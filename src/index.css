@@ -1,0 +1,349 @@
+@import "tailwindcss";
+
+@layer components {
+  .all-\[unset\] {
+    all: unset;
+  }
+}
+
+:root {
+  --avatar-user-squarecandice-wu-color-background: rgba(162, 168, 205, 1);
+  --basewhite: rgba(255, 255, 255, 1);
+  --blue-100: rgba(219, 234, 254, 1);
+  --blue-200: rgba(229, 234, 241, 1);
+  --blue-400: rgba(158, 164, 178, 1);
+  --blue-500: rgba(96, 101, 113, 1);
+  --blue-600: rgba(75, 82, 98, 1);
+  --blue-900: rgba(15, 23, 42, 1);
+  --blue-gray50: rgba(248, 250, 252, 1);
+  --blue-gray800: rgba(30, 41, 59, 1);
+  --bold-13px-font-family: "Plus Jakarta Sans", Helvetica;
+  --bold-13px-font-size: 14px;
+  --bold-13px-font-style: normal;
+  --bold-13px-font-weight: 700;
+  --bold-13px-letter-spacing: 0px;
+  --bold-13px-line-height: 22px;
+  --bold-18px-font-family: "Plus Jakarta Sans", Helvetica;
+  --bold-18px-font-size: 18px;
+  --bold-18px-font-style: normal;
+  --bold-18px-font-weight: 700;
+  --bold-18px-letter-spacing: 0px;
+  --bold-18px-line-height: 28px;
+  --bold-60px-font-family: "Inter", Helvetica;
+  --bold-60px-font-size: 60px;
+  --bold-60px-font-style: normal;
+  --bold-60px-font-weight: 700;
+  --bold-60px-letter-spacing: -2px;
+  --bold-60px-line-height: 66px;
+  --cool-gray50: rgba(249, 250, 251, 1);
+  --display-lg-medium-font-family: "Inter", Helvetica;
+  --display-lg-medium-font-size: 48px;
+  --display-lg-medium-font-style: normal;
+  --display-lg-medium-font-weight: 500;
+  --display-lg-medium-letter-spacing: -0.96px;
+  --display-lg-medium-line-height: 60px;
+  --display-md-semibold-font-family: "Inter", Helvetica;
+  --display-md-semibold-font-size: 36px;
+  --display-md-semibold-font-style: normal;
+  --display-md-semibold-font-weight: 600;
+  --display-md-semibold-letter-spacing: -0.72px;
+  --display-md-semibold-line-height: 44px;
+  --display-xl-semibold-font-family: "Inter", Helvetica;
+  --display-xl-semibold-font-size: 60px;
+  --display-xl-semibold-font-style: normal;
+  --display-xl-semibold-font-weight: 600;
+  --display-xl-semibold-letter-spacing: -1.2px;
+  --display-xl-semibold-line-height: 72px;
+  --ffffff: rgba(255, 255, 255, 1);
+  --gray-200: rgba(234, 236, 240, 1);
+  --gray-400: rgba(161, 161, 170, 1);
+  --gray-50: rgba(249, 250, 251, 1);
+  --gray-500: rgba(102, 112, 133, 1);
+  --gray-600: rgba(82, 82, 91, 1);
+  --gray-900: rgba(16, 24, 40, 1);
+  --inter-regular-16px-font-family: "Inter", Helvetica;
+  --inter-regular-16px-font-size: 16px;
+  --inter-regular-16px-font-style: normal;
+  --inter-regular-16px-font-weight: 400;
+  --inter-regular-16px-letter-spacing: 0px;
+  --inter-regular-16px-line-height: 26px;
+  --inter-regular-18px-font-family: "Inter", Helvetica;
+  --inter-regular-18px-font-size: 18px;
+  --inter-regular-18px-font-style: normal;
+  --inter-regular-18px-font-weight: 400;
+  --inter-regular-18px-letter-spacing: 0px;
+  --inter-regular-18px-line-height: 28px;
+  --PJ-bold-18px-font-family: "Plus Jakarta Sans", Helvetica;
+  --PJ-bold-18px-font-size: 18px;
+  --PJ-bold-18px-font-style: normal;
+  --PJ-bold-18px-font-weight: 700;
+  --PJ-bold-18px-letter-spacing: 0px;
+  --PJ-bold-18px-line-height: 24px;
+  --PJ-bold-52px-font-family: "Plus Jakarta Sans", Helvetica;
+  --PJ-bold-52px-font-size: 52px;
+  --PJ-bold-52px-font-style: normal;
+  --PJ-bold-52px-font-weight: 800;
+  --PJ-bold-52px-letter-spacing: 0px;
+  --PJ-bold-52px-line-height: 62px;
+  --PJ-bold-58px-font-family: "Plus Jakarta Sans", Helvetica;
+  --PJ-bold-58px-font-size: 58px;
+  --PJ-bold-58px-font-style: normal;
+  --PJ-bold-58px-font-weight: 800;
+  --PJ-bold-58px-letter-spacing: 0px;
+  --PJ-bold-58px-line-height: 66px;
+  --PJ-regular-16px-font-family: "Plus Jakarta Sans", Helvetica;
+  --PJ-regular-16px-font-size: 16px;
+  --PJ-regular-16px-font-style: normal;
+  --PJ-regular-16px-font-weight: 400;
+  --PJ-regular-16px-letter-spacing: 0px;
+  --PJ-regular-16px-line-height: 26px;
+  --regular-13px-font-family: "Poppins", Helvetica;
+  --regular-13px-font-size: 14px;
+  --regular-13px-font-style: normal;
+  --regular-13px-font-weight: 400;
+  --regular-13px-letter-spacing: 0px;
+  --regular-13px-line-height: 22px;
+  --regular-16px-font-family: "Inter", Helvetica;
+  --regular-16px-font-size: 16px;
+  --regular-16px-font-style: normal;
+  --regular-16px-font-weight: 400;
+  --regular-16px-letter-spacing: 0px;
+  --regular-16px-line-height: 26px;
+  --regular-18px-font-family: "Inter", Helvetica;
+  --regular-18px-font-size: 18px;
+  --regular-18px-font-style: normal;
+  --regular-18px-font-weight: 400;
+  --regular-18px-letter-spacing: 0px;
+  --regular-18px-line-height: 30px;
+  --semi-bold-16px-font-family: "Poppins", Helvetica;
+  --semi-bold-16px-font-size: 16px;
+  --semi-bold-16px-font-style: normal;
+  --semi-bold-16px-font-weight: 500;
+  --semi-bold-16px-letter-spacing: 0px;
+  --semi-bold-16px-line-height: 24px;
+  --semi-bold-18px-font-family: "Inter", Helvetica;
+  --semi-bold-18px-font-size: 18px;
+  --semi-bold-18px-font-style: normal;
+  --semi-bold-18px-font-weight: 600;
+  --semi-bold-18px-letter-spacing: 0px;
+  --semi-bold-18px-line-height: 28px;
+  --set-01-color-3: rgba(39, 127, 240, 1);
+  --set-01-color-4: rgba(16, 185, 130, 1);
+  --set-01-color-5: rgba(134, 239, 172, 1);
+  --set-01-color-6: rgba(248, 113, 113, 1);
+  --set-01-color-7: rgba(243, 159, 11, 1);
+  --text-lg-medium-font-family: "Inter", Helvetica;
+  --text-lg-medium-font-size: 18px;
+  --text-lg-medium-font-style: normal;
+  --text-lg-medium-font-weight: 500;
+  --text-lg-medium-letter-spacing: 0px;
+  --text-lg-medium-line-height: 28px;
+  --text-md-normal-font-family: "Inter", Helvetica;
+  --text-md-normal-font-size: 16px;
+  --text-md-normal-font-style: normal;
+  --text-md-normal-font-weight: 400;
+  --text-md-normal-letter-spacing: 0px;
+  --text-md-normal-line-height: 24px;
+  --text-xl-normal-font-family: "Inter", Helvetica;
+  --text-xl-normal-font-size: 20px;
+  --text-xl-normal-font-style: normal;
+  --text-xl-normal-font-weight: 400;
+  --text-xl-normal-letter-spacing: 0px;
+  --text-xl-normal-line-height: 30px;
+  --white: rgba(255, 255, 255, 1);
+  --x-10: rgba(31, 42, 64, 1);
+  --x-3f-8-8f-7: rgba(63, 136, 246, 1);
+}
+
+@theme {
+  /* Colors mapped to CSS variables */
+  --color-avatar-user-squarecandice-wu-color-background: var(--avatar-user-squarecandice-wu-color-background);
+  --color-basewhite: var(--basewhite);
+  --color-blue-100: var(--blue-100);
+  --color-blue-200: var(--blue-200);
+  --color-blue-400: var(--blue-400);
+  --color-blue-500: var(--blue-500);
+  --color-blue-600: var(--blue-600);
+  --color-blue-900: var(--blue-900);
+  --color-blue-gray50: var(--blue-gray50);
+  --color-blue-gray800: var(--blue-gray800);
+  --color-cool-gray50: var(--cool-gray50);
+  --color-ffffff: var(--ffffff);
+  --color-gray-200: var(--gray-200);
+  --color-gray-400: var(--gray-400);
+  --color-gray-50: var(--gray-50);
+  --color-gray-500: var(--gray-500);
+  --color-gray-600: var(--gray-600);
+  --color-gray-900: var(--gray-900);
+  --color-set-01-color-3: var(--set-01-color-3);
+  --color-set-01-color-4: var(--set-01-color-4);
+  --color-set-01-color-5: var(--set-01-color-5);
+  --color-set-01-color-6: var(--set-01-color-6);
+  --color-set-01-color-7: var(--set-01-color-7);
+  --color-white: var(--white);
+  --color-x-10: var(--x-10);
+  --color-x-3f-8-8f-7: var(--x-3f-8-8f-7);
+
+  /* Shadcn-style semantic colors */
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+
+  /* Fonts as tokens to enable classes like font-PJ-bold-18px */
+  --font-bold-13px: var(--bold-13px-font-family);
+  --font-bold-18px: var(--bold-18px-font-family);
+  --font-bold-60px: var(--bold-60px-font-family);
+  --font-display-lg-medium: var(--display-lg-medium-font-family);
+  --font-display-md-semibold: var(--display-md-semibold-font-family);
+  --font-display-xl-semibold: var(--display-xl-semibold-font-family);
+  --font-inter-regular-16px: var(--inter-regular-16px-font-family);
+  --font-inter-regular-18px: var(--inter-regular-18px-font-family);
+  --font-PJ-bold-18px: var(--PJ-bold-18px-font-family);
+  --font-PJ-bold-52px: var(--PJ-bold-52px-font-family);
+  --font-PJ-bold-58px: var(--PJ-bold-58px-font-family);
+  --font-PJ-regular-16px: var(--PJ-regular-16px-font-family);
+  --font-regular-13px: var(--regular-13px-font-family);
+  --font-regular-16px: var(--regular-16px-font-family);
+  --font-regular-18px: var(--regular-18px-font-family);
+  --font-semi-bold-16px: var(--semi-bold-16px-font-family);
+  --font-semi-bold-18px: var(--semi-bold-18px-font-family);
+  --font-text-lg-medium: var(--text-lg-medium-font-family);
+  --font-text-md-normal: var(--text-md-normal-font-family);
+  --font-text-xl-normal: var(--text-xl-normal-font-family);
+  --font-sans: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+
+  /* Radii mapped to rounded-* */
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+
+  /* Container max width token */
+  --container-2xl: 1400px;
+
+  /* Animation tokens */
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+}
+
+@import "tailwindcss";
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 47.4% 11.2%;
+
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 47.4% 11.2%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+
+    --card: transparent;
+    --card-foreground: 222.2 47.4% 11.2%;
+
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+
+    --destructive: 0 100% 50%;
+    --destructive-foreground: 210 40% 98%;
+
+    --ring: 215 20.2% 65.1%;
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 224 71% 4%;
+    --foreground: 213 31% 91%;
+
+    --muted: 223 47% 11%;
+    --muted-foreground: 215.4 16.3% 56.9%;
+
+    --accent: 216 34% 17%;
+    --accent-foreground: 210 40% 98%;
+
+    --popover: 224 71% 4%;
+    --popover-foreground: 215 20.2% 65.1%;
+
+    --border: 216 34% 17%;
+    --input: 216 34% 17%;
+
+    --card: transparent;
+    --card-foreground: 213 31% 91%;
+
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 1.2%;
+
+    --secondary: 222.2 47.4% 11.2%;
+    --secondary-foreground: 210 40% 98%;
+
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 40% 98%;
+
+    --ring: 216 34% 17%;
+
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    font-family: 'Inter', 'Poppins', system-ui, -apple-system, sans-serif;
+  }
+}
+
+/* Accordion keyframes */
+@keyframes accordion-down {
+  from { height: 0 }
+  to { height: var(--radix-accordion-content-height) }
+}
+
+@keyframes accordion-up {
+  from { height: var(--radix-accordion-content-height) }
+  to { height: 0 }
+}
+
+/* Container utility to center with padding and 2xl width */
+@layer utilities {
+  .container {
+    margin-inline: auto;
+    padding-inline: 2rem;
+    width: 100%;
+  }
+
+  @media (min-width: 1400px) {
+    .container { max-width: 1400px; }
+  }
+}

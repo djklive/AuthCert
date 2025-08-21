@@ -1,5 +1,6 @@
 //import React from "react";
 import { Button } from "../../../../components/ui/1.button";
+import { Link } from "react-router-dom";
 
 export const MainContentSection = () => {
   return (
@@ -28,12 +29,14 @@ export const MainContentSection = () => {
             Scanner un QR Code
           </Button>
 
-          <Button
-            variant="outline"
-            className="w-[220px] h-14 rounded-[10px] border-2 border-zinc-400 hover:bg-zinc-50 font-PJ-bold-18px font-[number:var(--PJ-bold-18px-font-weight)] text-rose-500 text-[length:var(--PJ-bold-18px-font-size)] leading-[var(--PJ-bold-18px-line-height)] tracking-[var(--PJ-bold-18px-letter-spacing)] [font-style:var(--PJ-bold-18px-font-style)]"
-          >
-            Verifier un certificat
-          </Button>
+          <Link to="/verifier-certificat">
+            <Button
+              variant="outline"
+              className="w-[220px] h-14 rounded-[10px] border-2 border-zinc-400 hover:bg-zinc-50 font-PJ-bold-18px font-[number:var(--PJ-bold-18px-font-weight)] text-rose-500 text-[length:var(--PJ-bold-18px-font-size)] leading-[var(--PJ-bold-18px-line-height)] tracking-[var(--PJ-bold-18px-letter-spacing)] [font-style:var(--PJ-bold-18px-font-style)]"
+            >
+              Verifier un certificat
+            </Button>
+          </Link>
         </div>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4 max-w-[533px] mx-auto px-4">

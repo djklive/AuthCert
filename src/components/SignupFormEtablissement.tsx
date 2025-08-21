@@ -6,13 +6,37 @@ import { Label } from "./ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Textarea } from "./ui/textarea";
 
+export interface EtablissementDocuments {
+  rccmDocument: File | null;
+  autorisation: File | null;
+  pieceIdentite: File | null;
+  logo: File | null;
+  plaquette: File | null;
+}
+
+export interface EtablissementFormValues {
+  nomEtablissement: string;
+  emailInstitutionnel: string;
+  password: string;
+  rccm: string;
+  typeEtablissement: string;
+  adresse: string;
+  telephone: string;
+  nomRepresentant: string;
+  emailRepresentant: string;
+  telephoneRepresentant: string;
+  acceptConditions: boolean;
+}
+
+export type SignupFormEtablissementSubmit = EtablissementFormValues & { documents: EtablissementDocuments };
+
 interface SignupFormEtablissementProps {
-  onSubmit: (data: any) => void;
+  onSubmit: (data: SignupFormEtablissementSubmit) => void;
   loading?: boolean;
 }
 
 export function SignupFormEtablissement({ onSubmit, loading = false }: SignupFormEtablissementProps) {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<EtablissementFormValues>({
     nomEtablissement: "",
     emailInstitutionnel: "",
     password: "",
@@ -26,12 +50,12 @@ export function SignupFormEtablissement({ onSubmit, loading = false }: SignupFor
     acceptConditions: false
   });
 
-  const [documents, setDocuments] = useState({
-    rccmDocument: null as File | null,
-    autorisation: null as File | null,
-    pieceIdentite: null as File | null,
-    logo: null as File | null,
-    plaquette: null as File | null
+  const [documents, setDocuments] = useState<EtablissementDocuments>({
+    rccmDocument: null,
+    autorisation: null,
+    pieceIdentite: null,
+    logo: null,
+    plaquette: null
   });
 
   const handleSubmit = (e: React.FormEvent) => {

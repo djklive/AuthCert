@@ -1,0 +1,1 @@
+export { VerifierCertificat } from "./VerifierCertificat";

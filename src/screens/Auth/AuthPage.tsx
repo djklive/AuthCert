@@ -7,8 +7,8 @@ import { PrimaryButton } from "../../components/PrimaryButton";
 import { Checkbox } from "../../components/ui/checkbox";
 import { Label } from "../../components/ui/label";
 import { TabNavigation } from "../../components/TabNavigation";
-import { SignupFormApprenant } from "../../components/SignupFormApprenant";
-import { SignupFormEtablissement } from "../../components/SignupFormEtablissement";
+import { SignupFormApprenant, type SignupFormApprenantData } from "../../components/SignupFormApprenant";
+import { SignupFormEtablissement, type SignupFormEtablissementSubmit } from "../../components/SignupFormEtablissement";
 import { AlertBox } from "../../components/AlertBox";
 import { GraduationCapIcon, SchoolIcon, ShieldCheckIcon } from "lucide-react";
 
@@ -35,7 +35,7 @@ export default function AuthPage({ defaultTab = "login" }: AuthPageProps) {
     }, 2000);
   };
 
-  const handleSignupApprenant = async (data: any) => {
+  const handleSignupApprenant = async (_data: SignupFormApprenantData) => {
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
@@ -43,7 +43,7 @@ export default function AuthPage({ defaultTab = "login" }: AuthPageProps) {
     }, 2000);
   };
 
-  const handleSignupEtablissement = async (data: any) => {
+  const handleSignupEtablissement = async (_data: SignupFormEtablissementSubmit) => {
     setLoading(true);
     setTimeout(() => {
       setLoading(false);

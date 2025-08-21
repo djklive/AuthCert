@@ -5,13 +5,23 @@ import { Checkbox } from "./ui/checkbox";
 import { Label } from "./ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 
+export interface SignupFormApprenantData {
+  fullName: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
+  phone: string;
+  etablissement: string;
+  acceptConditions: boolean;
+}
+
 interface SignupFormApprenantProps {
-  onSubmit: (data: any) => void;
+  onSubmit: (data: SignupFormApprenantData) => void;
   loading?: boolean;
 }
 
 export function SignupFormApprenant({ onSubmit, loading = false }: SignupFormApprenantProps) {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<SignupFormApprenantData>({
     fullName: "",
     email: "",
     password: "",

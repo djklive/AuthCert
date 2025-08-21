@@ -1,10 +1,11 @@
 //import React from "react";
 import { Separator } from "../../../../components/ui/1.separator";
+import { Twitter, Facebook, Instagram, Github } from "lucide-react";
 
 const navigationLinks = [
-  { label: "Accueil", href: "#" },
+  { label: "Accueil", href: "/" },
   { label: "A Propos", href: "#" },
-  { label: "Tarif", href: "#" },
+  { label: "Tarif", href: "/tarif" },
 ];
 
 export const SiteFooterSection = () => {
@@ -14,17 +15,10 @@ export const SiteFooterSection = () => {
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col lg:flex-row items-center justify-between gap-6 lg:gap-0 mb-8 lg:mb-16">
             <div className="flex items-center order-1 lg:order-1">
-              <div className="relative w-9 h-[33px] mr-4 lg:mr-6">
-                <div className="absolute w-8 h-8 top-0 left-0 bg-rose-500 rounded-[5px]" />
-                <div className="absolute top-0 left-[3px] font-black text-[#faf7f7] text-xl [font-family:'Inter',Helvetica] tracking-[0] leading-[normal] whitespace-nowrap">
-                  A
-                </div>
-                <div className="absolute top-[9px] left-3.5 text-xl font-black text-[#fffcfc] [font-family:'Inter',Helvetica] tracking-[0] leading-[normal] whitespace-nowrap">
-                  C
-                </div>
-              </div>
-              <div className="[font-family:'Plus_Jakarta_Sans',Helvetica] font-bold text-base tracking-[3.00px] leading-[30px] whitespace-nowrap">
-                <span className="text-rose-500 tracking-[0.48px]">/</span>
+              
+              <div className="[font-family:'Plus_Jakarta_Sans',Helvetica] font-bold text-base tracking-[3.00px] leading-[30px] whitespace-nowrap flex items-center gap-2">
+                {/* <span className="text-rose-500 tracking-[0.48px]">/</span> */}
+                <img src="/Logo - 32.svg" alt="Logo" />
                 <span className="text-zinc-900 tracking-[0.48px]">
                   AUTHCERT
                 </span>
@@ -44,7 +38,37 @@ export const SiteFooterSection = () => {
             </nav>
 
             <div className="flex items-center order-3 lg:order-3">
-              <img className="w-[148px] h-7" alt="Social" src="/social.png" />
+              {/* <img className="w-[148px] h-7" alt="Social" src="/social.png" /> */}
+              <div className="flex items-center gap-4">
+                <a
+                  href="#"
+                  className="text-white bg-black hover:bg-rose-500 transition-colors p-2 rounded-full"
+                  aria-label="Twitter"
+                >
+                  <Twitter className="w-5 h-5" />
+                </a>
+                <a
+                  href="#"
+                  className="text-white bg-black hover:bg-rose-500 transition-colors p-2 rounded-full"
+                  aria-label="Facebook"
+                >
+                  <Facebook className="w-5 h-5" />
+                </a>
+                <a
+                  href="#"
+                  className="text-white bg-black hover:bg-rose-500 transition-colors p-2 rounded-full"
+                  aria-label="Instagram"
+                >
+                  <Instagram className="w-5 h-5" />
+                </a>
+                <a
+                  href="#"
+                  className="text-white bg-black hover:bg-rose-500 transition-colors p-2 rounded-full"
+                  aria-label="GitHub"
+                >
+                  <Github className="w-5 h-5" />
+                </a>
+              </div>
             </div>
           </div>
 

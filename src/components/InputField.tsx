@@ -31,6 +31,7 @@ export function InputField({
 }: InputFieldProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [fileName, setFileName] = useState("");
+  const inputId = `file-${label.replace(/[^a-z0-9_-]/gi, "-")}`;
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (type === "file") {
@@ -45,19 +46,22 @@ export function InputField({
   if (type === "file") {
     return (
       <div className={`space-y-2 ${className}`}>
-        <Label className="text-gray-700">{label} {required && <span className="text-[#F43F5E]">*</span>}</Label>
+        <Label htmlFor={inputId} className="text-gray-700">{label} {required && <span className="text-[#F43F5E]">*</span>}</Label>
         <div className="relative">
           <input
+            id={inputId}
             type="file"
             accept={accept}
             onChange={handleInputChange}
             className="hidden"
-            id={`file-${label}`}
+            aria-label={label}
+            title={label}
+            name={inputId}
           />
           <Button
             type="button"
             variant="outline"
-            onClick={() => document.getElementById(`file-${label}`)?.click()}
+            onClick={() => document.getElementById(inputId)?.click()}
             className="w-full justify-start h-12 border-2 hover:border-[#F43F5E] transition-colors"
           >
             <UploadIcon className="w-4 h-4 mr-2" />

@@ -10,7 +10,7 @@ import { TabNavigation } from "../../components/TabNavigation";
 import { SignupFormApprenant, type SignupFormApprenantData } from "../../components/SignupFormApprenant";
 import { SignupFormEtablissement, type SignupFormEtablissementSubmit } from "../../components/SignupFormEtablissement";
 import { AlertBox } from "../../components/AlertBox";
-import { GraduationCapIcon, SchoolIcon, ShieldCheckIcon } from "lucide-react";
+import { GraduationCapIcon, SchoolIcon } from "lucide-react";
 
 interface AuthPageProps {
   defaultTab?: "login" | "signup";

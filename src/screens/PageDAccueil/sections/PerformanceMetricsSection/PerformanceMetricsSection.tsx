@@ -1,6 +1,6 @@
 import React from "react";
 import { Separator } from "../../../../components/ui/1.separator";
-import CountUp from '../../../../components/CountUp';
+import CountUp from "../../../../components/CountUp";
 
 const metricsData = [
   {

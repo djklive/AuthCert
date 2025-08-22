@@ -68,7 +68,7 @@ export const StaggerList: React.FC<{
       animate(
         "li",
         { opacity: [0, 1], y: [20, 0] },
-        { delay: stagger(0, staggerDelay), duration: 0.5 }
+        { delay: stagger(staggerDelay), duration: 0.5 }
       );
     }
   }, [inView, animate, scope, staggerDelay]);

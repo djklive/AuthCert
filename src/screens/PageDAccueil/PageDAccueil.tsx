@@ -1,3 +1,4 @@
+"use client"
 //import * as React from "react";
 import { Header } from "../../components/Header";
 import { DashboardFrameSection } from "./sections/DashboardFrameSection/DashboardFrameSection";
@@ -8,6 +9,7 @@ import { PerformanceMetricsSection } from "./sections/PerformanceMetricsSection/
 import { SignUpSection } from "./sections/SignUpSection/SignUpSection";
 import { SiteFooterSection } from "./sections/SiteFooterSection/SiteFooterSection";
 import { TestimonialSection } from "./sections/TestimonialSection/TestimonialSection";
+import { ContainerScroll } from "../../components/container-scroll-animation";
 
 export const PageDAccueil = () => {
   return (
@@ -15,15 +17,37 @@ export const PageDAccueil = () => {
       <Header activePage="Accueil" />
 
       <MainContentSection />
+
+      <ContainerScroll
+        titleComponent={
+          <>
+            <h1 className="text-4xl font-semibold text-black dark:text-white">
+              Decouvrer notre nouvelle application <br />
+              <span className="text-4xl md:text-[6rem] font-bold mt-1 leading-none">
+                d'authentification
+              </span>
+            </h1>
+          </>
+        }
+      >
+        <img
+          src={`/Right Illustration.png`}
+          alt="Right Illustration"
+          height={720}
+          width={1400}
+          className="mx-auto rounded-2xl object-cover h-full object-left-top"
+          draggable={false}
+        />
+      </ContainerScroll>
       
       {/* Image Right Illustration */}
-      <div className="w-full max-w-6xl mx-auto px-4">
+      {/* <div className="w-full max-w-6xl mx-auto px-4">
         <img 
           src="/Right Illustration.png" 
           alt="Right Illustration" 
           className="w-full h-auto object-contain"
         />
-      </div>
+      </div> */}
       
       <DashboardFrameSection />
       <DashboardWrapperSection />

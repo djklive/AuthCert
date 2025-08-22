@@ -56,8 +56,9 @@ export default function AuthPage({ defaultTab = "login" }: AuthPageProps) {
       <div className="w-full max-w-lg lg:max-w-lg xl:max-w-xl">
         {/* En-tête avec logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-[#F43F5E] rounded-full mb-4">
-            <ShieldCheckIcon className="w-8 h-8 text-white" />
+          <div className="inline-flex items-center justify-center mb-4">
+            {/* <ShieldCheckIcon className="w-8 h-8 text-white" /> */}
+            <img src="/Logo - 32.svg" alt="Logo" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">
             Certification Diplômes

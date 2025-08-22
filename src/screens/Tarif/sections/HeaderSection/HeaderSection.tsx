@@ -1,4 +1,4 @@
-import React from "react";
+//import React from "react";
 import { Button } from "../../../../components/ui/button";
 
 const navigationItems = [
@@ -7,7 +7,7 @@ const navigationItems = [
   { label: "Tarif", active: true },
 ];
 
-export const HeaderSection = (): JSX.Element => {
+export const HeaderSection = () => {
   return (
     <header className="w-full bg-transparent px-4 sm:px-6 lg:px-8">
       <div className="flex items-center justify-between py-3 sm:py-4 max-w-[1218px] mx-auto">

@@ -1,4 +1,4 @@
-import { type Screen, type UserType } from '../types';
+import { type Screen, type UserType, type NavigateFunction } from '../types';
 import { LoginScreen } from './screens/LoginScreen';
 import { OnboardingScreen } from './screens/OnboardingScreen';
 import { EstablishmentOnboardingScreen } from './screens/EstablishmentOnboardingScreen';
@@ -17,7 +17,7 @@ import { NotificationsScreen } from './screens/NotificationsScreen';
 interface ScreenRendererProps {
   currentScreen: Screen;
   userType: UserType | null;
-  onNavigate: (screen: Screen) => void;
+  onNavigate: NavigateFunction;
   onLogin: (userType: UserType) => void;
   onStartOnboarding: (userType: UserType) => void;
   onCompleteOnboarding: () => void;
@@ -137,15 +137,29 @@ export function ScreenRenderer({
 
       default:
         return (
-          <div className="p-6">
-            <h1 className="text-3xl font-bold">Page non trouvée</h1>
-            <p className="text-muted-foreground mt-2">
-              La page demandée n'existe pas.
-            </p>
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                Page non trouvée
+              </h2>
+              <p className="text-gray-600 mb-4">
+                La page que vous recherchez n'existe pas.
+              </p>
+              <button
+                onClick={() => onNavigate('dashboard')}
+                className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
+              >
+                Retour au dashboard
+              </button>
+            </div>
           </div>
         );
     }
   };
 
-  return <>{renderScreen()}</>;
+  return (
+    <div className="min-h-screen bg-background">
+      {renderScreen()}
+    </div>
+  );
 }

@@ -14,6 +14,9 @@ export type Screen =
   | 'profile' 
   | 'notifications';
 
+// Type pour la navigation qui accepte soit Screen soit string
+export type NavigateFunction = (screen: Screen | string) => void;
+
 export type AppState = {
   currentScreen: Screen;
   userType: UserType | null;

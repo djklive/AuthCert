@@ -1,5 +1,6 @@
 import "../../App.css";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
 import { InputField } from "../../components/InputField";
@@ -10,16 +11,22 @@ import { TabNavigation } from "../../components/TabNavigation";
 import { SignupFormApprenant, type SignupFormApprenantData } from "../../components/SignupFormApprenant";
 import { SignupFormEtablissement, type SignupFormEtablissementSubmit } from "../../components/SignupFormEtablissement";
 import { AlertBox } from "../../components/AlertBox";
-import { GraduationCapIcon, SchoolIcon, ShieldCheckIcon } from "lucide-react";
+import { GraduationCapIcon, SchoolIcon } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
+import { useAuth } from "../../App";
 
 interface AuthPageProps {
   defaultTab?: "login" | "signup";
 }
 
 export default function AuthPage({ defaultTab = "login" }: AuthPageProps) {
+  const navigate = useNavigate();
+  const { login } = useAuth();
+  
   const [loginData, setLoginData] = useState({
     email: "",
     password: "",
+    role: "" as "student" | "establishment" | "",
     rememberMe: false
   });
   const [signupTab, setSignupTab] = useState<"apprenant" | "etablissement">("apprenant");
@@ -28,11 +35,27 @@ export default function AuthPage({ defaultTab = "login" }: AuthPageProps) {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!loginData.role) {
+      setAlert({ type: "error", message: "Veuillez sélectionner votre rôle" });
+      return;
+    }
+
     setLoading(true);
+    
+    // Simulation d'une connexion
     setTimeout(() => {
       setLoading(false);
+      
+      // Connexion réussie - rediriger vers le dashboard approprié
+      login(loginData.role as "student" | "establishment");
       setAlert({ type: "success", message: "Connexion réussie ! Redirection en cours..." });
-    }, 2000);
+      
+      // Redirection vers le dashboard
+      setTimeout(() => {
+        navigate(`/dashboard?userType=${loginData.role}`);
+      }, 1000);
+    }, 1500);
   };
 
   const handleSignupApprenant = async (_data: SignupFormApprenantData) => {
@@ -118,6 +141,37 @@ export default function AuthPage({ defaultTab = "login" }: AuthPageProps) {
                     value={loginData.password}
                     onChange={(value) => setLoginData({ ...loginData, password: value })}
                   />
+                  
+                  {/* Sélecteur de rôle */}
+                  <div className="space-y-2">
+                    <Label htmlFor="role" className="text-sm font-medium text-gray-700">
+                      Rôle *
+                    </Label>
+                    <Select
+                      value={loginData.role}
+                      onValueChange={(value) => setLoginData({ ...loginData, role: value as "student" | "establishment" })}
+                      required
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Sélectionnez votre rôle" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="student">
+                          <div className="flex items-center gap-2">
+                            <GraduationCapIcon className="w-4 h-4" />
+                            Apprenant
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="establishment">
+                          <div className="flex items-center gap-2">
+                            <SchoolIcon className="w-4 h-4" />
+                            Établissement
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
                       <Checkbox

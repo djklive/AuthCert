@@ -1,6 +1,7 @@
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
+import { useNavigate } from 'react-router-dom';
 import { 
   Home, 
   Award, 
@@ -13,7 +14,7 @@ import {
   BarChart3,
   Crown
 } from 'lucide-react';
-import { type Screen, type UserType } from '../types';
+import { type Screen, type UserType, type NavigateFunction } from '../types';
 
 interface NavigationItem {
   screen: Screen;
@@ -23,7 +24,7 @@ interface NavigationItem {
 
 interface NavigationProps {
   currentScreen: Screen;
-  onNavigate: (screen: Screen) => void;
+  onNavigate: NavigateFunction;
   onLogout: () => void;
   navigationItems: NavigationItem[];
   userType: UserType | null;
@@ -48,6 +49,8 @@ export function Navigation({
   navigationItems,
   userType 
 }: NavigationProps) {
+  const navigate = useNavigate();
+
   const getIconComponent = (iconName: string) => {
     return iconMap[iconName as keyof typeof iconMap] || Home;
   };
@@ -59,16 +62,23 @@ export function Navigation({
     return 0;
   };
 
+  const handleLogout = () => {
+    // Appeler la fonction de déconnexion locale
+    onLogout();
+    // Rediriger vers la page d'accueil
+    navigate('/');
+  };
+
   return (
     <aside className="w-64 bg-card border-r border-border flex flex-col">
       {/* Logo */}
       <div className="p-6">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
-            <Award className="h-6 w-6 text-white" />
+          <div className=" flex items-center justify-center">
+            <img src="/Logo - 32.png" alt="Logo" className="w-12 h-12" />
           </div>
           <div>
-            <h1 className="font-bold text-lg">CertifiED</h1>
+            <h1 className="font-bold text-lg">AuthCert</h1>
             <p className="text-xs text-muted-foreground">
               {userType === 'establishment' ? 'Établissement' : 'Apprenant'}
             </p>
@@ -127,7 +137,7 @@ export function Navigation({
         <Button
           variant="ghost"
           className="w-full justify-start gap-3 h-11 text-muted-foreground hover:text-foreground"
-          onClick={onLogout}
+          onClick={handleLogout}
         >
           <LogOut className="h-5 w-5" />
           Se déconnecter

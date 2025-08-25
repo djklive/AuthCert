@@ -1,4 +1,4 @@
-export type UserType = 'student' | 'establishment';
+export type UserType = 'student' | 'establishment' | 'admin';
 
 export type Screen = 
   | 'login' 

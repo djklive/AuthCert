@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import App from './App';
+import AdminApp from '../dashboard-admin/App';
 import { type UserType } from './types';
 import { useAuth } from '../App';
 import './styles/globals.css';
@@ -46,5 +47,8 @@ export default function DashboardWrapper({ userType, isAuthenticated }: Dashboar
     return null;
   }
 
+  if (userType === 'admin') {
+    return <AdminApp onLogout={handleLogout} />;
+  }
   return <App onLogout={handleLogout} />;
 }

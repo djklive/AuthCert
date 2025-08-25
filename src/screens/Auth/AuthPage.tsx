@@ -11,7 +11,7 @@ import { TabNavigation } from "../../components/TabNavigation";
 import { SignupFormApprenant, type SignupFormApprenantData } from "../../components/SignupFormApprenant";
 import { SignupFormEtablissement, type SignupFormEtablissementSubmit } from "../../components/SignupFormEtablissement";
 import { AlertBox } from "../../components/AlertBox";
-import { GraduationCapIcon, SchoolIcon } from "lucide-react";
+import { GraduationCapIcon, SchoolIcon, ShieldIcon } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { useAuth } from "../../App";
 
@@ -26,7 +26,7 @@ export default function AuthPage({ defaultTab = "login" }: AuthPageProps) {
   const [loginData, setLoginData] = useState({
     email: "",
     password: "",
-    role: "" as "student" | "establishment" | "",
+    role: "" as "student" | "establishment" | "admin" | "",
     rememberMe: false
   });
   const [signupTab, setSignupTab] = useState<"apprenant" | "etablissement">("apprenant");
@@ -48,7 +48,7 @@ export default function AuthPage({ defaultTab = "login" }: AuthPageProps) {
       setLoading(false);
       
       // Connexion réussie - rediriger vers le dashboard approprié
-      login(loginData.role as "student" | "establishment");
+      login(loginData.role as "student" | "establishment" | "admin");
       setAlert({ type: "success", message: "Connexion réussie ! Redirection en cours..." });
       
       // Redirection vers le dashboard
@@ -149,7 +149,7 @@ export default function AuthPage({ defaultTab = "login" }: AuthPageProps) {
                     </Label>
                     <Select
                       value={loginData.role}
-                      onValueChange={(value) => setLoginData({ ...loginData, role: value as "student" | "establishment" })}
+                      onValueChange={(value) => setLoginData({ ...loginData, role: value as "student" | "establishment" | "admin" })}
                       required
                     >
                       <SelectTrigger className="w-full">
@@ -166,6 +166,12 @@ export default function AuthPage({ defaultTab = "login" }: AuthPageProps) {
                           <div className="flex items-center gap-2">
                             <SchoolIcon className="w-4 h-4" />
                             Établissement
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="admin">
+                          <div className="flex items-center gap-2">
+                            <ShieldIcon className="w-4 h-4" />
+                            Administrateur
                           </div>
                         </SelectItem>
                       </SelectContent>

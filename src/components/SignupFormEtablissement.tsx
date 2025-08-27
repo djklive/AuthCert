@@ -5,6 +5,8 @@ import { Checkbox } from "./ui/checkbox";
 import { Label } from "./ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Textarea } from "./ui/textarea";
+import axios from "axios";
+import { useNavigate } from "react-router-dom";
 
 export interface EtablissementDocuments {
   rccmDocument: File | null;
@@ -30,12 +32,8 @@ export interface EtablissementFormValues {
 
 export type SignupFormEtablissementSubmit = EtablissementFormValues & { documents: EtablissementDocuments };
 
-interface SignupFormEtablissementProps {
-  onSubmit: (data: SignupFormEtablissementSubmit) => void;
-  loading?: boolean;
-}
-
-export function SignupFormEtablissement({ onSubmit, loading = false }: SignupFormEtablissementProps) {
+export function SignupFormEtablissement() {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState<EtablissementFormValues>({
     nomEtablissement: "",
     emailInstitutionnel: "",
@@ -58,9 +56,120 @@ export function SignupFormEtablissement({ onSubmit, loading = false }: SignupFor
     plaquette: null
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [apiError, setApiError] = useState<string>('');
+
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+    
+    // Validation du mot de passe
+    if (formData.password.length < 6) {
+      newErrors.password = "Le mot de passe doit contenir au moins 6 caractères";
+    }
+    
+    // Validation des conditions
+    if (!formData.acceptConditions) {
+      newErrors.acceptConditions = "Vous devez accepter les conditions";
+    }
+    
+    // Validation des documents requis
+    if (!documents.rccmDocument) {
+      newErrors.rccmDocument = "Le document RCCM est requis";
+    }
+    
+    if (!documents.autorisation) {
+      newErrors.autorisation = "L'autorisation de fonctionnement est requise";
+    }
+    
+    if (!documents.pieceIdentite) {
+      newErrors.pieceIdentite = "La pièce d'identité du représentant est requise";
+    }
+    
+    // Validation des types de fichiers
+    Object.entries(documents).forEach(([key, file]) => {
+      if (file && !['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'].includes(file.type)) {
+        newErrors[key] = "Type de fichier non supporté. Utilisez PDF, JPG ou PNG";
+      }
+    });
+    
+    // Validation de la taille des fichiers (max 5MB)
+    Object.entries(documents).forEach(([key, file]) => {
+      if (file && file.size > 5 * 1024 * 1024) { // 5MB en bytes
+        newErrors[key] = "Le fichier est trop volumineux. Taille maximum : 5MB";
+      }
+    });
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({ ...formData, documents });
+    
+    if (!validateForm()) {
+      return;
+    }
+    
+    // Nettoyer les erreurs API précédentes
+    setApiError('');
+    setIsSubmitting(true);
+    
+    try {
+        // Créer FormData pour l'upload des fichiers
+        const formDataToSend = new FormData();
+        
+        // Ajouter les champs texte
+        formDataToSend.append('nomEtablissement', formData.nomEtablissement);
+        formDataToSend.append('emailEtablissement', formData.emailInstitutionnel);
+        formDataToSend.append('motDePasseEtablissement', formData.password);
+        formDataToSend.append('rccmEtablissement', formData.rccm);
+        formDataToSend.append('typeEtablissement', formData.typeEtablissement);
+        formDataToSend.append('adresseEtablissement', formData.adresse);
+        formDataToSend.append('telephoneEtablissement', formData.telephone);
+        formDataToSend.append('nomResponsableEtablissement', formData.nomRepresentant);
+        formDataToSend.append('emailResponsableEtablissement', formData.emailRepresentant);
+        formDataToSend.append('telephoneResponsableEtablissement', formData.telephoneRepresentant);
+        
+        // Ajouter les fichiers
+        if (documents.rccmDocument) {
+          formDataToSend.append('rccmDocument', documents.rccmDocument);
+        }
+        if (documents.autorisation) {
+          formDataToSend.append('autorisation', documents.autorisation);
+        }
+        if (documents.pieceIdentite) {
+          formDataToSend.append('pieceIdentite', documents.pieceIdentite);
+        }
+        if (documents.logo) {
+          formDataToSend.append('logo', documents.logo);
+        }
+        if (documents.plaquette) {
+          formDataToSend.append('plaquette', documents.plaquette);
+        }
+
+        // Appel à l'API avec FormData (fichiers inclus)
+        const response = await axios.post('http://localhost:5000/api/register/etablissement/upload', formDataToSend, {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        });
+      
+      if (response.data.success) {
+        // Redirection vers la page de connexion avec message de succès
+        navigate('/auth?tab=login&success=etablissement');
+      }
+    } catch (error: unknown) {
+      console.error('Registration failed:', error);
+      // Gestion d'erreur améliorée
+      if (error && typeof error === 'object' && 'response' in error && error.response && typeof error.response === 'object' && 'data' in error.response && error.response.data && typeof error.response.data === 'object' && 'message' in error.response.data) {
+        setApiError((error.response.data as { message: string }).message);
+      } else {
+        setApiError('Erreur lors de l\'inscription');
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const typesEtablissement = [
@@ -74,6 +183,13 @@ export function SignupFormEtablissement({ onSubmit, loading = false }: SignupFor
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Affichage des erreurs API */}
+      {apiError && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-sm text-red-600">{apiError}</p>
+        </div>
+      )}
+      
       {/* Informations de l'établissement */}
       <div className="space-y-4">
         <h3 className="text-lg font-semibold text-gray-800">Informations de l'établissement</h3>
@@ -103,6 +219,7 @@ export function SignupFormEtablissement({ onSubmit, loading = false }: SignupFor
           required
           value={formData.password}
           onChange={(value) => setFormData({ ...formData, password: value })}
+          error={errors.password}
         />
 
         <InputField
@@ -194,15 +311,21 @@ export function SignupFormEtablissement({ onSubmit, loading = false }: SignupFor
           accept=".pdf,.jpg,.jpeg,.png"
           onFileChange={(file) => setDocuments({ ...documents, rccmDocument: file })}
         />
+        {errors.rccmDocument && (
+          <p className="text-sm text-[#F43F5E]">{errors.rccmDocument}</p>
+        )}
 
         <InputField
-          label="Autorisation de fonctionnement"
+          label="Autorisation d'exercer"
           type="file"
           placeholder="Télécharger l'autorisation"
           required
           accept=".pdf,.jpg,.jpeg,.png"
           onFileChange={(file) => setDocuments({ ...documents, autorisation: file })}
         />
+        {errors.autorisation && (
+          <p className="text-sm text-[#F43F5E]">{errors.autorisation}</p>
+        )}
 
         <InputField
           label="Pièce d'identité du représentant"
@@ -212,6 +335,9 @@ export function SignupFormEtablissement({ onSubmit, loading = false }: SignupFor
           accept=".pdf,.jpg,.jpeg,.png"
           onFileChange={(file) => setDocuments({ ...documents, pieceIdentite: file })}
         />
+        {errors.pieceIdentite && (
+          <p className="text-sm text-[#F43F5E]">{errors.pieceIdentite}</p>
+        )}
 
         <InputField
           label="Logo de l'établissement (optionnel)"
@@ -220,6 +346,9 @@ export function SignupFormEtablissement({ onSubmit, loading = false }: SignupFor
           accept=".jpg,.jpeg,.png,.svg"
           onFileChange={(file) => setDocuments({ ...documents, logo: file })}
         />
+        {errors.logo && (
+          <p className="text-sm text-[#F43F5E]">{errors.logo}</p>
+        )}
 
         <InputField
           label="Plaquette institutionnelle (optionnel)"
@@ -228,6 +357,9 @@ export function SignupFormEtablissement({ onSubmit, loading = false }: SignupFor
           accept=".pdf"
           onFileChange={(file) => setDocuments({ ...documents, plaquette: file })}
         />
+        {errors.plaquette && (
+          <p className="text-sm text-[#F5E]">{errors.plaquette}</p>
+        )}
       </div>
 
       <div className="flex items-start space-x-2 pt-4">
@@ -252,9 +384,12 @@ export function SignupFormEtablissement({ onSubmit, loading = false }: SignupFor
             politique de confidentialité
           </a>
         </Label>
+        {errors.acceptConditions && (
+          <p className="text-sm text-[#F43F5E]">{errors.acceptConditions}</p>
+        )}
       </div>
 
-      <PrimaryButton type="submit" loading={loading} className="mt-6">
+      <PrimaryButton type="submit" loading={isSubmitting} className="mt-6">
         Créer le compte établissement
       </PrimaryButton>
     </form>

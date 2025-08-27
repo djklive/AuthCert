@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useUser } from '../../hooks/useUser';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
@@ -108,7 +108,21 @@ const mockNotifications = [
 ];
 
 export function DashboardScreen({ hasData = true, onNavigate }: DashboardScreenProps) {
-  const [selectedPeriod, setSelectedPeriod] = useState("30d");
+  const { user } = useUser();
+  
+  // Générer le nom d'affichage
+  const getDisplayName = () => {
+    if (user) {
+      if (user.role === 'establishment') {
+        return user.nom || 'Établissement';
+      } else {
+        return `${user.prenom || ''} ${user.nom || ''}`.trim() || 'Utilisateur';
+      }
+    }
+    return 'Utilisateur';
+  };
+
+  //const [selectedPeriod, setSelectedPeriod] = useState("30d");
 
   if (!hasData) {
     return (
@@ -163,7 +177,7 @@ export function DashboardScreen({ hasData = true, onNavigate }: DashboardScreenP
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
         <div>
-          <h1 className="text-3xl font-bold">Bonjour, Marie ! 👋</h1>
+          <h1 className="text-3xl font-bold">Bonjour, {getDisplayName()} ! 👋</h1>
           <p className="text-muted-foreground">Voici un aperçu de vos certificats</p>
         </div>
         <div className="flex items-center space-x-3">

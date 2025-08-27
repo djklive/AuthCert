@@ -1,8 +1,9 @@
+import { useUser } from '../../hooks/useUser';
 import { useState } from 'react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
-import { Badge } from '../ui/badge';
-import { Progress } from '../ui/progress';
+//import { Badge } from '../ui/badge';
+//import { Progress } from '../ui/progress';
 import { 
   Users, 
   Award, 
@@ -14,7 +15,6 @@ import {
   FileText,
   CheckCircle,
   XCircle,
-  MoreHorizontal,
   Download
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -26,6 +26,20 @@ interface EstablishmentDashboardScreenProps {
 
 export function EstablishmentDashboardScreen({ hasData = true, onNavigate }: EstablishmentDashboardScreenProps) {
   const [selectedPeriod, setSelectedPeriod] = useState('30d');
+
+  const { user } = useUser();
+
+  // Générer le nom d'affichage
+  const getDisplayName = () => {
+    if (user) {
+      if (user.role === 'establishment') {
+        return user.nom || 'Établissement';
+      } else {
+        return `${user.prenom || ''} ${user.nom || ''}`.trim() || 'Utilisateur';
+      }
+    }
+    return 'Utilisateur';
+  };
 
   // Mock data
   const stats = {
@@ -197,7 +211,7 @@ export function EstablishmentDashboardScreen({ hasData = true, onNavigate }: Est
     <div className="p-6 space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Dashboard Établissement</h1>
+          <h1 className="text-3xl font-bold">Dashboard {getDisplayName()}</h1>
           <p className="text-muted-foreground">Vue d'ensemble de votre activité et gestion des certificats</p>
         </div>
         <div className="flex gap-3">

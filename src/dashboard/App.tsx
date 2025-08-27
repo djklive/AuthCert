@@ -4,6 +4,7 @@ import { Navigation } from './components/Navigation';
 import { ScreenRenderer } from './components/ScreenRenderer';
 import { type UserType, type Screen, type AppState, type NavigateFunction } from './types';
 import { getNavigationItems, getInitialScreen } from './utils/navigation';
+import authService from '../services/authService';
 
 interface AppProps {
   onLogout?: () => void;
@@ -73,6 +74,9 @@ export default function App({ onLogout }: AppProps) {
   };
 
   const handleLogout = () => {
+    // Déconnexion du service d'authentification (supprime le token JWT)
+    authService.logout();
+    
     // Utiliser la fonction de déconnexion passée en prop si disponible
     if (onLogout) {
       onLogout();

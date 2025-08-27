@@ -1,4 +1,4 @@
-import React from 'react';
+//import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -8,10 +8,7 @@ import {
   BarChart3, 
   Settings, 
   LogOut,
-  Shield,
-  AlertTriangle,
-  CheckCircle,
-  Clock
+  Shield
 } from 'lucide-react';
 import { type Screen, type NavigateFunction, type User } from '../types';
 
@@ -75,7 +72,8 @@ export function Navigation({ currentScreen, onNavigate, onLogout, user }: Naviga
       <div className="p-6 border-b border-gray-200">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-gradient-to-br from-rose-500 to-rose-600 rounded-lg flex items-center justify-center">
-            <Shield className="w-6 h-6 text-white" />
+            {/* <Shield className="w-6 h-6 text-white" /> */}
+            <img src="/Logo - 32.png" alt="logo" className="w-12 h-12" />
           </div>
           <div>
             <h1 className="text-xl font-bold text-gray-900">AuthCert</h1>

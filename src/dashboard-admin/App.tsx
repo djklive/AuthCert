@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Navigation } from './components/Navigation';
 import { ScreenRenderer } from './components/ScreenRenderer';
@@ -16,9 +16,12 @@ export default function App({ onLogout }: AppProps) {
     userType: searchParams.get('userType') as UserType || 'admin',
     isAuthenticated: true,
     user: {
+      id: 'admin-1',
       name: 'Administrateur',
       email: 'admin@authcert.com',
-      role: 'admin'
+      role: 'admin' as const,
+      status: 'active' as const,
+      createdAt: new Date().toISOString()
     }
   });
 

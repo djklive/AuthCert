@@ -3,7 +3,9 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import App from './App';
 import AdminApp from '../dashboard-admin/App';
 import { type UserType } from './types';
-import { useAuth } from '../App';
+import { useAuth } from '../hooks/useAuth';
+import { UserProvider } from './contexts/UserContext';
+import authService from '../services/authService';
 import './styles/globals.css';
 
 interface DashboardWrapperProps {
@@ -37,8 +39,11 @@ export default function DashboardWrapper({ userType, isAuthenticated }: Dashboar
     return () => clearTimeout(timer);
   }, [userType, isAuthenticated, navigate, searchParams]);
 
-  // Fonction de déconnexion qui utilise le contexte global
+  // Fonction de déconnexion qui utilise le contexte global et le service d'authentification
   const handleLogout = () => {
+    // Déconnexion du service d'authentification (supprime le token JWT)
+    authService.logout();
+    // Déconnexion du contexte global
     logout();
     navigate('/');
   };
@@ -50,5 +55,9 @@ export default function DashboardWrapper({ userType, isAuthenticated }: Dashboar
   if (userType === 'admin') {
     return <AdminApp onLogout={handleLogout} />;
   }
-  return <App onLogout={handleLogout} />;
+  return (
+    <UserProvider>
+      <App onLogout={handleLogout} />
+    </UserProvider>
+  );
 }

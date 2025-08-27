@@ -15,6 +15,7 @@ import {
   Crown
 } from 'lucide-react';
 import { type Screen, type UserType, type NavigateFunction } from '../types';
+import { useUser } from '../hooks/useUser';
 
 interface NavigationItem {
   screen: Screen;
@@ -50,6 +51,7 @@ export function Navigation({
   userType 
 }: NavigationProps) {
   const navigate = useNavigate();
+  const { user } = useUser();
 
   const getIconComponent = (iconName: string) => {
     return iconMap[iconName as keyof typeof iconMap] || Home;
@@ -126,10 +128,19 @@ export function Navigation({
           </div>
           <div className="flex-1">
             <p className="font-medium text-sm">
-              {userType === 'establishment' ? 'École Supérieure' : 'Jean Dupont'}
+              {user ? (
+                userType === 'establishment' 
+                  ? (user.nom || 'Établissement')
+                  : `${user.prenom || ''} ${user.nom || ''}`.trim() || 'Utilisateur'
+              ) : (
+                userType === 'establishment' ? 'École Supérieure' : 'Jean Dupont'
+              )}
             </p>
             <p className="text-xs text-muted-foreground">
-              {userType === 'establishment' ? 'Établissement certifié' : 'Étudiant actif'}
+              {userType === 'establishment' 
+                ? (user?.statut === 'ACTIF' ? 'Établissement certifié' : `Statut: ${user?.statut || 'EN_ATTENTE'}`)
+                : 'Étudiant actif'
+              }
             </p>
           </div>
         </div>

@@ -4,6 +4,8 @@ import { PrimaryButton } from "./PrimaryButton";
 import { Checkbox } from "./ui/checkbox";
 import { Label } from "./ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import axios from "axios";
+import { useNavigate } from "react-router-dom";
 
 export interface SignupFormApprenantData {
   fullName: string;
@@ -15,12 +17,8 @@ export interface SignupFormApprenantData {
   acceptConditions: boolean;
 }
 
-interface SignupFormApprenantProps {
-  onSubmit: (data: SignupFormApprenantData) => void;
-  loading?: boolean;
-}
-
-export function SignupFormApprenant({ onSubmit, loading = false }: SignupFormApprenantProps) {
+export function SignupFormApprenant() {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState<SignupFormApprenantData>({
     fullName: "",
     email: "",
@@ -30,10 +28,70 @@ export function SignupFormApprenant({ onSubmit, loading = false }: SignupFormApp
     etablissement: "",
     acceptConditions: false
   });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [apiError, setApiError] = useState<string>('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+    
+    if (formData.password !== formData.confirmPassword) {
+      newErrors.confirmPassword = "Les mots de passe ne correspondent pas";
+    }
+    
+    if (formData.password.length < 6) {
+      newErrors.password = "Le mot de passe doit contenir au moins 6 caractères";
+    }
+
+    if(!formData.etablissement) {
+      newErrors.etablissement = "Veuillez sélectionner un établissement";
+    }
+    
+    if (!formData.acceptConditions) {
+      newErrors.acceptConditions = "Vous devez accepter les conditions";
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(formData);
+    
+    if (!validateForm()) {
+      return;
+    }
+    
+    // Nettoyer les erreurs API précédentes
+    setApiError('');
+    setIsSubmitting(true);
+    
+    try {
+      // Appel à l'API avec les bonnes données
+      const response = await axios.post('http://localhost:5000/api/register/apprenant', {
+        email: formData.email,
+        motDePasse: formData.password,
+        nom: formData.fullName.split(' ')[0] || formData.fullName,
+        prenom: formData.fullName.split(' ').slice(1).join(' ') || formData.fullName.split(' ')[0] || formData.fullName,
+        telephone: formData.phone || '',
+        etablissement: formData.etablissement
+      });
+      
+      if (response.data.success) {
+        // Redirection vers la page de connexion avec message de succès
+        navigate('/auth?tab=login&success=apprenant');
+      }
+    } catch (error: unknown) {
+      console.error('Registration failed:', error);
+      // Gestion d'erreur améliorée
+      if (error && typeof error === 'object' && 'response' in error && error.response && typeof error.response === 'object' && 'data' in error.response && error.response.data && typeof error.response.data === 'object' && 'message' in error.response.data) {
+        setApiError((error.response.data as { message: string }).message);
+      } else {
+        setApiError('Erreur lors de l\'inscription');
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const etablissements = [
@@ -46,6 +104,12 @@ export function SignupFormApprenant({ onSubmit, loading = false }: SignupFormApp
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Affichage des erreurs API */}
+      {apiError && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-sm text-red-600">{apiError}</p>
+        </div>
+      )}
       <InputField
         label="Nom complet"
         type="text"
@@ -71,6 +135,7 @@ export function SignupFormApprenant({ onSubmit, loading = false }: SignupFormApp
         required
         value={formData.password}
         onChange={(value) => setFormData({ ...formData, password: value })}
+        error={errors.password}
       />
 
       <InputField
@@ -80,6 +145,7 @@ export function SignupFormApprenant({ onSubmit, loading = false }: SignupFormApp
         required
         value={formData.confirmPassword}
         onChange={(value) => setFormData({ ...formData, confirmPassword: value })}
+        error={errors.confirmPassword}
       />
 
       <InputField
@@ -108,6 +174,9 @@ export function SignupFormApprenant({ onSubmit, loading = false }: SignupFormApp
             ))}
           </SelectContent>
         </Select>
+        {errors.etablissement && (
+          <p className="text-sm text-[#F43F5E]">{errors.etablissement}</p>
+        )}
       </div>
 
       <div className="flex items-start space-x-2">
@@ -128,9 +197,12 @@ export function SignupFormApprenant({ onSubmit, loading = false }: SignupFormApp
             politique de confidentialité
           </a>
         </Label>
+        {errors.acceptConditions && (
+          <p className="text-sm text-[#F43F5E]">{errors.acceptConditions}</p>
+        )}
       </div>
 
-      <PrimaryButton type="submit" loading={loading} className="mt-6">
+      <PrimaryButton type="submit" loading={isSubmitting} className="mt-6">
         Créer mon compte
       </PrimaryButton>
     </form>

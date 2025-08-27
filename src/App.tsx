@@ -1,30 +1,13 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import { useState, createContext, useContext } from "react";
+import { useState } from "react";
 import { PageDAccueil } from "./screens/PageDAccueil/PageDAccueil";
 import AuthPage from "./screens/Auth/AuthPage";
 import { VerifierCertificat } from "./screens/VerifierCertificat";
 import { Tarif } from "./screens/Tarif/Tarif";
 import DashboardWrapper from "./dashboard/DashboardWrapper";
 import { type UserType } from "./dashboard/types";
+import { AuthContext, type AuthContextType } from "./contexts/AuthContext";
 import "./App.css";
-
-// Contexte pour l'état d'authentification global
-interface AuthContextType {
-  userType: UserType | null;
-  isAuthenticated: boolean;
-  login: (userType: UserType) => void;
-  logout: () => void;
-}
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
 
 export default function App() {
   const [userType, setUserType] = useState<UserType | null>(null);

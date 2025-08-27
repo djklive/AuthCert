@@ -13,6 +13,7 @@ import { SignupFormApprenant } from "../../components/SignupFormApprenant";
 import { SignupFormEtablissement } from "../../components/SignupFormEtablissement";
 import { AlertBox } from "../../components/AlertBox";
 import { GraduationCapIcon, SchoolIcon, UserIcon } from "lucide-react";
+import { AnimatedSection, AnimatedCard } from "../../components/animations/ScrollAnimation";
 import { useAuth } from "../../hooks/useAuth";
 import authService from "../../services/authService";
 
@@ -164,24 +165,27 @@ export default function AuthPage({ defaultTab = "login" }: AuthPageProps) {
 
         {/* Alerte */}
         {alert && (
-          <AlertBox
-            type={alert.type}
-            message={alert.message}
-            className="mb-6"
-          />
+          <AnimatedSection delay={0.1}>
+            <AlertBox
+              type={alert.type}
+              message={alert.message}
+              className="mb-6"
+            />
+          </AnimatedSection>
         )}
 
-        <Card className="shadow-lg border-1 rounded-2xl overflow-hidden">
-            {/* Corrige defaut taille */}
-          <Tabs defaultValue={defaultTab} className="w-full max-w-lg mx-auto">
-            <TabsList className="grid w-full grid-cols-2 bg-gray-50 m-4 rounded-xl">
-              <TabsTrigger value="login" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#F43F5E]">
-                Connexion
-              </TabsTrigger>
-              <TabsTrigger value="signup" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#F43F5E]">
-                Inscription
-              </TabsTrigger>
-            </TabsList>
+        <AnimatedCard delay={0.4}>
+          <Card className="shadow-lg border-1 rounded-2xl overflow-hidden">
+              {/* Corrige defaut taille */}
+            <Tabs defaultValue={defaultTab} className="w-full max-w-lg mx-auto">
+              <TabsList className="grid w-full grid-cols-2 bg-gray-50 m-4 rounded-xl">
+                <TabsTrigger value="login" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#F43F5E]">
+                  Connexion
+                </TabsTrigger>
+                <TabsTrigger value="signup" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-[#F43F5E]">
+                  Inscription
+                </TabsTrigger>
+              </TabsList>
 
             {/* Formulaire de connexion */}
             <TabsContent value="login" className="mt-0">
@@ -310,22 +314,25 @@ export default function AuthPage({ defaultTab = "login" }: AuthPageProps) {
             </TabsContent>
           </Tabs>
         </Card>
+        </AnimatedCard>
 
         {/* Pied de page */}
-        <div className="text-center mt-8 text-sm text-gray-500">
-          <p>© 2025 Certification Diplômes. Tous droits réservés.</p>
-          <div className="mt-2 space-x-4">
-            <a href="#" className="hover:text-[#F43F5E] transition-colors">
-              Conditions d'utilisation
-            </a>
-            <a href="#" className="hover:text-[#F43F5E] transition-colors">
-              Confidentialité
-            </a>
-            <a href="#" className="hover:text-[#F43F5E] transition-colors">
-              Support
-            </a>
+        <AnimatedSection delay={1.1}>
+          <div className="text-center mt-8 text-sm text-gray-500">
+            <p>© 2025 Certification Diplômes. Tous droits réservés.</p>
+            <div className="mt-2 space-x-4">
+              <a href="#" className="hover:text-[#F43F5E] transition-colors">
+                Conditions d'utilisation
+              </a>
+              <a href="#" className="hover:text-[#F43F5E] transition-colors">
+                Confidentialité
+              </a>
+              <a href="#" className="hover:text-[#F43F5E] transition-colors">
+                Support
+              </a>
+            </div>
           </div>
-        </div>
+        </AnimatedSection>
       </div>
     </div>
   );

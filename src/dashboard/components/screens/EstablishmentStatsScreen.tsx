@@ -12,15 +12,12 @@ import {
   Users,
   Globe,
   BarChart3,
-  PieChart,
   Activity,
   MapPin,
   Trophy,
   Zap
 } from 'lucide-react';
 import { 
-  LineChart, 
-  Line, 
   AreaChart,
   Area,
   XAxis, 

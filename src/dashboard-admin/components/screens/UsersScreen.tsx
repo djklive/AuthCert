@@ -1,12 +1,12 @@
-import React from 'react';
+//import React from 'react';
 import { Users, Search, Filter } from 'lucide-react';
-import { type NavigateFunction } from '../../types';
+//import { type NavigateFunction } from '../../types';
 
-interface UsersScreenProps {
+/*interface UsersScreenProps {
   onNavigate: NavigateFunction;
-}
+}*/
 
-export function UsersScreen({ onNavigate }: UsersScreenProps) {
+export function UsersScreen() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">

@@ -172,6 +172,7 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
           <div className="flex space-x-2">
             {onboardingSteps.map((_, index) => (
               <button
+                title="Passer à l'étape suivante"
                 key={index}
                 onClick={() => setCurrentStep(index)}
                 className={`w-2 h-2 rounded-full transition-colors ${

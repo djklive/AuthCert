@@ -8,9 +8,7 @@ import {
   Award, 
   Eye, 
   Building2, 
-  CheckCircle, 
-  XCircle,
-  Clock,
+  CheckCircle,
   Star,
   AlertTriangle,
   Trash2,
@@ -94,11 +92,11 @@ const mockNotifications = [
   }
 ];
 
-interface NotificationsScreenProps {
+/*interface NotificationsScreenProps {
   onNavigate: (screen: string) => void;
-}
+}*/
 
-export function NotificationsScreen({ onNavigate }: NotificationsScreenProps) {
+export function NotificationsScreen() {
   const [notifications, setNotifications] = useState(mockNotifications);
   const [activeTab, setActiveTab] = useState('all');
 

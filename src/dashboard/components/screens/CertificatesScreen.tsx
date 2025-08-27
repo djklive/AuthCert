@@ -5,18 +5,16 @@ import { Badge } from '../ui/badge';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
 import { 
   Award, 
   Search, 
-  Filter, 
   Grid3X3, 
   List, 
   Eye, 
   Download, 
   QrCode, 
   Share2,
-  Calendar,
   Building2,
   ExternalLink,
   Shield,
@@ -216,7 +214,7 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
           <h1 className="text-3xl font-bold">Mes Certificats</h1>
           <p className="text-muted-foreground">Gérez et partagez vos credentials</p>
         </div>
-        <Button onClick={() => onNavigate('requests')} className="rounded-xl">
+        <Button onClick={() => onNavigate('create-certificate')} className="rounded-xl">
           <Award className="mr-2 h-4 w-4" />
           Nouveau certificat
         </Button>

@@ -1,12 +1,12 @@
-import React from 'react';
-import { Settings, Shield, Bell, Globe } from 'lucide-react';
-import { type NavigateFunction } from '../../types';
+//import React from 'react';
+import { Shield, Bell, Globe } from 'lucide-react';
+//import { type NavigateFunction } from '../../types';
 
-interface SettingsScreenProps {
+/*interface SettingsScreenProps {
   onNavigate: NavigateFunction;
-}
+}*/
 
-export function SettingsScreen({ onNavigate }: SettingsScreenProps) {
+export function SettingsScreen() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">

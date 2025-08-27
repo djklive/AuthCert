@@ -15,16 +15,23 @@ import {
   ArrowRight, 
   ArrowLeft, 
   Check,
-  Eye,
   Shield,
   Rocket,
   Mail,
-  Calendar,
   Tag,
   FileText,
   User,
   X
 } from 'lucide-react';
+
+interface Student {
+  id: number;
+  name: string;
+  email: string;
+  courses: string[];
+  certificates: number;
+  avatar: string;
+}
 
 interface CreateCertificateScreenProps {
   onNavigate: (screen: string) => void;
@@ -32,7 +39,7 @@ interface CreateCertificateScreenProps {
 
 export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenProps) {
   const [currentStep, setCurrentStep] = useState(1);
-  const [selectedStudent, setSelectedStudent] = useState<any>(null);
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [certificateData, setCertificateData] = useState({
     type: '',
@@ -457,14 +464,14 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
                           <p className="font-medium">Notifier l'étudiant par email</p>
                           <p className="text-sm text-muted-foreground">L'étudiant recevra un email avec le lien de téléchargement</p>
                         </div>
-                        <input type="checkbox" defaultChecked className="rounded" />
+                        <input title="Notifier l'étudiant par email" type="checkbox" defaultChecked className="rounded" />
                       </div>
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="font-medium">Ajouter au portfolio public</p>
                           <p className="text-sm text-muted-foreground">Le certificat sera visible sur le profil public de l'étudiant</p>
                         </div>
-                        <input type="checkbox" defaultChecked className="rounded" />
+                        <input title='Ajouter au portfolio public' type="checkbox" defaultChecked className="rounded" />
                       </div>
                     </div>
                   </CardContent>

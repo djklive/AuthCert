@@ -110,28 +110,28 @@ export function ScreenRenderer({
       case 'subscription':
         return (
           <SubscriptionScreen 
-            onNavigate={onNavigate}
+            
           />
         );
 
       case 'requests':
         return (
           <RequestsScreen 
-            onNavigate={onNavigate}
+            
           />
         );
 
       case 'profile':
         return (
           <ProfileScreen 
-            onNavigate={onNavigate}
+            
           />
         );
 
       case 'notifications':
         return (
           <NotificationsScreen 
-            onNavigate={onNavigate}
+            
           />
         );
 

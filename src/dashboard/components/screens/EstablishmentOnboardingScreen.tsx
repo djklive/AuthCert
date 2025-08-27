@@ -152,6 +152,7 @@ export function EstablishmentOnboardingScreen({ onComplete }: EstablishmentOnboa
                   <div className="flex items-center gap-4">
                     <div className="relative">
                       <input
+                        title="Couleur principale des certificats"
                         id="primaryColor"
                         type="color"
                         value={primaryColor}
@@ -178,6 +179,7 @@ export function EstablishmentOnboardingScreen({ onComplete }: EstablishmentOnboa
                       <div className="flex items-center gap-2 mt-1">
                         <input
                           type="checkbox"
+                          title="Ajouter une signature numérique"
                           id="hasSignature"
                           checked={hasSignature}
                           onChange={(e) => setHasSignature(e.target.checked)}

@@ -1,12 +1,12 @@
-import React from 'react';
-import { CreditCard, AlertTriangle } from 'lucide-react';
-import { type NavigateFunction } from '../../types';
+//import React from 'react';
+import { AlertTriangle } from 'lucide-react';
+//import { type NavigateFunction } from '../../types';
 
-interface SubscriptionsScreenProps {
+/*interface SubscriptionsScreenProps {
   onNavigate: NavigateFunction;
-}
+}*/
 
-export function SubscriptionsScreen({ onNavigate }: SubscriptionsScreenProps) {
+export function SubscriptionsScreen() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">

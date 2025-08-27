@@ -20,19 +20,19 @@ export function ScreenRenderer({ currentScreen, onNavigate, user }: ScreenRender
         return <DashboardScreen onNavigate={onNavigate} user={user} />;
       
       case 'establishments':
-        return <EstablishmentsScreen onNavigate={onNavigate} />;
+        return <EstablishmentsScreen />;
       
       case 'users':
-        return <UsersScreen onNavigate={onNavigate} />;
+        return <UsersScreen />;
       
       case 'subscriptions':
-        return <SubscriptionsScreen onNavigate={onNavigate} />;
+        return <SubscriptionsScreen />;
       
       case 'reports':
-        return <ReportsScreen onNavigate={onNavigate} />;
+        return <ReportsScreen />;
       
       case 'settings':
-        return <SettingsScreen onNavigate={onNavigate} />;
+        return <SettingsScreen />;
       
       default:
         return (

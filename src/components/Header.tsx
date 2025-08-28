@@ -88,7 +88,7 @@ export const Header = ({ activePage }: HeaderProps) => {
                 {
                     toggleMenu 
                     ? <AiOutlineClose fontSize={28} className='text-black md:hidden cursor-pointer' onClick={() => setToggleMenu(false)} />
-                    : <HiMenuAlt4 fontSize={28} className='text-black md:hidden cursor-pointer' onClick={() => setToggleMenu(true)} />}
+                    : <HiMenuAlt4 fontSize={28} className='text-white rounded-sm p-2 bg-rose-500 md:hidden cursor-pointer' onClick={() => setToggleMenu(true)} />}
                 {
                    toggleMenu && (
                     <ul

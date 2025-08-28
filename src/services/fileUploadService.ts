@@ -17,7 +17,7 @@ export class FileUploadService {
     path: string
   ): Promise<UploadResult> {
     try {
-      const { data, error } = await supabase.storage
+      const { error } = await supabase.storage
         .from(bucket)
         .upload(path, file, {
           cacheControl: '3600',
@@ -90,7 +90,6 @@ export class FileUploadService {
     const timestamp = Date.now()
     const randomId = Math.random().toString(36).substring(2, 15)
     const extension = originalName.split('.').pop()
-    const baseName = originalName.split('.').slice(0, -1).join('.')
     
     return `${prefix || 'file'}_${timestamp}_${randomId}.${extension}`
   }

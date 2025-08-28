@@ -1,0 +1,9 @@
+# Ignorer les fichiers frontend pour Railway
+src/
+public/
+index.html
+vite.config.ts
+tsconfig.json
+*.tsx
+*.ts
+!backend/**/*

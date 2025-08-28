@@ -12,10 +12,11 @@ import { TabNavigation } from "../../components/TabNavigation";
 import { SignupFormApprenant } from "../../components/SignupFormApprenant";
 import { SignupFormEtablissement } from "../../components/SignupFormEtablissement";
 import { AlertBox } from "../../components/AlertBox";
-import { GraduationCapIcon, SchoolIcon, UserIcon } from "lucide-react";
+import { ArrowLeftIcon, GraduationCapIcon, SchoolIcon, UserIcon } from "lucide-react";
 import { AnimatedSection, AnimatedCard } from "../../components/animations/ScrollAnimation";
 import { useAuth } from "../../hooks/useAuth";
 import authService from "../../services/authService";
+import { Button } from "../../components/ui/button";
 
 interface AuthPageProps {
   defaultTab?: "login" | "signup";
@@ -148,6 +149,12 @@ export default function AuthPage({ defaultTab = "login" }: AuthPageProps) {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
+      {/* Bouton retour*/}
+      <div className="absolute top-4 left-4">
+        <Button variant="outline" onClick={() => navigate(-1)}>
+          <ArrowLeftIcon className="w-4 h-4" />
+        </Button>
+      </div>
       <div className="w-full max-w-lg lg:max-w-lg xl:max-w-xl">
         {/* En-tête avec logo */}
         <div className="text-center mb-8">

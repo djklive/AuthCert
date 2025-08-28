@@ -1261,15 +1261,20 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Démarrage du serveur
-app.listen(PORT, () => {
-  console.log(`🚀 Serveur démarré sur le port ${PORT}`);
-  console.log(`📡 API disponible sur http://localhost:${PORT}/api`);
-  console.log(`🔗 DATABASE_URL: ${process.env.DATABASE_URL || 'Non défini'}`);
-});
+// Export de l'app pour le fichier start.js
+module.exports = app;
 
-// Gestion de la fermeture
-process.on('SIGINT', async () => {
-  await prisma.$disconnect();
-  process.exit(0);
-});
+// Démarrage du serveur (seulement si appelé directement)
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`🚀 Serveur démarré sur le port ${PORT}`);
+    console.log(`📡 API disponible sur http://localhost:${PORT}/api`);
+    console.log(`🔗 DATABASE_URL: ${process.env.DATABASE_URL || 'Non défini'}`);
+  });
+
+  // Gestion de la fermeture
+  process.on('SIGINT', async () => {
+    await prisma.$disconnect();
+    process.exit(0);
+  });
+}

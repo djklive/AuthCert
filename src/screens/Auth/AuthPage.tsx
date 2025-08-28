@@ -18,6 +18,8 @@ import { useAuth } from "../../hooks/useAuth";
 import authService from "../../services/authService";
 import { Button } from "../../components/ui/button";
 
+const API_BASE_URL = 'https://authcert-production.up.railway.app/api';
+
 interface AuthPageProps {
   defaultTab?: "login" | "signup";
 }
@@ -81,7 +83,7 @@ export default function AuthPage({ defaultTab = "login" }: AuthPageProps) {
       }
 
       // Appel à l'API de connexion
-      const response = await fetch('https://authcert-production.up.railway.app/api/auth/login', {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

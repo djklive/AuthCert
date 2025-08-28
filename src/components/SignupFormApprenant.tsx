@@ -7,6 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 
+const API_BASE_URL = 'https://authcert-production.up.railway.app/api';
+
 export interface SignupFormApprenantData {
   firstName: string;
   lastName: string;
@@ -70,7 +72,7 @@ export function SignupFormApprenant() {
     
     try {
       // Appel à l'API avec les bonnes données
-      const response = await axios.post('https://authcert-production.up.railway.app/api/register/apprenant', {
+      const response = await axios.post(`${API_BASE_URL}/register/apprenant`, {
         email: formData.email,
         motDePasse: formData.password,
         nom: formData.lastName,

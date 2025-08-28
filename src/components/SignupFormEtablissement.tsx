@@ -9,6 +9,8 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { FileUploadService } from "../services/fileUploadService";
 
+const API_BASE_URL = 'https://authcert-production.up.railway.app/api';
+
 export interface EtablissementDocuments {
   rccmDocument: File | null;
   autorisation: File | null;
@@ -195,7 +197,7 @@ export function SignupFormEtablissement() {
       await Promise.all(uploadPromises);
 
       // 2. Créer l'établissement avec les URLs des fichiers Supabase
-      const response = await axios.post('https://authcert-production.up.railway.app/api/register/etablissement/supabase', {
+      const response = await axios.post(`${API_BASE_URL}/register/etablissement/supabase`, {
         nomEtablissement: formData.nomEtablissement,
         emailEtablissement: formData.emailInstitutionnel,
         motDePasseEtablissement: formData.password,

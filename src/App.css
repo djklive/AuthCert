@@ -209,6 +209,15 @@ html {
   font-size: var(--font-size);
 }
 
+.blue-glassmorphism {
+  background: rgb(39, 51, 89, 0.4);
+  border-radius: 16px;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
+  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: blur(5px);
+  border: 1px solid rgba(0, 0, 0, 0.3);
+}
+
 /* Custom shadows for cards */
 .shadow-soft {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);

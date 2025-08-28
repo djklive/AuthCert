@@ -1,6 +1,6 @@
 import authService from '../../services/authService';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = 'https://authcert-production.up.railway.app/api';
 
 export interface Establishment {
   id_etablissement: number;

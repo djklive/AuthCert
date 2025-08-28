@@ -70,7 +70,7 @@ export function SignupFormApprenant() {
     
     try {
       // Appel à l'API avec les bonnes données
-      const response = await axios.post('http://localhost:5000/api/register/apprenant', {
+      const response = await axios.post('https://authcert-production.up.railway.app/api/register/apprenant', {
         email: formData.email,
         motDePasse: formData.password,
         nom: formData.lastName,

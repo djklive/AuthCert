@@ -81,7 +81,7 @@ export default function AuthPage({ defaultTab = "login" }: AuthPageProps) {
       }
 
       // Appel à l'API de connexion
-      const response = await fetch('http://localhost:5000/api/auth/login', {
+      const response = await fetch('https://authcert-production.up.railway.app/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

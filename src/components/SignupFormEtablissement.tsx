@@ -195,7 +195,7 @@ export function SignupFormEtablissement() {
       await Promise.all(uploadPromises);
 
       // 2. Créer l'établissement avec les URLs des fichiers Supabase
-      const response = await axios.post('http://localhost:5000/api/register/etablissement/supabase', {
+      const response = await axios.post('https://authcert-production.up.railway.app/api/register/etablissement/supabase', {
         nomEtablissement: formData.nomEtablissement,
         emailEtablissement: formData.emailInstitutionnel,
         motDePasseEtablissement: formData.password,

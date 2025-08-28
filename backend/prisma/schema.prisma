@@ -1,0 +1,109 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Apprenant {
+  id_apprenant     Int            @id @default(autoincrement())
+  email            String         @unique
+  motDePasse       String
+  statut           Statut         @default(EN_ATTENTE)
+  dateCreation     DateTime       @default(now())
+  dateModification DateTime       @updatedAt
+  nom              String
+  telephone        String?
+  etablissementId  Int?
+  prenom           String
+  etablissement    Etablissement? @relation(fields: [etablissementId], references: [id_etablissement])
+
+  @@map("apprenants")
+}
+
+model Etablissement {
+  id_etablissement                  Int                     @id @default(autoincrement())
+  nomEtablissement                  String
+  emailEtablissement                String                  @unique
+  motDePasseEtablissement           String
+  rccmEtablissement                 String                  @unique
+  typeEtablissement                 TypeEtablissement
+  dateCreation                      DateTime                @default(now())
+  dateModification                  DateTime                @updatedAt
+  adresseEtablissement              String
+  telephoneEtablissement            String
+  nomResponsableEtablissement       String
+  emailResponsableEtablissement     String
+  telephoneResponsableEtablissement String
+  statut                            Statut                  @default(EN_ATTENTE)
+  apprenants                        Apprenant[]
+  documents                         DocumentEtablissement[]
+
+  @@map("etablissements")
+}
+
+model Admin {
+  id_admin         Int      @id @default(autoincrement())
+  email            String   @unique
+  motDePasse       String
+  statut           Statut   @default(ACTIF)
+  dateCreation     DateTime @default(now())
+  dateModification DateTime @updatedAt
+  nom              String
+  prenom           String
+
+  @@map("admins")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    Int
+  userType  String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@map("sessions")
+}
+
+model DocumentEtablissement {
+  id              Int            @id @default(autoincrement())
+  etablissementId Int
+  typeDocument    String
+  nomFichier      String
+  typeMime        String
+  tailleFichier   Int
+  cheminFichier   String?
+  statut          StatutDocument @default(EN_ATTENTE)
+  dateUpload      DateTime       @default(now())
+  dateValidation  DateTime?
+  commentaires    String?
+  etablissement   Etablissement  @relation(fields: [etablissementId], references: [id_etablissement])
+
+  @@map("documents_etablissement")
+}
+
+enum Statut {
+  EN_ATTENTE
+  ACTIF
+  SUSPENDU
+  REJETE
+}
+
+enum TypeEtablissement {
+  UNIVERSITE_PUBLIQUE
+  UNIVERSITE_PRIVEE
+  INSTITUT_SUPERIEUR
+  ECOLE_TECHNIQUE
+  CENTRE_FORMATION
+  AUTRE
+}
+
+enum StatutDocument {
+  EN_ATTENTE
+  VALIDE
+  REJETE
+  EXPIRED
+}

@@ -1,4 +1,4 @@
-require('dotenv').config({ path: '../.env' });
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
@@ -39,10 +39,10 @@ if (!fs.existsSync(etablissementsDir)) {
 // Route d'inscription d'un apprenant
 app.post('/api/register/apprenant', async (req, res) => {
   try {
-    const { email, motDePasse, nom, telephone, etablissement } = req.body;
+    const { email, motDePasse, nom, prenom, telephone, etablissement } = req.body;
 
     // Validation des champs requis
-    if (!email || !motDePasse || !nom || !etablissement) {
+    if (!email || !motDePasse || !nom || !prenom || !etablissement) {
       return res.status(400).json({
         success: false,
         message: 'Tous les champs obligatoires doivent être remplis'
@@ -71,7 +71,7 @@ app.post('/api/register/apprenant', async (req, res) => {
         email,
         motDePasse: hashedPassword,
         nom,
-        prenom: nom, // Utiliser le nom comme prénom pour l'instant
+        prenom,
         telephone: telephone || null,
         etablissementId: null, // Pas de relation pour l'instant
         statut: 'ACTIF',
@@ -825,6 +825,227 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+// Route d'inscription d'un établissement AVEC Supabase Storage
+app.post('/api/register/etablissement/supabase', async (req, res) => {
+  try {
+    console.log('🚀 Début inscription établissement avec Supabase Storage');
+    console.log('📋 Body reçu:', JSON.stringify(req.body, null, 2));
+    
+    const {
+      nomEtablissement,
+      emailEtablissement,
+      motDePasseEtablissement,
+      rccmEtablissement,
+      typeEtablissement,
+      adresseEtablissement,
+      telephoneEtablissement,
+      nomResponsableEtablissement,
+      emailResponsableEtablissement,
+      telephoneResponsableEtablissement,
+      documents // URLs des fichiers Supabase
+    } = req.body;
+    
+    // Mapping des types d'établissement frontend vers backend
+    const typeEtablissementMapping = {
+      'Université publique': 'UNIVERSITE_PUBLIQUE',
+      'Université privée': 'UNIVERSITE_PRIVEE',
+      'Institut supérieur': 'INSTITUT_SUPERIEUR',
+      'École technique': 'ECOLE_TECHNIQUE',
+      'Centre de formation': 'CENTRE_FORMATION',
+      'Autre': 'AUTRE'
+    };
+    
+    // Convertir le type d'établissement
+    const typeEtablissementBackend = typeEtablissementMapping[typeEtablissement];
+    if (!typeEtablissementBackend) {
+      return res.status(400).json({
+        success: false,
+        message: 'Type d\'établissement invalide'
+      });
+    }
+    
+    console.log('🔄 Type d\'établissement converti:', typeEtablissement, '→', typeEtablissementBackend);
+    
+    // Validation des champs requis
+    console.log('✅ Validation des champs...');
+    if (!nomEtablissement || !emailEtablissement || !motDePasseEtablissement || 
+        !rccmEtablissement || !typeEtablissement || !adresseEtablissement || 
+        !telephoneEtablissement || !nomResponsableEtablissement || 
+        !emailResponsableEtablissement || !telephoneResponsableEtablissement) {
+      console.log('❌ Validation échouée - champs manquants');
+      return res.status(400).json({
+        success: false,
+        message: 'Tous les champs obligatoires doivent être remplis'
+      });
+    }
+    console.log('✅ Validation réussie');
+
+    // Vérification si l'email existe déjà
+    console.log('🔍 Vérification email existant...');
+    const existingEtablissement = await prisma.etablissement.findUnique({
+      where: { emailEtablissement }
+    });
+
+    if (existingEtablissement) {
+      console.log('❌ Email déjà existant');
+      return res.status(409).json({
+        success: false,
+        message: 'Un établissement avec cet email existe déjà'
+      });
+    }
+    console.log('✅ Email disponible');
+
+    // Hashage du mot de passe
+    console.log('🔐 Hashage du mot de passe...');
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(motDePasseEtablissement, salt);
+    console.log('✅ Mot de passe hashé');
+
+    // Création de l'établissement
+    console.log('🏗️ Création de l\'établissement en base...');
+    const etablissement = await prisma.etablissement.create({
+      data: {
+        nomEtablissement,
+        emailEtablissement,
+        motDePasseEtablissement: hashedPassword,
+        rccmEtablissement,
+        typeEtablissement: typeEtablissementBackend,
+        adresseEtablissement,
+        telephoneEtablissement,
+        nomResponsableEtablissement,
+        emailResponsableEtablissement,
+        telephoneResponsableEtablissement,
+        statut: 'EN_ATTENTE',
+        dateCreation: new Date(),
+        dateModification: new Date()
+      }
+    });
+
+    // Log des URLs des documents Supabase
+    if (documents) {
+      console.log('📋 URLs des documents Supabase reçus:', documents);
+      console.log('🔗 RCCM:', documents.rccmDocument);
+      console.log('🔗 Autorisation:', documents.autorisation);
+      console.log('🔗 Pièce d\'identité:', documents.pieceIdentite);
+      console.log('🔗 Logo:', documents.logo);
+      console.log('🔗 Plaquette:', documents.plaquette);
+    }
+
+    // Sauvegarder les URLs des documents Supabase dans la base
+    if (documents) {
+      const documentsToSave = [];
+      
+      // Documents obligatoires
+      if (documents.rccmDocument) {
+        documentsToSave.push({
+          etablissementId: etablissement.id_etablissement,
+          typeDocument: 'rccm',
+          nomFichier: 'Document RCCM',
+          typeMime: 'application/pdf',
+          tailleFichier: 0, // Taille non disponible depuis Supabase
+          cheminFichier: documents.rccmDocument, // URL Supabase
+          statut: 'EN_ATTENTE',
+          dateUpload: new Date()
+        });
+      }
+      
+      if (documents.autorisation) {
+        documentsToSave.push({
+          etablissementId: etablissement.id_etablissement,
+          typeDocument: 'autorisation',
+          nomFichier: 'Autorisation de fonctionnement',
+          typeMime: 'application/pdf',
+          tailleFichier: 0,
+          cheminFichier: documents.autorisation, // URL Supabase
+          statut: 'EN_ATTENTE',
+          dateUpload: new Date()
+        });
+      }
+      
+      if (documents.pieceIdentite) {
+        documentsToSave.push({
+          etablissementId: etablissement.id_etablissement,
+          typeDocument: 'pieceIdentite',
+          nomFichier: 'Pièce d\'identité du représentant',
+          typeMime: 'application/pdf',
+          tailleFichier: 0,
+          cheminFichier: documents.pieceIdentite, // URL Supabase
+          statut: 'EN_ATTENTE',
+          dateUpload: new Date()
+        });
+      }
+      
+      // Documents optionnels
+      if (documents.logo) {
+        documentsToSave.push({
+          etablissementId: etablissement.id_etablissement,
+          typeDocument: 'logo',
+          nomFichier: 'Logo de l\'établissement',
+          typeMime: 'image/png',
+          tailleFichier: 0,
+          cheminFichier: documents.logo, // URL Supabase
+          statut: 'EN_ATTENTE',
+          dateUpload: new Date()
+        });
+      }
+      
+      if (documents.plaquette) {
+        documentsToSave.push({
+          etablissementId: etablissement.id_etablissement,
+          typeDocument: 'plaquette',
+          nomFichier: 'Plaquette institutionnelle',
+          typeMime: 'application/pdf',
+          tailleFichier: 0,
+          cheminFichier: documents.plaquette, // URL Supabase
+          statut: 'EN_ATTENTE',
+          dateUpload: new Date()
+        });
+      }
+      
+      // Sauvegarder tous les documents
+      if (documentsToSave.length > 0) {
+        try {
+          await prisma.documentEtablissement.createMany({
+            data: documentsToSave
+          });
+          console.log(`✅ ${documentsToSave.length} documents Supabase sauvegardés en base`);
+        } catch (error) {
+          console.error('❌ Erreur lors de la sauvegarde des documents Supabase:', error);
+          // Ne pas faire échouer l'inscription pour une erreur de documents
+        }
+      }
+    }
+
+    console.log('✅ Établissement créé avec succès via Supabase, ID:', etablissement.id_etablissement);
+
+    // Suppression du mot de passe de la réponse
+    const { motDePasseEtablissement: _, ...etablissementSansMotDePasse } = etablissement;
+
+    res.status(201).json({
+      success: true,
+      message: 'Demande d\'inscription établissement soumise avec succès via Supabase ! Votre compte sera validé sous 48-72h.',
+      data: etablissementSansMotDePasse
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur inscription établissement Supabase:', error);
+    console.error('📋 Détails de l\'erreur:', error.message);
+    console.error('🔍 Stack trace:', error.stack);
+    
+    // Vérifier si c'est une erreur Prisma
+    if (error.code) {
+      console.error('📊 Code erreur Prisma:', error.code);
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la création du compte établissement via Supabase',
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
 // Route pour changer le statut d'un établissement (pour l'admin)
 app.patch('/api/admin/etablissement/:id/status', authenticateToken, requireRole('admin'), async (req, res) => {
   try {
@@ -1028,6 +1249,16 @@ app.patch('/api/admin/etablissement/:id/suspend', authenticateToken, requireRole
       error: error.message
     });
   }
+});
+
+// Route de santé pour Railway
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development'
+  });
 });
 
 // Démarrage du serveur

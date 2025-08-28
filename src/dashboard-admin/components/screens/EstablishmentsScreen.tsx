@@ -51,9 +51,9 @@ export function EstablishmentsScreen() {
   };
 
   // Fonction pour visualiser un document
-  const handleViewDocument = async (documentId: number) => {
+  const handleViewDocument = async (documentId: number, documentUrl?: string) => {
     try {
-      await api.viewDocument(documentId);
+      await api.viewDocument(documentId, documentUrl);
     } catch (err) {
       console.error('Erreur visualisation:', err);
       alert('Erreur lors de la visualisation du document');
@@ -61,9 +61,9 @@ export function EstablishmentsScreen() {
   };
 
   // Fonction pour télécharger un document
-  const handleDownloadDocument = async (documentId: number, fileName: string) => {
+  const handleDownloadDocument = async (documentId: number, fileName: string, documentUrl?: string) => {
     try {
-      await api.downloadDocument(documentId, fileName);
+      await api.downloadDocument(documentId, fileName, documentUrl);
     } catch (err) {
       console.error('Erreur téléchargement:', err);
       alert('Erreur lors du téléchargement du document');
@@ -75,6 +75,7 @@ export function EstablishmentsScreen() {
       case 'EN_ATTENTE': return 'bg-amber-100 text-amber-800';
       case 'ACTIF': return 'bg-green-100 text-green-800';
       case 'REJETE': return 'bg-red-100 text-red-800';
+      case 'SUSPENDU': return 'bg-orange-100 text-orange-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -84,6 +85,7 @@ export function EstablishmentsScreen() {
       case 'EN_ATTENTE': return 'En attente';
       case 'ACTIF': return 'Actif';
       case 'REJETE': return 'Rejeté';
+      case 'SUSPENDU': return 'Suspendu';
       default: return 'Inconnu';
     }
   };
@@ -94,7 +96,25 @@ export function EstablishmentsScreen() {
       case 'EN_ATTENTE': return 'pending';
       case 'ACTIF': return 'active';
       case 'REJETE': return 'rejected';
+      case 'SUSPENDU': return 'rejected'; // Grouper avec les rejetés pour l'affichage
       default: return 'pending';
+    }
+  };
+
+  // Fonction utilitaire pour détecter le type de document
+  const isSupabaseDocument = (cheminFichier: string): boolean => {
+    return cheminFichier.startsWith('http');
+  };
+
+  // Fonction pour obtenir l'icône du type de document
+  const getDocumentIcon = (typeDocument: string) => {
+    switch (typeDocument.toLowerCase()) {
+      case 'rccm': return '📋';
+      case 'autorisation': return '✅';
+      case 'pieceidentite': return '🆔';
+      case 'logo': return '🖼️';
+      case 'plaquette': return '📄';
+      default: return '📎';
     }
   };
 
@@ -286,15 +306,21 @@ export function EstablishmentsScreen() {
                 <div className="space-y-3">
                   {selectedEstablishment.documents.map((doc) => (
                     <div key={doc.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div>
-                        <p className="font-medium text-gray-900">{doc.nomFichier}</p>
-                        <p className="text-sm text-gray-600">
-                          Ajouté le {new Date(doc.dateUpload).toLocaleDateString('fr-FR')}
-                        </p>
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">{getDocumentIcon(doc.typeDocument)}</span>
+                        <div>
+                          <p className="font-medium text-gray-900">{doc.nomFichier}</p>
+                          <p className="text-sm text-gray-600">
+                            Ajouté le {new Date(doc.dateUpload).toLocaleDateString('fr-FR')}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {isSupabaseDocument(doc.cheminFichier) ? '📁 Stocké sur Supabase' : '💾 Stocké localement'}
+                          </p>
+                        </div>
                       </div>
                       <div className="flex items-center gap-2">
                         <button 
-                          onClick={() => handleViewDocument(doc.id)}
+                          onClick={() => handleViewDocument(doc.id, doc.cheminFichier)}
                           className="px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                           title="Afficher le document"
                         >
@@ -302,7 +328,7 @@ export function EstablishmentsScreen() {
                           Afficher
                         </button>
                         <button 
-                          onClick={() => handleDownloadDocument(doc.id, doc.nomFichier)}
+                          onClick={() => handleDownloadDocument(doc.id, doc.nomFichier, doc.cheminFichier)}
                           className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
                           title="Télécharger le document"
                         >

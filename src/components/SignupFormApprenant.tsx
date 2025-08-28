@@ -8,7 +8,8 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 
 export interface SignupFormApprenantData {
-  fullName: string;
+  firstName: string;
+  lastName: string;
   email: string;
   password: string;
   confirmPassword: string;
@@ -20,7 +21,8 @@ export interface SignupFormApprenantData {
 export function SignupFormApprenant() {
   const navigate = useNavigate();
   const [formData, setFormData] = useState<SignupFormApprenantData>({
-    fullName: "",
+    firstName: "",
+    lastName: "",
     email: "",
     password: "",
     confirmPassword: "",
@@ -71,8 +73,8 @@ export function SignupFormApprenant() {
       const response = await axios.post('http://localhost:5000/api/register/apprenant', {
         email: formData.email,
         motDePasse: formData.password,
-        nom: formData.fullName.split(' ')[0] || formData.fullName,
-        prenom: formData.fullName.split(' ').slice(1).join(' ') || formData.fullName.split(' ')[0] || formData.fullName,
+        nom: formData.lastName,
+        prenom: formData.firstName,
         telephone: formData.phone || '',
         etablissement: formData.etablissement
       });
@@ -111,12 +113,21 @@ export function SignupFormApprenant() {
         </div>
       )}
       <InputField
-        label="Nom complet"
+        label="Nom"
         type="text"
-        placeholder="Entrez votre nom complet"
+        placeholder="Entrez votre nom"
         required
-        value={formData.fullName}
-        onChange={(value) => setFormData({ ...formData, fullName: value })}
+        value={formData.lastName}
+        onChange={(value) => setFormData({ ...formData, lastName: value })}
+      />
+
+      <InputField
+        label="Prénom"
+        type="text"
+        placeholder="Entrez votre prénom"
+        required
+        value={formData.firstName}
+        onChange={(value) => setFormData({ ...formData, firstName: value })}
       />
 
       <InputField

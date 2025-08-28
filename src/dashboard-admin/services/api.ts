@@ -6,7 +6,7 @@ export interface Establishment {
   id_etablissement: number;
   nomEtablissement: string;
   emailEtablissement: string;
-  statut: 'EN_ATTENTE' | 'ACTIF' | 'REJETE';
+  statut: 'EN_ATTENTE' | 'ACTIF' | 'REJETE' | 'SUSPENDU';
   dateCreation: string;
   nomResponsableEtablissement: string;
   telephoneEtablissement: string;
@@ -19,8 +19,10 @@ export interface Document {
   id: number;
   typeDocument: string;
   nomFichier: string;
-  cheminFichier: string;
+  cheminFichier: string; // Peut contenir soit un chemin local soit une URL Supabase
   dateUpload: string;
+  typeMime?: string;
+  tailleFichier?: number;
 }
 
 export const api = {
@@ -67,18 +69,24 @@ export const api = {
   },
 
   // Visualiser un document dans le navigateur
-  async viewDocument(documentId: number): Promise<void> {
+  async viewDocument(documentId: number, documentUrl?: string): Promise<void> {
     try {
+      // Si c'est une URL Supabase, l'ouvrir directement
+      if (documentUrl && documentUrl.startsWith('http')) {
+        window.open(documentUrl, '_blank');
+        console.log(`👁️ Document Supabase ouvert: ${documentUrl}`);
+        return;
+      }
+
+      // Sinon, utiliser l'ancienne méthode pour les documents locaux
       const token = authService.getToken();
       if (!token) {
         throw new Error('Token d\'authentification manquant');
       }
       
       const url = `${API_BASE_URL}/admin/document/${documentId}/view`;
-      // Ouvrir dans un nouvel onglet avec le token dans l'URL (pour la démo)
-      // En production, on utiliserait une approche plus sécurisée
       window.open(url, '_blank');
-      console.log(`👁️ Document ouvert: ${documentId}`);
+      console.log(`👁️ Document local ouvert: ${documentId}`);
     } catch (error) {
       console.error('Erreur visualisation:', error);
       throw error;
@@ -86,8 +94,31 @@ export const api = {
   },
 
   // Télécharger un document
-  async downloadDocument(documentId: number, fileName: string): Promise<void> {
+  async downloadDocument(documentId: number, fileName: string, documentUrl?: string): Promise<void> {
     try {
+      // Si c'est une URL Supabase, télécharger directement
+      if (documentUrl && documentUrl.startsWith('http')) {
+        const response = await fetch(documentUrl);
+        if (!response.ok) {
+          throw new Error('Erreur lors du téléchargement depuis Supabase');
+        }
+        
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        
+        console.log(`📥 Document Supabase téléchargé: ${fileName}`);
+        return;
+      }
+
+      // Sinon, utiliser l'ancienne méthode pour les documents locaux
       const response = await fetch(`${API_BASE_URL}/admin/document/${documentId}/download`, {
         headers: authService.getAuthHeaders()
       });
@@ -96,24 +127,18 @@ export const api = {
         throw new Error('Erreur lors du téléchargement');
       }
       
-      // Créer un blob à partir de la réponse
       const blob = await response.blob();
-      
-      // Créer un lien de téléchargement
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       link.download = fileName;
       
-      // Déclencher le téléchargement
       document.body.appendChild(link);
       link.click();
-      
-      // Nettoyer
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
       
-      console.log(`📥 Document téléchargé: ${fileName}`);
+      console.log(`📥 Document local téléchargé: ${fileName}`);
     } catch (error) {
       console.error('Erreur téléchargement:', error);
       throw error;

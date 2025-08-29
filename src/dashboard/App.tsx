@@ -107,7 +107,7 @@ export default function App({ onLogout }: AppProps) {
             navigationItems={getNavigationItems(appState.userType)}
             userType={appState.userType}
           />
-          <main className="flex-1 overflow-auto">
+          <main className="flex-1 overflow-auto lg:ml-0">
             <ScreenRenderer
               currentScreen={appState.currentScreen}
               userType={appState.userType}

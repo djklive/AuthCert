@@ -173,19 +173,19 @@ export function DashboardScreen({ hasData = true, onNavigate }: DashboardScreenP
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-8">
+    <div className="p-4 lg:p-6 max-w-7xl mx-auto space-y-6 lg:space-y-8">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
         <div>
-          <h1 className="text-3xl font-bold">Bonjour, {getDisplayName()} ! 👋</h1>
-          <p className="text-muted-foreground">Voici un aperçu de vos certificats</p>
+          <h1 className="text-2xl lg:text-3xl font-bold">Bonjour, {getDisplayName()} ! 👋</h1>
+          <p className="text-sm lg:text-base text-muted-foreground">Voici un aperçu de vos certificats</p>
         </div>
-        <div className="flex items-center space-x-3">
-          <Button variant="outline" size="sm" className="rounded-xl">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
+          <Button variant="outline" size="sm" className="rounded-xl w-full sm:w-auto">
             <Calendar className="mr-2 h-4 w-4" />
             Derniers 30 jours
           </Button>
-          <Button size="sm" className="rounded-xl" onClick={() => onNavigate('requests')}>
+          <Button size="sm" className="rounded-xl w-full sm:w-auto" onClick={() => onNavigate('requests')}>
             <Plus className="mr-2 h-4 w-4" />
             Nouveau certificat
           </Button>
@@ -193,19 +193,19 @@ export function DashboardScreen({ hasData = true, onNavigate }: DashboardScreenP
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 lg:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         {mockStats.map((stat, index) => {
           const Icon = stat.icon;
           return (
             <Card key={index} className="relative overflow-hidden">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
-                <div className={`w-10 h-10 ${stat.bgColor} rounded-lg flex items-center justify-center`}>
-                  <Icon className={`h-5 w-5 ${stat.color}`} />
+                <CardTitle className="text-xs lg:text-sm font-medium">{stat.title}</CardTitle>
+                <div className={`w-8 h-8 lg:w-10 lg:h-10 ${stat.bgColor} rounded-lg flex items-center justify-center`}>
+                  <Icon className={`h-4 w-4 lg:h-5 lg:w-5 ${stat.color}`} />
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stat.value}</div>
+                <div className="text-xl lg:text-2xl font-bold">{stat.value}</div>
                 <p className="text-xs text-muted-foreground flex items-center mt-1">
                   <TrendingUp className="mr-1 h-3 w-3" />
                   {stat.description}
@@ -216,7 +216,7 @@ export function DashboardScreen({ hasData = true, onNavigate }: DashboardScreenP
         })}
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-3">
+      <div className="grid gap-6 lg:gap-8 grid-cols-1 lg:grid-cols-3">
         {/* Recent Certificates */}
         <div className="lg:col-span-2">
           <Card>
@@ -234,29 +234,29 @@ export function DashboardScreen({ hasData = true, onNavigate }: DashboardScreenP
             <CardContent className="space-y-4">
               {mockCertificates.map((cert, index) => (
                 <div key={cert.id}>
-                  <div className="flex items-center space-x-4">
-                    <div className={`w-12 h-12 ${cert.color}/10 rounded-xl flex items-center justify-center`}>
-                      <Award className={`h-6 w-6 ${cert.color.replace('bg-', 'text-')}`} />
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+                    <div className={`w-10 h-10 sm:w-12 sm:h-12 ${cert.color}/10 rounded-xl flex items-center justify-center flex-shrink-0`}>
+                      <Award className={`h-5 w-5 sm:h-6 sm:w-6 ${cert.color.replace('bg-', 'text-')}`} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h4 className="font-semibold truncate">{cert.title}</h4>
-                      <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+                      <h4 className="font-semibold truncate text-sm sm:text-base">{cert.title}</h4>
+                      <div className="flex items-center space-x-2 text-xs sm:text-sm text-muted-foreground">
                         <span>{cert.institution}</span>
                         <span>•</span>
                         <span>{cert.date}</span>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <Badge variant={cert.status === 'verified' ? 'default' : 'secondary'}>
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2">
+                      <Badge variant={cert.status === 'verified' ? 'default' : 'secondary'} className="w-full sm:w-auto text-center">
                         {cert.status === 'verified' ? 'Vérifié' : 'En attente'}
                       </Badge>
-                      <div className="flex items-center text-sm text-muted-foreground">
+                      <div className="flex items-center justify-center sm:justify-start text-xs sm:text-sm text-muted-foreground">
                         <Eye className="mr-1 h-3 w-3" />
                         {cert.views}
                       </div>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm">
+                          <Button variant="ghost" size="sm" className="w-full sm:w-auto">
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
@@ -289,31 +289,31 @@ export function DashboardScreen({ hasData = true, onNavigate }: DashboardScreenP
         </div>
 
         {/* Sidebar */}
-        <div className="space-y-6">
+        <div className="space-y-4 lg:space-y-6">
           {/* Activity Chart */}
           <Card>
             <CardHeader>
-              <CardTitle>Activité mensuelle</CardTitle>
-              <CardDescription>Vérifications de vos certificats</CardDescription>
+              <CardTitle className="text-base lg:text-lg">Activité mensuelle</CardTitle>
+              <CardDescription className="text-xs lg:text-sm">Vérifications de vos certificats</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
+              <div className="space-y-3 lg:space-y-4">
                 <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
+                  <div className="flex justify-between text-xs lg:text-sm">
                     <span>Cette semaine</span>
                     <span className="font-semibold">23</span>
                   </div>
                   <Progress value={75} className="h-2" />
                 </div>
                 <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
+                  <div className="flex justify-between text-xs lg:text-sm">
                     <span>Semaine dernière</span>
                     <span className="font-semibold">18</span>
                   </div>
                   <Progress value={60} className="h-2" />
                 </div>
                 <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
+                  <div className="flex justify-between text-xs lg:text-sm">
                     <span>Il y a 2 semaines</span>
                     <span className="font-semibold">31</span>
                   </div>
@@ -327,13 +327,13 @@ export function DashboardScreen({ hasData = true, onNavigate }: DashboardScreenP
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle>Notifications</CardTitle>
+                <CardTitle className="text-base lg:text-lg">Notifications</CardTitle>
                 <Button variant="ghost" size="sm" onClick={() => onNavigate('notifications')}>
                   <Bell className="h-4 w-4" />
                 </Button>
               </div>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-3 lg:space-y-4">
               {mockNotifications.map((notification, index) => (
                 <div key={notification.id} className="space-y-2">
                   <div className="flex items-start space-x-3">
@@ -341,8 +341,8 @@ export function DashboardScreen({ hasData = true, onNavigate }: DashboardScreenP
                       notification.type === 'success' ? 'bg-primary' : 'bg-chart-2'
                     }`} />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium">{notification.title}</p>
-                      <p className="text-sm text-muted-foreground">{notification.description}</p>
+                      <p className="text-xs lg:text-sm font-medium">{notification.title}</p>
+                      <p className="text-xs lg:text-sm text-muted-foreground">{notification.description}</p>
                       <p className="text-xs text-muted-foreground mt-1">{notification.time}</p>
                     </div>
                   </div>

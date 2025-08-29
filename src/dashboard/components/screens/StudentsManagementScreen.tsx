@@ -126,20 +126,20 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
   };
 
   return (
-    <div className="p-6 space-y-8">
-      <div className="flex items-center justify-between">
+    <div className="p-4 lg:p-6 space-y-6 lg:space-y-8">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Gestion des étudiants</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl lg:text-3xl font-bold">Gestion des étudiants</h1>
+          <p className="text-sm lg:text-base text-muted-foreground">
             Gérez vos étudiants liés et traitez les nouvelles demandes de liaison
           </p>
         </div>
-        <div className="flex gap-3">
-          <Button variant="outline" className="rounded-xl">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
+          <Button variant="outline" className="rounded-xl w-full sm:w-auto">
             <Download className="h-4 w-4 mr-2" />
             Exporter
           </Button>
-          <Button className="rounded-xl">
+          <Button className="rounded-xl w-full sm:w-auto">
             <UserPlus className="h-4 w-4 mr-2" />
             Inviter un étudiant
           </Button>

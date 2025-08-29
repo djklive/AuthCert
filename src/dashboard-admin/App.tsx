@@ -70,7 +70,7 @@ export default function App({ onLogout }: AppProps) {
         user={appState.user}
       />
       
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto lg:ml-0">
         <ScreenRenderer
           currentScreen={appState.currentScreen}
           onNavigate={handleNavigate}

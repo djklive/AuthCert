@@ -84,7 +84,7 @@ export const Header = ({ activePage }: HeaderProps) => {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
           </svg>
         </Button>*/}
-        <div className='flex relative'>
+        <div className='flex lg:absolute relative'>
                 {
                     toggleMenu 
                     ? <AiOutlineClose fontSize={28} className='text-black md:hidden cursor-pointer' onClick={() => setToggleMenu(false)} />

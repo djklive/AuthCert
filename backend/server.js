@@ -622,6 +622,52 @@ app.get('/api/admin/etablissements', authenticateToken, requireRole('admin'), as
   }
 });
 
+// Route pour recuperer tous les etablissements (page d'accueil)
+app.get('/api/accueil/etablissements', async (req, res) => {
+  try {
+    console.log('🔍 Récupération des établissements...');
+    
+    const etablissements = await prisma.etablissement.findMany({
+      select: {
+        id_etablissement: true,
+        nomEtablissement: true,
+        emailEtablissement: true,
+        statut: true,
+        dateCreation: true,
+        nomResponsableEtablissement: true,
+        telephoneEtablissement: true,
+        adresseEtablissement: true,
+        typeEtablissement: true,
+        documents: {
+          select: {
+            id: true,
+            typeDocument: true,
+            nomFichier: true,
+            cheminFichier: true,
+            dateUpload: true
+          }
+        }
+      },
+      orderBy: { dateCreation: 'desc' }
+    });
+    
+    console.log(`✅ ${etablissements.length} établissements trouvés:`, etablissements.map(e => ({ nom: e.nomEtablissement, statut: e.statut })));
+    
+    res.json({
+      success: true,
+      data: etablissements
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur récupération établissements:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération des établissements',
+      error: error.message
+    });
+  }
+});
+
 // Route pour récupérer les documents d'un établissement
 app.get('/api/etablissement/:id/documents', async (req, res) => {
   try {

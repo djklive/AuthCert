@@ -1,3 +1,4 @@
+import { useUser } from '../../hooks/useUser';
 import { useState } from 'react';
 import { Button } from '../ui/button';
 import { Card, CardContent } from '../ui/card';
@@ -99,6 +100,27 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [selectedCertificate, setSelectedCertificate] = useState<typeof mockCertificates[0] | null>(null);
+
+  const { user } = useUser();
+
+  // Generer le bouton en fonction du role de l'utilisateur
+  const generateButton = () => {
+    if (user?.role === 'establishment') {
+      return (
+        <Button onClick={() => onNavigate('create-certificate')} className="rounded-xl">
+          <Award className="mr-2 h-4 w-4" />
+          Nouveau certificat
+        </Button>
+      );
+    } else {
+      return (
+        <Button onClick={() => onNavigate('requests')} className="rounded-xl">
+          <Award className="mr-2 h-4 w-4" />
+          Nouveau certificat
+        </Button>
+      );
+    }
+  }
 
   const filteredCertificates = mockCertificates.filter(cert => {
     const matchesSearch = cert.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -214,10 +236,7 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
           <h1 className="text-3xl font-bold">Mes Certificats</h1>
           <p className="text-muted-foreground">Gérez et partagez vos credentials</p>
         </div>
-        <Button onClick={() => onNavigate('create-certificate')} className="rounded-xl">
-          <Award className="mr-2 h-4 w-4" />
-          Nouveau certificat
-        </Button>
+        {generateButton()}
       </div>
 
       {/* Search and Filters */}

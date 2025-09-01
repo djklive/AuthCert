@@ -18,6 +18,27 @@ const prisma = new PrismaClient();
 
 const PORT = process.env.PORT || 5000;
 
+// Fonction utilitaire pour mapper les types d'établissement
+function mapTypeEtablissement(typeString) {
+  const typeMap = {
+    'Université publique': 'UNIVERSITE_PUBLIQUE',
+    'Université privée': 'UNIVERSITE_PRIVEE',
+    'Institut supérieur': 'INSTITUT_SUPERIEUR',
+    'École technique': 'ECOLE_TECHNIQUE',
+    'Centre de formation': 'CENTRE_FORMATION',
+    'Autre': 'AUTRE',
+    // Support pour les valeurs déjà mappées
+    'UNIVERSITE_PUBLIQUE': 'UNIVERSITE_PUBLIQUE',
+    'UNIVERSITE_PRIVEE': 'UNIVERSITE_PRIVEE',
+    'INSTITUT_SUPERIEUR': 'INSTITUT_SUPERIEUR',
+    'ECOLE_TECHNIQUE': 'ECOLE_TECHNIQUE',
+    'CENTRE_FORMATION': 'CENTRE_FORMATION',
+    'AUTRE': 'AUTRE'
+  };
+  
+  return typeMap[typeString] || 'AUTRE';
+}
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -1292,6 +1313,317 @@ app.patch('/api/admin/etablissement/:id/suspend', authenticateToken, requireRole
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la suspension',
+      error: error.message
+    });
+  }
+});
+
+// ========================================
+// ROUTES ADMIN POUR LA GESTION DES UTILISATEURS
+// ========================================
+
+// Route pour récupérer tous les apprenants (admin)
+app.get('/api/admin/apprenants', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    console.log('🔍 Récupération de tous les apprenants...');
+    
+    const apprenants = await prisma.apprenant.findMany({
+      select: {
+        id_apprenant: true,
+        email: true,
+        nom: true,
+        prenom: true,
+        telephone: true,
+        statut: true,
+        dateCreation: true,
+        dateModification: true,
+        etablissementId: true,
+        etablissement: {
+          select: {
+            nomEtablissement: true
+          }
+        }
+      },
+      orderBy: { dateCreation: 'desc' }
+    });
+    
+    console.log(`✅ ${apprenants.length} apprenants trouvés`);
+    
+    res.json({
+      success: true,
+      data: apprenants
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur récupération apprenants:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération des apprenants',
+      error: error.message
+    });
+  }
+});
+
+// Route pour mettre à jour le statut d'un apprenant (admin)
+app.patch('/api/admin/apprenant/:id/status', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { statut, commentaires } = req.body;
+    
+    console.log(`🔄 Mise à jour statut apprenant ${id} vers ${statut}`);
+    
+    // Mettre à jour l'apprenant
+    const apprenant = await prisma.apprenant.update({
+      where: { id_apprenant: parseInt(id) },
+      data: {
+        statut,
+        dateModification: new Date()
+      }
+    });
+    
+    console.log(`✅ Statut apprenant mis à jour: ${apprenant.email} -> ${statut}`);
+    
+    res.json({
+      success: true,
+      message: `Statut de l'apprenant mis à jour vers ${statut}`,
+      data: apprenant
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur mise à jour statut apprenant:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la mise à jour du statut',
+      error: error.message
+    });
+  }
+});
+
+// Route pour supprimer un apprenant (admin)
+app.delete('/api/admin/apprenant/:id', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    console.log(`🗑️ Suppression apprenant ${id}`);
+    
+    // Vérifier que l'apprenant existe
+    const apprenant = await prisma.apprenant.findUnique({
+      where: { id_apprenant: parseInt(id) }
+    });
+    
+    if (!apprenant) {
+      return res.status(404).json({
+        success: false,
+        message: 'Apprenant non trouvé'
+      });
+    }
+    
+    // Supprimer l'apprenant
+    await prisma.apprenant.delete({
+      where: { id_apprenant: parseInt(id) }
+    });
+    
+    console.log(`✅ Apprenant supprimé: ${apprenant.email}`);
+    
+    res.json({
+      success: true,
+      message: 'Apprenant supprimé avec succès'
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur suppression apprenant:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la suppression',
+      error: error.message
+    });
+  }
+});
+
+// Route pour créer un nouvel apprenant (admin)
+app.post('/api/admin/apprenant', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const { email, motDePasse, nom, prenom, telephone, etablissementId } = req.body;
+    
+    console.log(`➕ Création nouvel apprenant: ${email}`);
+    
+    // Vérifier que l'email n'existe pas déjà
+    const existingApprenant = await prisma.apprenant.findUnique({
+      where: { email }
+    });
+    
+    if (existingApprenant) {
+      return res.status(400).json({
+        success: false,
+        message: 'Un apprenant avec cet email existe déjà'
+      });
+    }
+    
+    // Hasher le mot de passe
+    const hashedPassword = await bcrypt.hash(motDePasse, 10);
+    
+    // Créer l'apprenant
+    const apprenant = await prisma.apprenant.create({
+      data: {
+        email,
+        motDePasse: hashedPassword,
+        nom,
+        prenom,
+        telephone: telephone || null,
+        etablissementId: etablissementId ? parseInt(etablissementId) : null,
+        statut: 'ACTIF' // Par défaut actif pour les créations admin
+      }
+    });
+    
+    console.log(`✅ Apprenant créé: ${apprenant.email} (ID: ${apprenant.id_apprenant})`);
+    
+    res.status(201).json({
+      success: true,
+      message: 'Apprenant créé avec succès',
+      data: apprenant
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur création apprenant:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la création de l\'apprenant',
+      error: error.message
+    });
+  }
+});
+
+// Route pour créer un nouvel établissement (admin)
+app.post('/api/admin/etablissement', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const {
+      nomEtablissement,
+      emailEtablissement,
+      motDePasseEtablissement,
+      rccmEtablissement,
+      typeEtablissement,
+      adresseEtablissement,
+      telephoneEtablissement,
+      nomResponsableEtablissement,
+      emailResponsableEtablissement,
+      telephoneResponsableEtablissement
+    } = req.body;
+    
+    console.log(`➕ Création nouvel établissement: ${nomEtablissement}`);
+    
+    // Vérifier que l'email n'existe pas déjà
+    const existingEtablissement = await prisma.etablissement.findUnique({
+      where: { emailEtablissement }
+    });
+    
+    if (existingEtablissement) {
+      return res.status(400).json({
+        success: false,
+        message: 'Un établissement avec cet email existe déjà'
+      });
+    }
+    
+    // Vérifier que le RCCM n'existe pas déjà
+    const existingRCCM = await prisma.etablissement.findUnique({
+      where: { rccmEtablissement }
+    });
+    
+    if (existingRCCM) {
+      return res.status(400).json({
+        success: false,
+        message: 'Un établissement avec ce numéro RCCM existe déjà'
+      });
+    }
+    
+    // Hasher le mot de passe
+    const hashedPassword = await bcrypt.hash(motDePasseEtablissement, 10);
+    
+    // Mapper le type d'établissement
+    const mappedType = mapTypeEtablissement(typeEtablissement);
+    
+    // Créer l'établissement
+    const etablissement = await prisma.etablissement.create({
+      data: {
+        nomEtablissement,
+        emailEtablissement,
+        motDePasseEtablissement: hashedPassword,
+        rccmEtablissement,
+        typeEtablissement: mappedType,
+        adresseEtablissement,
+        telephoneEtablissement,
+        nomResponsableEtablissement,
+        emailResponsableEtablissement,
+        telephoneResponsableEtablissement,
+        statut: 'ACTIF' // Par défaut actif pour les créations admin
+      }
+    });
+    
+    console.log(`✅ Établissement créé: ${etablissement.nomEtablissement} (ID: ${etablissement.id_etablissement})`);
+    
+    res.status(201).json({
+      success: true,
+      message: 'Établissement créé avec succès',
+      data: etablissement
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur création établissement:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la création de l\'établissement',
+      error: error.message
+    });
+  }
+});
+
+// Route pour supprimer un établissement (admin)
+app.delete('/api/admin/etablissement/:id', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    console.log(`🗑️ Suppression établissement ${id}`);
+    
+    // Vérifier que l'établissement existe
+    const etablissement = await prisma.etablissement.findUnique({
+      where: { id_etablissement: parseInt(id) },
+      include: {
+        apprenants: true,
+        documents: true
+      }
+    });
+    
+    if (!etablissement) {
+      return res.status(404).json({
+        success: false,
+        message: 'Établissement non trouvé'
+      });
+    }
+    
+    // Supprimer d'abord les documents associés
+    if (etablissement.documents.length > 0) {
+      await prisma.documentEtablissement.deleteMany({
+        where: { etablissementId: parseInt(id) }
+      });
+      console.log(`🗑️ ${etablissement.documents.length} documents supprimés`);
+    }
+    
+    // Supprimer l'établissement
+    await prisma.etablissement.delete({
+      where: { id_etablissement: parseInt(id) }
+    });
+    
+    console.log(`✅ Établissement supprimé: ${etablissement.nomEtablissement}`);
+    
+    res.json({
+      success: true,
+      message: 'Établissement supprimé avec succès'
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur suppression établissement:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la suppression',
       error: error.message
     });
   }

@@ -5,18 +5,16 @@ import { Badge } from '../ui/badge';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
 import { 
   Award, 
   Search, 
-  Filter, 
   Grid3X3, 
   List, 
   Eye, 
   Download, 
   QrCode, 
   Share2,
-  Calendar,
   Building2,
   ExternalLink,
   Shield,

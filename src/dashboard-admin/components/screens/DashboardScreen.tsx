@@ -9,7 +9,6 @@ import {
   AlertTriangle,
   CheckCircle,
   Clock,
-  DollarSign
 } from 'lucide-react';
 import { type NavigateFunction, type User, type KPI, type ActivityLog } from '../../types';
 

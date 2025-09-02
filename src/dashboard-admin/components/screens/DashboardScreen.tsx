@@ -124,37 +124,37 @@ export function DashboardScreen({ onNavigate, user }: DashboardScreenProps) {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 lg:p-6 space-y-4 lg:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Tableau de bord</h1>
-          <p className="text-gray-600">Bienvenue, {user.name}. Voici un aperçu de votre plateforme.</p>
+          <h1 className="text-xl lg:text-2xl font-bold text-gray-900">Tableau de bord</h1>
+          <p className="text-sm lg:text-base text-gray-600">Bienvenue, {user.name}. Voici un aperçu de votre plateforme.</p>
         </div>
-        <div className="text-right">
-          <p className="text-sm text-gray-500">Dernière mise à jour</p>
-          <p className="text-sm font-medium text-gray-900">Il y a 2 minutes</p>
+        <div className="text-left lg:text-right">
+          <p className="text-xs lg:text-sm text-gray-500">Dernière mise à jour</p>
+          <p className="text-xs lg:text-sm font-medium text-gray-900">Il y a 2 minutes</p>
         </div>
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
         {kpis.map((kpi, index) => {
           const Icon = getIcon(kpi.icon);
           return (
-            <div key={index} className="bg-white rounded-xl p-6 border border-gray-200">
+            <div key={index} className="bg-white rounded-xl p-4 lg:p-6 border border-gray-200">
               <div className="flex items-center justify-between">
                 <div className="p-2 bg-gray-100 rounded-lg">
-                  <Icon className="w-6 h-6 text-gray-600" />
+                  <Icon className="w-5 h-5 lg:w-6 lg:h-6 text-gray-600" />
                 </div>
                 {getChangeIcon(kpi.changeType)}
               </div>
-              <div className="mt-4">
-                <p className="text-2xl font-bold text-gray-900">{kpi.value}</p>
-                <p className="text-sm text-gray-600">{kpi.title}</p>
+              <div className="mt-3 lg:mt-4">
+                <p className="text-xl lg:text-2xl font-bold text-gray-900">{kpi.value}</p>
+                <p className="text-xs lg:text-sm text-gray-600">{kpi.title}</p>
                 <div className="flex items-center gap-1 mt-2">
                   {getChangeIcon(kpi.changeType)}
-                  <span className={`text-sm font-medium ${
+                  <span className={`text-xs lg:text-sm font-medium ${
                     kpi.changeType === 'increase' ? 'text-green-600' : 'text-red-600'
                   }`}>
                     {kpi.change}% ce mois
@@ -167,23 +167,23 @@ export function DashboardScreen({ onNavigate, user }: DashboardScreenProps) {
       </div>
 
       {/* Actions Prioritaires et Revenus */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
         {/* Actions Prioritaires */}
-        <div className="lg:col-span-2 bg-white rounded-xl p-6 border border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Actions Prioritaires</h2>
+        <div className="lg:col-span-2 bg-white rounded-xl p-4 lg:p-6 border border-gray-200">
+          <h2 className="text-base lg:text-lg font-semibold text-gray-900 mb-3 lg:mb-4">Actions Prioritaires</h2>
           <div className="space-y-3">
             {priorityActions.map((action) => (
-              <div key={action.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div key={action.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 bg-gray-50 rounded-lg gap-3">
                 <div className="flex items-center gap-3">
-                  {action.type === 'warning' && <AlertTriangle className="w-5 h-5 text-amber-600" />}
-                  {action.type === 'error' && <AlertTriangle className="w-5 h-5 text-red-600" />}
-                  <div>
-                    <p className="font-medium text-gray-900">{action.title}</p>
+                  {action.type === 'warning' && <AlertTriangle className="w-4 h-4 lg:w-5 lg:h-5 text-amber-600 flex-shrink-0" />}
+                  {action.type === 'error' && <AlertTriangle className="w-4 h-4 lg:w-5 lg:h-5 text-red-600 flex-shrink-0" />}
+                  <div className="min-w-0">
+                    <p className="font-medium text-gray-900 text-sm lg:text-base">{action.title}</p>
                   </div>
                 </div>
                 <button
                   onClick={action.onClick}
-                  className="px-3 py-1.5 text-sm font-medium text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                  className="w-full sm:w-auto px-3 py-1.5 text-xs lg:text-sm font-medium text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
                 >
                   {action.action}
                 </button>
@@ -193,12 +193,12 @@ export function DashboardScreen({ onNavigate, user }: DashboardScreenProps) {
         </div>
 
         {/* Widget Revenus */}
-        <div className="bg-white rounded-xl p-6 border border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Revenus (MRR)</h2>
+        <div className="bg-white rounded-xl p-4 lg:p-6 border border-gray-200">
+          <h2 className="text-base lg:text-lg font-semibold text-gray-900 mb-3 lg:mb-4">Revenus (MRR)</h2>
           <div className="text-center">
-            <div className="text-3xl font-bold text-gray-900 mb-2">€24,500</div>
-            <p className="text-sm text-gray-600 mb-4">Revenus mensuels récurrents</p>
-            <div className="space-y-2 text-sm">
+            <div className="text-2xl lg:text-3xl font-bold text-gray-900 mb-2">€24,500</div>
+            <p className="text-xs lg:text-sm text-gray-600 mb-3 lg:mb-4">Revenus mensuels récurrents</p>
+            <div className="space-y-2 text-xs lg:text-sm">
               <div className="flex justify-between">
                 <span className="text-gray-600">Plan Basic:</span>
                 <span className="font-medium">€8,200</span>
@@ -214,7 +214,7 @@ export function DashboardScreen({ onNavigate, user }: DashboardScreenProps) {
             </div>
             <button
               onClick={() => onNavigate('reports')}
-              className="w-full mt-4 px-4 py-2 bg-rose-500 text-white rounded-lg hover:bg-rose-600 transition-colors"
+              className="w-full mt-3 lg:mt-4 px-3 lg:px-4 py-2 bg-rose-500 text-white rounded-lg hover:bg-rose-600 transition-colors text-sm lg:text-base"
             >
               Voir le rapport complet
             </button>

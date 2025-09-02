@@ -7,6 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Textarea } from "./ui/textarea";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { FileUploadService } from "../services/fileUploadService";
+
+const API_BASE_URL = 'https://authcert-production.up.railway.app/api';
 
 export interface EtablissementDocuments {
   rccmDocument: File | null;
@@ -116,44 +119,98 @@ export function SignupFormEtablissement() {
     setIsSubmitting(true);
     
     try {
-        // Créer FormData pour l'upload des fichiers
-        const formDataToSend = new FormData();
-        
-        // Ajouter les champs texte
-        formDataToSend.append('nomEtablissement', formData.nomEtablissement);
-        formDataToSend.append('emailEtablissement', formData.emailInstitutionnel);
-        formDataToSend.append('motDePasseEtablissement', formData.password);
-        formDataToSend.append('rccmEtablissement', formData.rccm);
-        formDataToSend.append('typeEtablissement', formData.typeEtablissement);
-        formDataToSend.append('adresseEtablissement', formData.adresse);
-        formDataToSend.append('telephoneEtablissement', formData.telephone);
-        formDataToSend.append('nomResponsableEtablissement', formData.nomRepresentant);
-        formDataToSend.append('emailResponsableEtablissement', formData.emailRepresentant);
-        formDataToSend.append('telephoneResponsableEtablissement', formData.telephoneRepresentant);
-        
-        // Ajouter les fichiers
-        if (documents.rccmDocument) {
-          formDataToSend.append('rccmDocument', documents.rccmDocument);
-        }
-        if (documents.autorisation) {
-          formDataToSend.append('autorisation', documents.autorisation);
-        }
-        if (documents.pieceIdentite) {
-          formDataToSend.append('pieceIdentite', documents.pieceIdentite);
-        }
-        if (documents.logo) {
-          formDataToSend.append('logo', documents.logo);
-        }
-        if (documents.plaquette) {
-          formDataToSend.append('plaquette', documents.plaquette);
-        }
+      // 1. Upload des fichiers vers Supabase
+      const uploadPromises = [];
+      const uploadedFiles: Record<string, string> = {};
 
-        // Appel à l'API avec FormData (fichiers inclus)
-        const response = await axios.post('http://localhost:5000/api/register/etablissement/upload', formDataToSend, {
-          headers: {
-            'Content-Type': 'multipart/form-data'
-          }
-        });
+      if (documents.rccmDocument) {
+        const path = `etablissements/${Date.now()}_rccm.${documents.rccmDocument.name.split('.').pop()}`;
+        uploadPromises.push(
+          FileUploadService.uploadFile(documents.rccmDocument, 'documents', path)
+            .then(result => {
+              if (result.success && result.publicUrl) {
+                uploadedFiles.rccmDocument = result.publicUrl;
+              } else {
+                throw new Error(`Erreur upload RCCM: ${result.error}`);
+              }
+            })
+        );
+      }
+
+      if (documents.autorisation) {
+        const path = `etablissements/${Date.now()}_autorisation.${documents.autorisation.name.split('.').pop()}`;
+        uploadPromises.push(
+          FileUploadService.uploadFile(documents.autorisation, 'documents', path)
+            .then(result => {
+              if (result.success && result.publicUrl) {
+                uploadedFiles.autorisation = result.publicUrl;
+              } else {
+                throw new Error(`Erreur upload autorisation: ${result.error}`);
+              }
+            })
+        );
+      }
+
+      if (documents.pieceIdentite) {
+        const path = `etablissements/${Date.now()}_pieceIdentite.${documents.pieceIdentite.name.split('.').pop()}`;
+        uploadPromises.push(
+          FileUploadService.uploadFile(documents.pieceIdentite, 'documents', path)
+            .then(result => {
+              if (result.success && result.publicUrl) {
+                uploadedFiles.pieceIdentite = result.publicUrl;
+              } else {
+                throw new Error(`Erreur upload pièce d'identité: ${result.error}`);
+              }
+            })
+        );
+      }
+
+      if (documents.logo) {
+        const path = `etablissements/${Date.now()}_logo.${documents.logo.name.split('.').pop()}`;
+        uploadPromises.push(
+          FileUploadService.uploadFile(documents.logo, 'documents', path)
+            .then(result => {
+              if (result.success && result.publicUrl) {
+                uploadedFiles.logo = result.publicUrl;
+              } else {
+                throw new Error(`Erreur upload logo: ${result.error}`);
+              }
+            })
+        );
+      }
+
+      if (documents.plaquette) {
+        const path = `etablissements/${Date.now()}_plaquette.${documents.plaquette.name.split('.').pop()}`;
+        uploadPromises.push(
+          FileUploadService.uploadFile(documents.plaquette, 'documents', path)
+            .then(result => {
+              if (result.success && result.publicUrl) {
+                uploadedFiles.plaquette = result.publicUrl;
+              } else {
+                throw new Error(`Erreur upload plaquette: ${result.error}`);
+              }
+            })
+        );
+      }
+
+      // Attendre que tous les uploads soient terminés
+      await Promise.all(uploadPromises);
+
+      // 2. Créer l'établissement avec les URLs des fichiers Supabase
+      const response = await axios.post(`${API_BASE_URL}/register/etablissement/supabase`, {
+        nomEtablissement: formData.nomEtablissement,
+        emailEtablissement: formData.emailInstitutionnel,
+        motDePasseEtablissement: formData.password,
+        rccmEtablissement: formData.rccm,
+        typeEtablissement: formData.typeEtablissement,
+        adresseEtablissement: formData.adresse,
+        telephoneEtablissement: formData.telephone,
+        nomResponsableEtablissement: formData.nomRepresentant,
+        emailResponsableEtablissement: formData.emailRepresentant,
+        telephoneResponsableEtablissement: formData.telephoneRepresentant,
+        // URLs des fichiers uploadés vers Supabase
+        documents: uploadedFiles
+      });
       
       if (response.data.success) {
         // Redirection vers la page de connexion avec message de succès

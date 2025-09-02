@@ -21,11 +21,11 @@ import {
   Star
 } from 'lucide-react';
 
-interface SubscriptionScreenProps {
+/*interface SubscriptionScreenProps {
   onNavigate: (screen: string) => void;
-}
+}*/
 
-export function SubscriptionScreen({ onNavigate }: SubscriptionScreenProps) {
+export function SubscriptionScreen() {
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
 
   // Current subscription data

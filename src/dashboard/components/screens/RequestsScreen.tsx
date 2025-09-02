@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
-import { Input } from '../ui/input';
+//import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -66,11 +66,11 @@ const establishments = [
   { id: 3, name: "Data University", courses: ["Data Analysis", "Machine Learning", "Statistics"] }
 ];
 
-interface RequestsScreenProps {
+/*interface RequestsScreenProps {
   onNavigate: (screen: string) => void;
-}
+}*/
 
-export function RequestsScreen({ onNavigate }: RequestsScreenProps) {
+export function RequestsScreen() {
   const [isNewRequestOpen, setIsNewRequestOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [selectedEstablishment, setSelectedEstablishment] = useState('');

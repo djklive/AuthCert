@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { InputField } from "./InputField";
 import { PrimaryButton } from "./PrimaryButton";
 import { Checkbox } from "./ui/checkbox";
@@ -6,9 +6,13 @@ import { Label } from "./ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { api, type Establishment } from '../services/api';
+
+const API_BASE_URL = 'https://authcert-production.up.railway.app/api';
 
 export interface SignupFormApprenantData {
-  fullName: string;
+  firstName: string;
+  lastName: string;
   email: string;
   password: string;
   confirmPassword: string;
@@ -18,9 +22,34 @@ export interface SignupFormApprenantData {
 }
 
 export function SignupFormApprenant() {
+  const [establishments, setEstablishments] = useState<Establishment[]>([]);
+  const [loadingEstablishments, setLoadingEstablishments] = useState(false);
+  const [establishmentsError, setEstablishmentsError] = useState<string>('');
+
+  // Charger les établissements depuis l'API
+  useEffect(() => {
+    loadEstablishments();
+  }, []);
+
+  const loadEstablishments = async () => {
+    try {
+      setLoadingEstablishments(true);
+      setEstablishmentsError('');
+      const data = await api.getEstablishments();
+      console.log('Établissements chargés:', data); // Debug
+      setEstablishments(data);
+    } catch (err) {
+      setEstablishmentsError('Erreur lors du chargement des établissements');
+      console.error('Erreur chargement:', err);
+    } finally {
+      setLoadingEstablishments(false);
+    }
+  };
+
   const navigate = useNavigate();
   const [formData, setFormData] = useState<SignupFormApprenantData>({
-    fullName: "",
+    firstName: "",
+    lastName: "",
     email: "",
     password: "",
     confirmPassword: "",
@@ -68,11 +97,11 @@ export function SignupFormApprenant() {
     
     try {
       // Appel à l'API avec les bonnes données
-      const response = await axios.post('http://localhost:5000/api/register/apprenant', {
+      const response = await axios.post(`${API_BASE_URL}/register/apprenant`, {
         email: formData.email,
         motDePasse: formData.password,
-        nom: formData.fullName.split(' ')[0] || formData.fullName,
-        prenom: formData.fullName.split(' ').slice(1).join(' ') || formData.fullName.split(' ')[0] || formData.fullName,
+        nom: formData.lastName,
+        prenom: formData.firstName,
         telephone: formData.phone || '',
         etablissement: formData.etablissement
       });
@@ -94,13 +123,13 @@ export function SignupFormApprenant() {
     }
   };
 
-  const etablissements = [
+  /*const etablissements = [
     "Université de Kinshasa",
     "Université de Lubumbashi",
     "École Supérieure de Commerce",
     "Institut Supérieur Technique",
     "Autre"
-  ];
+  ];*/
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -111,12 +140,21 @@ export function SignupFormApprenant() {
         </div>
       )}
       <InputField
-        label="Nom complet"
+        label="Nom"
         type="text"
-        placeholder="Entrez votre nom complet"
+        placeholder="Entrez votre nom"
         required
-        value={formData.fullName}
-        onChange={(value) => setFormData({ ...formData, fullName: value })}
+        value={formData.lastName}
+        onChange={(value) => setFormData({ ...formData, lastName: value })}
+      />
+
+      <InputField
+        label="Prénom"
+        type="text"
+        placeholder="Entrez votre prénom"
+        required
+        value={formData.firstName}
+        onChange={(value) => setFormData({ ...formData, firstName: value })}
       />
 
       <InputField
@@ -160,22 +198,45 @@ export function SignupFormApprenant() {
         <Label className="text-gray-700">Établissement souhaité <span className="text-[#F43F5E]">*</span></Label>
         <Select onValueChange={(value) => setFormData({ ...formData, etablissement: value })}>
           <SelectTrigger className="h-12 border-2 focus:border-[#F43F5E]">
-            <SelectValue placeholder="Sélectionnez un établissement" />
+            <SelectValue placeholder={
+              loadingEstablishments 
+                ? "Chargement des établissements..." 
+                : establishments.length === 0 
+                  ? "Aucun établissement disponible" 
+                  : "Sélectionnez un établissement"
+            } />
           </SelectTrigger>
           <SelectContent className="bg-white border-2 border-gray-200 shadow-lg rounded-lg">
-            {etablissements.map((etablissement) => (
-              <SelectItem 
-                key={etablissement} 
-                value={etablissement}
-                className="hover:bg-gray-100 focus:bg-gray-100 cursor-pointer"
-              >
-                {etablissement}
-              </SelectItem>
-            ))}
+            {loadingEstablishments ? (
+              <div className="p-4 text-center text-sm text-gray-500">
+                Chargement des établissements...
+              </div>
+            ) : establishmentsError ? (
+              <div className="p-4 text-center text-sm text-red-500">
+                {establishmentsError}
+              </div>
+            ) : establishments.length === 0 ? (
+              <div className="p-4 text-center text-sm text-gray-500">
+                Aucun établissement actif disponible
+              </div>
+            ) : (
+              establishments.map((etablissement) => (
+                <SelectItem 
+                  key={etablissement.id_etablissement} 
+                  value={etablissement.nomEtablissement}
+                  className="hover:bg-gray-100 focus:bg-gray-100 cursor-pointer"
+                >
+                  {etablissement.nomEtablissement}
+                </SelectItem>
+              ))
+            )}
           </SelectContent>
         </Select>
         {errors.etablissement && (
           <p className="text-sm text-[#F43F5E]">{errors.etablissement}</p>
+        )}
+        {establishmentsError && (
+          <p className="text-sm text-red-500">{establishmentsError}</p>
         )}
       </div>
 

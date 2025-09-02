@@ -1,12 +1,12 @@
-import React from 'react';
-import { BarChart3, Download, Calendar } from 'lucide-react';
-import { type NavigateFunction } from '../../types';
+//import React from 'react';
+import { Download, Calendar } from 'lucide-react';
+//import { type NavigateFunction } from '../../types';
 
-interface ReportsScreenProps {
+/*interface ReportsScreenProps {
   onNavigate: NavigateFunction;
-}
+}*/
 
-export function ReportsScreen({ onNavigate }: ReportsScreenProps) {
+export function ReportsScreen() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">

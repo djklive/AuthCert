@@ -55,11 +55,11 @@ const mockSessions = [
   }
 ];
 
-interface ProfileScreenProps {
+/*interface ProfileScreenProps {
   onNavigate: (screen: string) => void;
-}
+}*/
 
-export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
+export function ProfileScreen() {
   const [user, setUser] = useState(mockUser);
   const [isEditing, setIsEditing] = useState(false);
   const [notifications, setNotifications] = useState({

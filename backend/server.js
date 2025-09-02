@@ -1,4 +1,4 @@
-require('dotenv').config({ path: '../.env' });
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
@@ -17,6 +17,27 @@ const app = express();
 const prisma = new PrismaClient();
 
 const PORT = process.env.PORT || 5000;
+
+// Fonction utilitaire pour mapper les types d'établissement
+function mapTypeEtablissement(typeString) {
+  const typeMap = {
+    'Université publique': 'UNIVERSITE_PUBLIQUE',
+    'Université privée': 'UNIVERSITE_PRIVEE',
+    'Institut supérieur': 'INSTITUT_SUPERIEUR',
+    'École technique': 'ECOLE_TECHNIQUE',
+    'Centre de formation': 'CENTRE_FORMATION',
+    'Autre': 'AUTRE',
+    // Support pour les valeurs déjà mappées
+    'UNIVERSITE_PUBLIQUE': 'UNIVERSITE_PUBLIQUE',
+    'UNIVERSITE_PRIVEE': 'UNIVERSITE_PRIVEE',
+    'INSTITUT_SUPERIEUR': 'INSTITUT_SUPERIEUR',
+    'ECOLE_TECHNIQUE': 'ECOLE_TECHNIQUE',
+    'CENTRE_FORMATION': 'CENTRE_FORMATION',
+    'AUTRE': 'AUTRE'
+  };
+  
+  return typeMap[typeString] || 'AUTRE';
+}
 
 // Middleware
 app.use(cors());
@@ -39,10 +60,10 @@ if (!fs.existsSync(etablissementsDir)) {
 // Route d'inscription d'un apprenant
 app.post('/api/register/apprenant', async (req, res) => {
   try {
-    const { email, motDePasse, nom, telephone, etablissement } = req.body;
+    const { email, motDePasse, nom, prenom, telephone, etablissement } = req.body;
 
     // Validation des champs requis
-    if (!email || !motDePasse || !nom || !etablissement) {
+    if (!email || !motDePasse || !nom || !prenom || !etablissement) {
       return res.status(400).json({
         success: false,
         message: 'Tous les champs obligatoires doivent être remplis'
@@ -71,7 +92,7 @@ app.post('/api/register/apprenant', async (req, res) => {
         email,
         motDePasse: hashedPassword,
         nom,
-        prenom: nom, // Utiliser le nom comme prénom pour l'instant
+        prenom,
         telephone: telephone || null,
         etablissementId: null, // Pas de relation pour l'instant
         statut: 'ACTIF',
@@ -622,6 +643,52 @@ app.get('/api/admin/etablissements', authenticateToken, requireRole('admin'), as
   }
 });
 
+// Route pour recuperer tous les etablissements (page d'accueil)
+app.get('/api/accueil/etablissements', async (req, res) => {
+  try {
+    console.log('🔍 Récupération des établissements...');
+    
+    const etablissements = await prisma.etablissement.findMany({
+      select: {
+        id_etablissement: true,
+        nomEtablissement: true,
+        emailEtablissement: true,
+        statut: true,
+        dateCreation: true,
+        nomResponsableEtablissement: true,
+        telephoneEtablissement: true,
+        adresseEtablissement: true,
+        typeEtablissement: true,
+        documents: {
+          select: {
+            id: true,
+            typeDocument: true,
+            nomFichier: true,
+            cheminFichier: true,
+            dateUpload: true
+          }
+        }
+      },
+      orderBy: { dateCreation: 'desc' }
+    });
+    
+    console.log(`✅ ${etablissements.length} établissements trouvés:`, etablissements.map(e => ({ nom: e.nomEtablissement, statut: e.statut })));
+    
+    res.json({
+      success: true,
+      data: etablissements
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur récupération établissements:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération des établissements',
+      error: error.message
+    });
+  }
+});
+
 // Route pour récupérer les documents d'un établissement
 app.get('/api/etablissement/:id/documents', async (req, res) => {
   try {
@@ -821,6 +888,227 @@ app.post('/api/auth/login', async (req, res) => {
       success: false,
       message: 'Erreur lors de la connexion',
       error: error.message
+    });
+  }
+});
+
+// Route d'inscription d'un établissement AVEC Supabase Storage
+app.post('/api/register/etablissement/supabase', async (req, res) => {
+  try {
+    console.log('🚀 Début inscription établissement avec Supabase Storage');
+    console.log('📋 Body reçu:', JSON.stringify(req.body, null, 2));
+    
+    const {
+      nomEtablissement,
+      emailEtablissement,
+      motDePasseEtablissement,
+      rccmEtablissement,
+      typeEtablissement,
+      adresseEtablissement,
+      telephoneEtablissement,
+      nomResponsableEtablissement,
+      emailResponsableEtablissement,
+      telephoneResponsableEtablissement,
+      documents // URLs des fichiers Supabase
+    } = req.body;
+    
+    // Mapping des types d'établissement frontend vers backend
+    const typeEtablissementMapping = {
+      'Université publique': 'UNIVERSITE_PUBLIQUE',
+      'Université privée': 'UNIVERSITE_PRIVEE',
+      'Institut supérieur': 'INSTITUT_SUPERIEUR',
+      'École technique': 'ECOLE_TECHNIQUE',
+      'Centre de formation': 'CENTRE_FORMATION',
+      'Autre': 'AUTRE'
+    };
+    
+    // Convertir le type d'établissement
+    const typeEtablissementBackend = typeEtablissementMapping[typeEtablissement];
+    if (!typeEtablissementBackend) {
+      return res.status(400).json({
+        success: false,
+        message: 'Type d\'établissement invalide'
+      });
+    }
+    
+    console.log('🔄 Type d\'établissement converti:', typeEtablissement, '→', typeEtablissementBackend);
+    
+    // Validation des champs requis
+    console.log('✅ Validation des champs...');
+    if (!nomEtablissement || !emailEtablissement || !motDePasseEtablissement || 
+        !rccmEtablissement || !typeEtablissement || !adresseEtablissement || 
+        !telephoneEtablissement || !nomResponsableEtablissement || 
+        !emailResponsableEtablissement || !telephoneResponsableEtablissement) {
+      console.log('❌ Validation échouée - champs manquants');
+      return res.status(400).json({
+        success: false,
+        message: 'Tous les champs obligatoires doivent être remplis'
+      });
+    }
+    console.log('✅ Validation réussie');
+
+    // Vérification si l'email existe déjà
+    console.log('🔍 Vérification email existant...');
+    const existingEtablissement = await prisma.etablissement.findUnique({
+      where: { emailEtablissement }
+    });
+
+    if (existingEtablissement) {
+      console.log('❌ Email déjà existant');
+      return res.status(409).json({
+        success: false,
+        message: 'Un établissement avec cet email existe déjà'
+      });
+    }
+    console.log('✅ Email disponible');
+
+    // Hashage du mot de passe
+    console.log('🔐 Hashage du mot de passe...');
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(motDePasseEtablissement, salt);
+    console.log('✅ Mot de passe hashé');
+
+    // Création de l'établissement
+    console.log('🏗️ Création de l\'établissement en base...');
+    const etablissement = await prisma.etablissement.create({
+      data: {
+        nomEtablissement,
+        emailEtablissement,
+        motDePasseEtablissement: hashedPassword,
+        rccmEtablissement,
+        typeEtablissement: typeEtablissementBackend,
+        adresseEtablissement,
+        telephoneEtablissement,
+        nomResponsableEtablissement,
+        emailResponsableEtablissement,
+        telephoneResponsableEtablissement,
+        statut: 'EN_ATTENTE',
+        dateCreation: new Date(),
+        dateModification: new Date()
+      }
+    });
+
+    // Log des URLs des documents Supabase
+    if (documents) {
+      console.log('📋 URLs des documents Supabase reçus:', documents);
+      console.log('🔗 RCCM:', documents.rccmDocument);
+      console.log('🔗 Autorisation:', documents.autorisation);
+      console.log('🔗 Pièce d\'identité:', documents.pieceIdentite);
+      console.log('🔗 Logo:', documents.logo);
+      console.log('🔗 Plaquette:', documents.plaquette);
+    }
+
+    // Sauvegarder les URLs des documents Supabase dans la base
+    if (documents) {
+      const documentsToSave = [];
+      
+      // Documents obligatoires
+      if (documents.rccmDocument) {
+        documentsToSave.push({
+          etablissementId: etablissement.id_etablissement,
+          typeDocument: 'rccm',
+          nomFichier: 'Document RCCM',
+          typeMime: 'application/pdf',
+          tailleFichier: 0, // Taille non disponible depuis Supabase
+          cheminFichier: documents.rccmDocument, // URL Supabase
+          statut: 'EN_ATTENTE',
+          dateUpload: new Date()
+        });
+      }
+      
+      if (documents.autorisation) {
+        documentsToSave.push({
+          etablissementId: etablissement.id_etablissement,
+          typeDocument: 'autorisation',
+          nomFichier: 'Autorisation de fonctionnement',
+          typeMime: 'application/pdf',
+          tailleFichier: 0,
+          cheminFichier: documents.autorisation, // URL Supabase
+          statut: 'EN_ATTENTE',
+          dateUpload: new Date()
+        });
+      }
+      
+      if (documents.pieceIdentite) {
+        documentsToSave.push({
+          etablissementId: etablissement.id_etablissement,
+          typeDocument: 'pieceIdentite',
+          nomFichier: 'Pièce d\'identité du représentant',
+          typeMime: 'application/pdf',
+          tailleFichier: 0,
+          cheminFichier: documents.pieceIdentite, // URL Supabase
+          statut: 'EN_ATTENTE',
+          dateUpload: new Date()
+        });
+      }
+      
+      // Documents optionnels
+      if (documents.logo) {
+        documentsToSave.push({
+          etablissementId: etablissement.id_etablissement,
+          typeDocument: 'logo',
+          nomFichier: 'Logo de l\'établissement',
+          typeMime: 'image/png',
+          tailleFichier: 0,
+          cheminFichier: documents.logo, // URL Supabase
+          statut: 'EN_ATTENTE',
+          dateUpload: new Date()
+        });
+      }
+      
+      if (documents.plaquette) {
+        documentsToSave.push({
+          etablissementId: etablissement.id_etablissement,
+          typeDocument: 'plaquette',
+          nomFichier: 'Plaquette institutionnelle',
+          typeMime: 'application/pdf',
+          tailleFichier: 0,
+          cheminFichier: documents.plaquette, // URL Supabase
+          statut: 'EN_ATTENTE',
+          dateUpload: new Date()
+        });
+      }
+      
+      // Sauvegarder tous les documents
+      if (documentsToSave.length > 0) {
+        try {
+          await prisma.documentEtablissement.createMany({
+            data: documentsToSave
+          });
+          console.log(`✅ ${documentsToSave.length} documents Supabase sauvegardés en base`);
+        } catch (error) {
+          console.error('❌ Erreur lors de la sauvegarde des documents Supabase:', error);
+          // Ne pas faire échouer l'inscription pour une erreur de documents
+        }
+      }
+    }
+
+    console.log('✅ Établissement créé avec succès via Supabase, ID:', etablissement.id_etablissement);
+
+    // Suppression du mot de passe de la réponse
+    const { motDePasseEtablissement: _, ...etablissementSansMotDePasse } = etablissement;
+
+    res.status(201).json({
+      success: true,
+      message: 'Demande d\'inscription établissement soumise avec succès via Supabase ! Votre compte sera validé sous 48-72h.',
+      data: etablissementSansMotDePasse
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur inscription établissement Supabase:', error);
+    console.error('📋 Détails de l\'erreur:', error.message);
+    console.error('🔍 Stack trace:', error.stack);
+    
+    // Vérifier si c'est une erreur Prisma
+    if (error.code) {
+      console.error('📊 Code erreur Prisma:', error.code);
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la création du compte établissement via Supabase',
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });
@@ -1030,15 +1318,341 @@ app.patch('/api/admin/etablissement/:id/suspend', authenticateToken, requireRole
   }
 });
 
-// Démarrage du serveur
-app.listen(PORT, () => {
-  console.log(`🚀 Serveur démarré sur le port ${PORT}`);
-  console.log(`📡 API disponible sur http://localhost:${PORT}/api`);
-  console.log(`🔗 DATABASE_URL: ${process.env.DATABASE_URL || 'Non défini'}`);
+// ========================================
+// ROUTES ADMIN POUR LA GESTION DES UTILISATEURS
+// ========================================
+
+// Route pour récupérer tous les apprenants (admin)
+app.get('/api/admin/apprenants', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    console.log('🔍 Récupération de tous les apprenants...');
+    
+    const apprenants = await prisma.apprenant.findMany({
+      select: {
+        id_apprenant: true,
+        email: true,
+        nom: true,
+        prenom: true,
+        telephone: true,
+        statut: true,
+        dateCreation: true,
+        dateModification: true,
+        etablissementId: true,
+        etablissement: {
+          select: {
+            nomEtablissement: true
+          }
+        }
+      },
+      orderBy: { dateCreation: 'desc' }
+    });
+    
+    console.log(`✅ ${apprenants.length} apprenants trouvés`);
+    
+    res.json({
+      success: true,
+      data: apprenants
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur récupération apprenants:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération des apprenants',
+      error: error.message
+    });
+  }
 });
 
-// Gestion de la fermeture
-process.on('SIGINT', async () => {
-  await prisma.$disconnect();
-  process.exit(0);
+// Route pour mettre à jour le statut d'un apprenant (admin)
+app.patch('/api/admin/apprenant/:id/status', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { statut, commentaires } = req.body;
+    
+    console.log(`🔄 Mise à jour statut apprenant ${id} vers ${statut}`);
+    
+    // Mettre à jour l'apprenant
+    const apprenant = await prisma.apprenant.update({
+      where: { id_apprenant: parseInt(id) },
+      data: {
+        statut,
+        dateModification: new Date()
+      }
+    });
+    
+    console.log(`✅ Statut apprenant mis à jour: ${apprenant.email} -> ${statut}`);
+    
+    res.json({
+      success: true,
+      message: `Statut de l'apprenant mis à jour vers ${statut}`,
+      data: apprenant
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur mise à jour statut apprenant:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la mise à jour du statut',
+      error: error.message
+    });
+  }
 });
+
+// Route pour supprimer un apprenant (admin)
+app.delete('/api/admin/apprenant/:id', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    console.log(`🗑️ Suppression apprenant ${id}`);
+    
+    // Vérifier que l'apprenant existe
+    const apprenant = await prisma.apprenant.findUnique({
+      where: { id_apprenant: parseInt(id) }
+    });
+    
+    if (!apprenant) {
+      return res.status(404).json({
+        success: false,
+        message: 'Apprenant non trouvé'
+      });
+    }
+    
+    // Supprimer l'apprenant
+    await prisma.apprenant.delete({
+      where: { id_apprenant: parseInt(id) }
+    });
+    
+    console.log(`✅ Apprenant supprimé: ${apprenant.email}`);
+    
+    res.json({
+      success: true,
+      message: 'Apprenant supprimé avec succès'
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur suppression apprenant:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la suppression',
+      error: error.message
+    });
+  }
+});
+
+// Route pour créer un nouvel apprenant (admin)
+app.post('/api/admin/apprenant', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const { email, motDePasse, nom, prenom, telephone, etablissementId } = req.body;
+    
+    console.log(`➕ Création nouvel apprenant: ${email}`);
+    
+    // Vérifier que l'email n'existe pas déjà
+    const existingApprenant = await prisma.apprenant.findUnique({
+      where: { email }
+    });
+    
+    if (existingApprenant) {
+      return res.status(400).json({
+        success: false,
+        message: 'Un apprenant avec cet email existe déjà'
+      });
+    }
+    
+    // Hasher le mot de passe
+    const hashedPassword = await bcrypt.hash(motDePasse, 10);
+    
+    // Créer l'apprenant
+    const apprenant = await prisma.apprenant.create({
+      data: {
+        email,
+        motDePasse: hashedPassword,
+        nom,
+        prenom,
+        telephone: telephone || null,
+        etablissementId: etablissementId ? parseInt(etablissementId) : null,
+        statut: 'ACTIF' // Par défaut actif pour les créations admin
+      }
+    });
+    
+    console.log(`✅ Apprenant créé: ${apprenant.email} (ID: ${apprenant.id_apprenant})`);
+    
+    res.status(201).json({
+      success: true,
+      message: 'Apprenant créé avec succès',
+      data: apprenant
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur création apprenant:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la création de l\'apprenant',
+      error: error.message
+    });
+  }
+});
+
+// Route pour créer un nouvel établissement (admin)
+app.post('/api/admin/etablissement', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const {
+      nomEtablissement,
+      emailEtablissement,
+      motDePasseEtablissement,
+      rccmEtablissement,
+      typeEtablissement,
+      adresseEtablissement,
+      telephoneEtablissement,
+      nomResponsableEtablissement,
+      emailResponsableEtablissement,
+      telephoneResponsableEtablissement
+    } = req.body;
+    
+    console.log(`➕ Création nouvel établissement: ${nomEtablissement}`);
+    
+    // Vérifier que l'email n'existe pas déjà
+    const existingEtablissement = await prisma.etablissement.findUnique({
+      where: { emailEtablissement }
+    });
+    
+    if (existingEtablissement) {
+      return res.status(400).json({
+        success: false,
+        message: 'Un établissement avec cet email existe déjà'
+      });
+    }
+    
+    // Vérifier que le RCCM n'existe pas déjà
+    const existingRCCM = await prisma.etablissement.findUnique({
+      where: { rccmEtablissement }
+    });
+    
+    if (existingRCCM) {
+      return res.status(400).json({
+        success: false,
+        message: 'Un établissement avec ce numéro RCCM existe déjà'
+      });
+    }
+    
+    // Hasher le mot de passe
+    const hashedPassword = await bcrypt.hash(motDePasseEtablissement, 10);
+    
+    // Mapper le type d'établissement
+    const mappedType = mapTypeEtablissement(typeEtablissement);
+    
+    // Créer l'établissement
+    const etablissement = await prisma.etablissement.create({
+      data: {
+        nomEtablissement,
+        emailEtablissement,
+        motDePasseEtablissement: hashedPassword,
+        rccmEtablissement,
+        typeEtablissement: mappedType,
+        adresseEtablissement,
+        telephoneEtablissement,
+        nomResponsableEtablissement,
+        emailResponsableEtablissement,
+        telephoneResponsableEtablissement,
+        statut: 'ACTIF' // Par défaut actif pour les créations admin
+      }
+    });
+    
+    console.log(`✅ Établissement créé: ${etablissement.nomEtablissement} (ID: ${etablissement.id_etablissement})`);
+    
+    res.status(201).json({
+      success: true,
+      message: 'Établissement créé avec succès',
+      data: etablissement
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur création établissement:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la création de l\'établissement',
+      error: error.message
+    });
+  }
+});
+
+// Route pour supprimer un établissement (admin)
+app.delete('/api/admin/etablissement/:id', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    console.log(`🗑️ Suppression établissement ${id}`);
+    
+    // Vérifier que l'établissement existe
+    const etablissement = await prisma.etablissement.findUnique({
+      where: { id_etablissement: parseInt(id) },
+      include: {
+        apprenants: true,
+        documents: true
+      }
+    });
+    
+    if (!etablissement) {
+      return res.status(404).json({
+        success: false,
+        message: 'Établissement non trouvé'
+      });
+    }
+    
+    // Supprimer d'abord les documents associés
+    if (etablissement.documents.length > 0) {
+      await prisma.documentEtablissement.deleteMany({
+        where: { etablissementId: parseInt(id) }
+      });
+      console.log(`🗑️ ${etablissement.documents.length} documents supprimés`);
+    }
+    
+    // Supprimer l'établissement
+    await prisma.etablissement.delete({
+      where: { id_etablissement: parseInt(id) }
+    });
+    
+    console.log(`✅ Établissement supprimé: ${etablissement.nomEtablissement}`);
+    
+    res.json({
+      success: true,
+      message: 'Établissement supprimé avec succès'
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur suppression établissement:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la suppression',
+      error: error.message
+    });
+  }
+});
+
+// Route de santé pour Railway
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
+// Export de l'app pour le fichier start.js
+module.exports = app;
+
+// Démarrage du serveur (seulement si appelé directement)
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`🚀 Serveur démarré sur le port ${PORT}`);
+    console.log(`📡 API disponible sur http://localhost:${PORT}/api`);
+    console.log(`🔗 DATABASE_URL: ${process.env.DATABASE_URL || 'Non défini'}`);
+  });
+
+  // Gestion de la fermeture
+  process.on('SIGINT', async () => {
+    await prisma.$disconnect();
+    process.exit(0);
+  });
+}

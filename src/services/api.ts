@@ -1,4 +1,5 @@
-const API_BASE_URL = 'https://authcert-production.up.railway.app/api';
+//const API_BASE_URL = 'https://authcert-production.up.railway.app/api';
+const API_BASE_URL = 'http://localhost:5000/api';
 
 export interface Document {
   id: number;
@@ -44,7 +45,7 @@ export const api = {
         console.log('✅ Établissements actifs:', activeEstablishments.map((e: Establishment) => ({ nom: e.nomEtablissement, statut: e.statut })));
         
         // Pour le moment, retourner tous les établissements pour debug
-        return allEstablishments;
+        return activeEstablishments;
       }
       
       return [];

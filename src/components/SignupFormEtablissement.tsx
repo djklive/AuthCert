@@ -9,7 +9,8 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { FileUploadService } from "../services/fileUploadService";
 
-const API_BASE_URL = 'https://authcert-production.up.railway.app/api';
+//const API_BASE_URL = 'https://authcert-production.up.railway.app/api';
+const API_BASE_URL = 'http://localhost:5000/api';
 
 export interface EtablissementDocuments {
   rccmDocument: File | null;

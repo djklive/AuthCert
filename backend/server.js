@@ -60,13 +60,13 @@ if (!fs.existsSync(etablissementsDir)) {
 // Route d'inscription d'un apprenant
 app.post('/api/register/apprenant', async (req, res) => {
   try {
-    const { email, motDePasse, nom, prenom, telephone, etablissement } = req.body;
+    const { email, motDePasse, nom, prenom, telephone, etablissements } = req.body;
 
     // Validation des champs requis
-    if (!email || !motDePasse || !nom || !prenom || !etablissement) {
+    if (!email || !motDePasse || !nom || !prenom || !etablissements || etablissements.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'Tous les champs obligatoires doivent être remplis'
+        message: 'Tous les champs obligatoires doivent être remplis, y compris au moins un établissement'
       });
     }
 
@@ -94,20 +94,49 @@ app.post('/api/register/apprenant', async (req, res) => {
         nom,
         prenom,
         telephone: telephone || null,
-        etablissementId: null, // Pas de relation pour l'instant
         statut: 'ACTIF',
         dateCreation: new Date(),
         dateModification: new Date()
       }
     });
 
+    // Créer les demandes de liaison pour chaque établissement sélectionné
+    const demandesLiaison = [];
+    for (const nomEtablissement of etablissements) {
+      // Trouver l'établissement par son nom
+      const etablissement = await prisma.etablissement.findFirst({
+        where: { 
+          nomEtablissement: nomEtablissement,
+          statut: 'ACTIF'
+        }
+      });
+
+      if (etablissement) {
+        // Créer une demande de liaison automatique
+        const liaison = await prisma.liaisonApprenantEtablissement.create({
+          data: {
+            apprenantId: apprenant.id_apprenant,
+            etablissementId: etablissement.id_etablissement,
+            messageDemande: `Demande automatique lors de l'inscription`,
+            statutLiaison: 'EN_ATTENTE'
+          }
+        });
+        demandesLiaison.push(liaison);
+      }
+    }
+
     // Suppression du mot de passe de la réponse
     const { motDePasse: _, ...apprenantSansMotDePasse } = apprenant;
 
+    console.log(`✅ Apprenant créé: ${apprenant.email} avec ${demandesLiaison.length} demandes de liaison`);
+
     res.status(201).json({
       success: true,
-      message: 'Compte apprenant créé avec succès',
-      data: apprenantSansMotDePasse
+      message: `Compte apprenant créé avec succès. ${demandesLiaison.length} demande(s) de liaison envoyée(s) aux établissements.`,
+      data: {
+        apprenant: apprenantSansMotDePasse,
+        demandesLiaison: demandesLiaison.length
+      }
     });
 
   } catch (error) {
@@ -1337,10 +1366,18 @@ app.get('/api/admin/apprenants', authenticateToken, requireRole('admin'), async 
         statut: true,
         dateCreation: true,
         dateModification: true,
-        etablissementId: true,
-        etablissement: {
+        liaisons: {
           select: {
-            nomEtablissement: true
+            id: true,
+            statutLiaison: true,
+            dateDemande: true,
+            etablissement: {
+              select: {
+                id_etablissement: true,
+                nomEtablissement: true,
+                typeEtablissement: true
+              }
+            }
           }
         }
       },
@@ -1443,7 +1480,7 @@ app.delete('/api/admin/apprenant/:id', authenticateToken, requireRole('admin'), 
 // Route pour créer un nouvel apprenant (admin)
 app.post('/api/admin/apprenant', authenticateToken, requireRole('admin'), async (req, res) => {
   try {
-    const { email, motDePasse, nom, prenom, telephone, etablissementId } = req.body;
+    const { email, motDePasse, nom, prenom, telephone, etablissements } = req.body;
     
     console.log(`➕ Création nouvel apprenant: ${email}`);
     
@@ -1470,10 +1507,36 @@ app.post('/api/admin/apprenant', authenticateToken, requireRole('admin'), async 
         nom,
         prenom,
         telephone: telephone || null,
-        etablissementId: etablissementId ? parseInt(etablissementId) : null,
         statut: 'ACTIF' // Par défaut actif pour les créations admin
       }
     });
+
+    // Créer les liaisons avec les établissements si fournis
+    if (etablissements && etablissements.length > 0) {
+      const liaisonPromises = etablissements.map(async (nomEtablissement) => {
+        // Trouver l'établissement par nom
+        const etablissement = await prisma.etablissement.findFirst({
+          where: { 
+            nomEtablissement: nomEtablissement,
+            statut: 'ACTIF'
+          }
+        });
+
+        if (etablissement) {
+          return prisma.liaisonApprenantEtablissement.create({
+            data: {
+              apprenantId: apprenant.id_apprenant,
+              etablissementId: etablissement.id_etablissement,
+              statutLiaison: 'APPROUVE', // Les créations admin sont automatiquement approuvées
+              dateApprobation: new Date()
+            }
+          });
+        }
+        return null;
+      });
+
+      await Promise.all(liaisonPromises.filter(promise => promise !== null));
+    }
     
     console.log(`✅ Apprenant créé: ${apprenant.email} (ID: ${apprenant.id_apprenant})`);
     
@@ -1624,6 +1687,421 @@ app.delete('/api/admin/etablissement/:id', authenticateToken, requireRole('admin
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la suppression',
+      error: error.message
+    });
+  }
+});
+
+// ========================================
+// ROUTES POUR LA GESTION DES LIAISONS APPRENANT-ÉTABLISSEMENT
+// ========================================
+
+// Route pour créer une demande de liaison (apprenant vers établissement)
+app.post('/api/liaison/demande', authenticateToken, async (req, res) => {
+  try {
+    const { etablissementId, messageDemande } = req.body;
+    const userId = req.user.id;
+    const userType = req.user.role;
+
+    console.log(`🔗 Demande de liaison: Apprenant ${userId} -> Établissement ${etablissementId}`);
+
+    // Vérifier que l'utilisateur est un apprenant
+    if (userType !== 'student') {
+      return res.status(403).json({
+        success: false,
+        message: 'Seuls les apprenants peuvent faire des demandes de liaison'
+      });
+    }
+
+    // Vérifier que l'établissement existe et est actif
+    const etablissement = await prisma.etablissement.findUnique({
+      where: { id_etablissement: parseInt(etablissementId) }
+    });
+
+    if (!etablissement) {
+      return res.status(404).json({
+        success: false,
+        message: 'Établissement non trouvé'
+      });
+    }
+
+    if (etablissement.statut !== 'ACTIF') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cet établissement n\'accepte pas de nouvelles demandes'
+      });
+    }
+
+    // Vérifier qu'il n'y a pas déjà une demande en cours
+    const existingLiaison = await prisma.liaisonApprenantEtablissement.findUnique({
+      where: {
+        apprenantId_etablissementId: {
+          apprenantId: userId,
+          etablissementId: parseInt(etablissementId)
+        }
+      }
+    });
+
+    if (existingLiaison) {
+      return res.status(409).json({
+        success: false,
+        message: 'Une demande de liaison existe déjà avec cet établissement',
+        statut: existingLiaison.statutLiaison
+      });
+    }
+
+    // Créer la demande de liaison
+    const liaison = await prisma.liaisonApprenantEtablissement.create({
+      data: {
+        apprenantId: userId,
+        etablissementId: parseInt(etablissementId),
+        messageDemande: messageDemande || null,
+        statutLiaison: 'EN_ATTENTE'
+      },
+      include: {
+        apprenant: {
+          select: {
+            nom: true,
+            prenom: true,
+            email: true
+          }
+        },
+        etablissement: {
+          select: {
+            nomEtablissement: true,
+            emailEtablissement: true
+          }
+        }
+      }
+    });
+
+    console.log(`✅ Demande de liaison créée: ${liaison.id}`);
+
+    res.status(201).json({
+      success: true,
+      message: 'Demande de liaison envoyée avec succès',
+      data: liaison
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur création demande liaison:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la création de la demande',
+      error: error.message
+    });
+  }
+});
+
+// Route pour récupérer les demandes de liaison d'un établissement
+app.get('/api/etablissement/:id/demandes', authenticateToken, requireRole('establishment'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    console.log(`🔍 Récupération des demandes pour l'établissement ${id}`);
+
+    // Vérifier que l'établissement appartient à l'utilisateur connecté
+    if (parseInt(id) !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Accès non autorisé à cet établissement'
+      });
+    }
+
+    const demandes = await prisma.liaisonApprenantEtablissement.findMany({
+      where: {
+        etablissementId: parseInt(id),
+        statutLiaison: 'EN_ATTENTE'
+      },
+      include: {
+        apprenant: {
+          select: {
+            id_apprenant: true,
+            nom: true,
+            prenom: true,
+            email: true,
+            telephone: true,
+            dateCreation: true
+          }
+        }
+      },
+      orderBy: { dateDemande: 'desc' }
+    });
+
+    console.log(`✅ ${demandes.length} demandes trouvées`);
+
+    res.json({
+      success: true,
+      data: demandes
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur récupération demandes:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération des demandes',
+      error: error.message
+    });
+  }
+});
+
+// Route pour approuver/rejeter une demande de liaison
+app.patch('/api/liaison/:id/statut', authenticateToken, requireRole('establishment'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { statut, messageReponse } = req.body;
+    const userId = req.user.id;
+
+    console.log(`🔄 Mise à jour statut liaison ${id} vers ${statut}`);
+
+    // Vérifier que la liaison existe et appartient à l'établissement
+    const liaison = await prisma.liaisonApprenantEtablissement.findUnique({
+      where: { id: parseInt(id) },
+      include: {
+        etablissement: true
+      }
+    });
+
+    if (!liaison) {
+      return res.status(404).json({
+        success: false,
+        message: 'Demande de liaison non trouvée'
+      });
+    }
+
+    if (liaison.etablissementId !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Accès non autorisé à cette demande'
+      });
+    }
+
+    if (liaison.statutLiaison !== 'EN_ATTENTE') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cette demande a déjà été traitée'
+      });
+    }
+
+    // Mettre à jour le statut
+    const updateData = {
+      statutLiaison: statut,
+      messageReponse: messageReponse || null
+    };
+
+    if (statut === 'APPROUVE') {
+      updateData.dateApprobation = new Date();
+    } else if (statut === 'REJETE') {
+      updateData.dateRejet = new Date();
+    }
+
+    const liaisonMiseAJour = await prisma.liaisonApprenantEtablissement.update({
+      where: { id: parseInt(id) },
+      data: updateData,
+      include: {
+        apprenant: {
+          select: {
+            nom: true,
+            prenom: true,
+            email: true
+          }
+        },
+        etablissement: {
+          select: {
+            nomEtablissement: true
+          }
+        }
+      }
+    });
+
+    console.log(`✅ Liaison ${id} mise à jour vers ${statut}`);
+
+    res.json({
+      success: true,
+      message: `Demande ${statut === 'APPROUVE' ? 'approuvée' : 'rejetée'} avec succès`,
+      data: liaisonMiseAJour
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur mise à jour statut liaison:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la mise à jour du statut',
+      error: error.message
+    });
+  }
+});
+
+// Route pour récupérer les liaisons d'un apprenant
+app.get('/api/apprenant/liaisons', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userType = req.user.role;
+
+    console.log(`🔍 Récupération des liaisons pour l'apprenant ${userId}`);
+
+    // Vérifier que l'utilisateur est un apprenant
+    if (userType !== 'student') {
+      return res.status(403).json({
+        success: false,
+        message: 'Seuls les apprenants peuvent accéder à leurs liaisons'
+      });
+    }
+
+    const liaisons = await prisma.liaisonApprenantEtablissement.findMany({
+      where: { apprenantId: userId },
+      include: {
+        etablissement: {
+          select: {
+            id_etablissement: true,
+            nomEtablissement: true,
+            typeEtablissement: true,
+            adresseEtablissement: true,
+            telephoneEtablissement: true,
+            emailEtablissement: true
+          }
+        }
+      },
+      orderBy: { dateDemande: 'desc' }
+    });
+
+    console.log(`✅ ${liaisons.length} liaisons trouvées`);
+
+    res.json({
+      success: true,
+      data: liaisons
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur récupération liaisons apprenant:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération des liaisons',
+      error: error.message
+    });
+  }
+});
+
+// Route pour récupérer les étudiants liés d'un établissement
+app.get('/api/etablissement/:id/etudiants', authenticateToken, requireRole('establishment'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    console.log(`🔍 Récupération des étudiants liés pour l'établissement ${id}`);
+
+    // Vérifier que l'établissement appartient à l'utilisateur connecté
+    if (parseInt(id) !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Accès non autorisé à cet établissement'
+      });
+    }
+
+    const etudiants = await prisma.liaisonApprenantEtablissement.findMany({
+      where: {
+        etablissementId: parseInt(id),
+        statutLiaison: 'APPROUVE'
+      },
+      include: {
+        apprenant: {
+          select: {
+            id_apprenant: true,
+            nom: true,
+            prenom: true,
+            email: true,
+            telephone: true,
+            dateCreation: true,
+            statut: true
+          }
+        }
+      },
+      orderBy: { dateApprobation: 'desc' }
+    });
+
+    console.log(`✅ ${etudiants.length} étudiants liés trouvés`);
+
+    res.json({
+      success: true,
+      data: etudiants
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur récupération étudiants liés:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération des étudiants',
+      error: error.message
+    });
+  }
+});
+
+// Route pour récupérer les statistiques de liaison d'un établissement
+app.get('/api/etablissement/:id/stats-liaisons', authenticateToken, requireRole('establishment'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    console.log(`📊 Récupération des statistiques pour l'établissement ${id}`);
+
+    // Vérifier que l'établissement appartient à l'utilisateur connecté
+    if (parseInt(id) !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Accès non autorisé à cet établissement'
+      });
+    }
+
+    const [
+      totalDemandes,
+      demandesEnAttente,
+      etudiantsApprouves,
+      demandesRejetees
+    ] = await Promise.all([
+      prisma.liaisonApprenantEtablissement.count({
+        where: { etablissementId: parseInt(id) }
+      }),
+      prisma.liaisonApprenantEtablissement.count({
+        where: { 
+          etablissementId: parseInt(id),
+          statutLiaison: 'EN_ATTENTE'
+        }
+      }),
+      prisma.liaisonApprenantEtablissement.count({
+        where: { 
+          etablissementId: parseInt(id),
+          statutLiaison: 'APPROUVE'
+        }
+      }),
+      prisma.liaisonApprenantEtablissement.count({
+        where: { 
+          etablissementId: parseInt(id),
+          statutLiaison: 'REJETE'
+        }
+      })
+    ]);
+
+    const stats = {
+      totalDemandes,
+      demandesEnAttente,
+      etudiantsApprouves,
+      demandesRejetees,
+      tauxApprobation: totalDemandes > 0 ? Math.round((etudiantsApprouves / totalDemandes) * 100) : 0
+    };
+
+    console.log(`✅ Statistiques récupérées:`, stats);
+
+    res.json({
+      success: true,
+      data: stats
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur récupération statistiques:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération des statistiques',
       error: error.message
     });
   }

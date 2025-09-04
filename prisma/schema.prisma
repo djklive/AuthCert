@@ -16,9 +16,10 @@ model Apprenant {
   dateModification DateTime       @updatedAt
   nom              String
   telephone        String?
-  etablissementId  Int?
   prenom           String
-  etablissement    Etablissement? @relation(fields: [etablissementId], references: [id_etablissement])
+  
+  // Relations many-to-many avec les établissements
+  liaisons         LiaisonApprenantEtablissement[]
 
   @@map("apprenants")
 }
@@ -38,7 +39,9 @@ model Etablissement {
   emailResponsableEtablissement     String
   telephoneResponsableEtablissement String
   statut                            Statut                  @default(EN_ATTENTE)
-  apprenants                        Apprenant[]
+  
+  // Relations many-to-many avec les apprenants
+  liaisons                          LiaisonApprenantEtablissement[]
   documents                         DocumentEtablissement[]
 
   @@map("etablissements")
@@ -106,4 +109,32 @@ enum StatutDocument {
   VALIDE
   REJETE
   EXPIRED
+}
+
+// Nouveau modèle pour gérer les liaisons many-to-many entre apprenants et établissements
+model LiaisonApprenantEtablissement {
+  id                Int      @id @default(autoincrement())
+  apprenantId       Int
+  etablissementId   Int
+  statutLiaison     StatutLiaison @default(EN_ATTENTE)
+  dateDemande       DateTime @default(now())
+  dateApprobation   DateTime?
+  dateRejet         DateTime?
+  messageDemande    String?
+  messageReponse    String?
+  approuvePar       Int?     // ID de l'admin qui a approuvé
+  
+  // Relations
+  apprenant         Apprenant @relation(fields: [apprenantId], references: [id_apprenant], onDelete: Cascade)
+  etablissement     Etablissement @relation(fields: [etablissementId], references: [id_etablissement], onDelete: Cascade)
+  
+  @@unique([apprenantId, etablissementId])
+  @@map("liaisons_apprenant_etablissement")
+}
+
+enum StatutLiaison {
+  EN_ATTENTE
+  APPROUVE
+  REJETE
+  SUSPENDU
 }

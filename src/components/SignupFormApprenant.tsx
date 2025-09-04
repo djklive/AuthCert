@@ -3,12 +3,13 @@ import { InputField } from "./InputField";
 import { PrimaryButton } from "./PrimaryButton";
 import { Checkbox } from "./ui/checkbox";
 import { Label } from "./ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { MultiSelect } from "./ui/multi-select";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { api, type Establishment } from '../services/api';
 
-const API_BASE_URL = 'https://authcert-production.up.railway.app/api';
+//const API_BASE_URL = 'https://authcert-production.up.railway.app/api';
+const API_BASE_URL = 'http://localhost:5000/api';
 
 export interface SignupFormApprenantData {
   firstName: string;
@@ -17,7 +18,7 @@ export interface SignupFormApprenantData {
   password: string;
   confirmPassword: string;
   phone: string;
-  etablissement: string;
+  etablissements: string[]; // Changé pour supporter plusieurs établissements
   acceptConditions: boolean;
 }
 
@@ -54,7 +55,7 @@ export function SignupFormApprenant() {
     password: "",
     confirmPassword: "",
     phone: "",
-    etablissement: "",
+    etablissements: [], // Changé pour supporter plusieurs établissements
     acceptConditions: false
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -72,8 +73,8 @@ export function SignupFormApprenant() {
       newErrors.password = "Le mot de passe doit contenir au moins 6 caractères";
     }
 
-    if(!formData.etablissement) {
-      newErrors.etablissement = "Veuillez sélectionner un établissement";
+    if(formData.etablissements.length === 0) {
+      newErrors.etablissements = "Veuillez sélectionner au moins un établissement";
     }
     
     if (!formData.acceptConditions) {
@@ -103,7 +104,7 @@ export function SignupFormApprenant() {
         nom: formData.lastName,
         prenom: formData.firstName,
         telephone: formData.phone || '',
-        etablissement: formData.etablissement
+        etablissements: formData.etablissements // Envoyer la liste des établissements
       });
       
       if (response.data.success) {
@@ -195,48 +196,45 @@ export function SignupFormApprenant() {
       />
 
       <div className="space-y-2">
-        <Label className="text-gray-700">Établissement souhaité <span className="text-[#F43F5E]">*</span></Label>
-        <Select onValueChange={(value) => setFormData({ ...formData, etablissement: value })}>
-          <SelectTrigger className="h-12 border-2 focus:border-[#F43F5E]">
-            <SelectValue placeholder={
-              loadingEstablishments 
-                ? "Chargement des établissements..." 
-                : establishments.length === 0 
-                  ? "Aucun établissement disponible" 
-                  : "Sélectionnez un établissement"
-            } />
-          </SelectTrigger>
-          <SelectContent className="bg-white border-2 border-gray-200 shadow-lg rounded-lg">
-            {loadingEstablishments ? (
-              <div className="p-4 text-center text-sm text-gray-500">
-                Chargement des établissements...
-              </div>
-            ) : establishmentsError ? (
-              <div className="p-4 text-center text-sm text-red-500">
-                {establishmentsError}
-              </div>
-            ) : establishments.length === 0 ? (
-              <div className="p-4 text-center text-sm text-gray-500">
-                Aucun établissement actif disponible
-              </div>
-            ) : (
-              establishments.map((etablissement) => (
-                <SelectItem 
-                  key={etablissement.id_etablissement} 
-                  value={etablissement.nomEtablissement}
-                  className="hover:bg-gray-100 focus:bg-gray-100 cursor-pointer"
-                >
-                  {etablissement.nomEtablissement}
-                </SelectItem>
-              ))
-            )}
-          </SelectContent>
-        </Select>
-        {errors.etablissement && (
-          <p className="text-sm text-[#F43F5E]">{errors.etablissement}</p>
+        <Label className="text-gray-700">Établissements souhaités <span className="text-[#F43F5E]">*</span></Label>
+        <p className="text-xs text-gray-500">Vous pouvez sélectionner plusieurs établissements pour recevoir vos certificats</p>
+        
+        {loadingEstablishments ? (
+          <div className="p-4 text-center text-sm text-gray-500">
+            Chargement des établissements...
+          </div>
+        ) : establishmentsError ? (
+          <div className="p-4 text-center text-sm text-red-500">
+            {establishmentsError}
+          </div>
+        ) : establishments.length === 0 ? (
+          <div className="p-4 text-center text-sm text-gray-500">
+            Aucun établissement actif disponible
+          </div>
+        ) : (
+          <MultiSelect
+            options={establishments.map(etab => ({
+              label: etab.nomEtablissement,
+              value: etab.nomEtablissement,
+              description: etab.typeEtablissement
+            }))}
+            selected={formData.etablissements}
+            onChange={(selected) => setFormData({ ...formData, etablissements: selected })}
+            placeholder="Sélectionnez vos établissements..."
+            disabled={loadingEstablishments}
+          />
         )}
-        {establishmentsError && (
-          <p className="text-sm text-red-500">{establishmentsError}</p>
+        
+        {errors.etablissements && (
+          <p className="text-sm text-[#F43F5E]">{errors.etablissements}</p>
+        )}
+        
+        {formData.etablissements.length > 0 && (
+          <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+            <p className="text-sm text-green-700">
+              <strong>{formData.etablissements.length}</strong> établissement{formData.etablissements.length > 1 ? 's' : ''} sélectionné{formData.etablissements.length > 1 ? 's' : ''}
+            </p>
+          </div>
         )}
       </div>
 

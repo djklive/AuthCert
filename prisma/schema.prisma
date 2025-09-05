@@ -17,10 +17,11 @@ model Apprenant {
   nom              String
   telephone        String?
   prenom           String
+  walletAddress String    @unique // L'adresse du portefeuille blockchain de l'utilisateur
   
   // Relations many-to-many avec les établissements
   liaisons         LiaisonApprenantEtablissement[]
-
+  certificates    Certificate[]   // Les certificats émis par cet établissement
   @@map("apprenants")
 }
 
@@ -39,10 +40,16 @@ model Etablissement {
   emailResponsableEtablissement     String
   telephoneResponsableEtablissement String
   statut                            Statut                  @default(EN_ATTENTE)
+  smartContractAddress  String?   @unique // L'adresse de son contrat sur la blockchain, unique
   
   // Relations many-to-many avec les apprenants
-  liaisons                          LiaisonApprenantEtablissement[]
-  documents                         DocumentEtablissement[]
+  liaisons                          LiaisonApprenantEtablissement[] // Les inscriptions des étudiants dans cet établissement
+  documents                         DocumentEtablissement[] // Les documents justificatifs soumis
+  // Relations
+  certificates    Certificate[]   // Les certificats émis par cet établissement
+  subscriptionPlan SubscriptionPlan? @relation(fields: [subscriptionPlanId], references: [id])
+  subscriptionPlanId Int?
+  payments        Payment[]       // Les paiements d'abonnement
 
   @@map("etablissements")
 }
@@ -137,4 +144,75 @@ enum StatutLiaison {
   APPROUVE
   REJETE
   SUSPENDU
+}
+
+// Représente un certificat numérique émis.
+model Certificate {
+  id              Int   @id @default(autoincrement())
+  title           String
+  description     String?  @db.Text
+  issueDate       DateTime
+  pdfUrl          String   // Lien vers le fichier PDF stocké
+  transactionHash String   @unique // Hash de la transaction blockchain
+  documentHash    String   @unique // Empreinte SHA-256 du PDF
+
+  status CertificateStatus @default(ISSUED)
+
+  createdAt DateTime @default(now())
+
+  // Relations
+  issuer      Etablissement @relation(fields: [issuerId], references: [id_etablissement]) // L'établissement émetteur
+  issuerId    Int
+  learner     Apprenant        @relation(fields: [learnerId], references: [id_apprenant]) // L'apprenant qui reçoit le certificat
+  learnerId   Int @unique
+
+  verificationLogs VerificationLog[] // L'historique des vérifications de ce certificat
+}
+
+// ===============================================
+//                MODÈLES DE SUPPORT
+// ===============================================
+
+model SubscriptionPlan {
+  id               Int   @id @default(autoincrement())
+  name             String   @unique // ex: "Basic", "Pro"
+  pricePerMonth    Decimal
+  certificateLimit Int
+
+  institutions Etablissement[]
+}
+
+model Payment {
+  id            Int   @id @default(autoincrement())
+  amount        Decimal
+  paymentDate   DateTime @default(now())
+  status        PaymentStatus @default(SUCCESS)
+
+  institution   Etablissement @relation(fields: [institutionId], references: [id_etablissement])
+  institutionId Int
+}
+
+model VerificationLog {
+  id               Int   @id @default(autoincrement())
+  verificationDate DateTime @default(now())
+  ipAddress        String?
+  result           Boolean
+
+  certificate   Certificate @relation(fields: [certificateId], references: [id])
+  certificateId Int
+}
+
+
+// ===============================================
+//                       ENUMS
+// ===============================================
+
+enum CertificateStatus {
+  ISSUED
+  REVOKED
+}
+
+enum PaymentStatus {
+  SUCCESS
+  FAILED
 }

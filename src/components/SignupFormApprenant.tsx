@@ -8,8 +8,8 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { api, type Establishment } from '../services/api';
 
-//const API_BASE_URL = 'https://authcert-production.up.railway.app/api';
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = 'https://authcert-production.up.railway.app/api';
+//const API_BASE_URL = 'http://localhost:5000/api';
 
 export interface SignupFormApprenantData {
   firstName: string;

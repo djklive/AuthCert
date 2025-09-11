@@ -17,9 +17,11 @@ model Apprenant {
   nom              String
   telephone        String?
   prenom           String
+  walletAddress    String?        @unique
   
   // Relations many-to-many avec les établissements
   liaisons         LiaisonApprenantEtablissement[]
+  certificats     Certificat[]
 
   @@map("apprenants")
 }
@@ -39,10 +41,12 @@ model Etablissement {
   emailResponsableEtablissement     String
   telephoneResponsableEtablissement String
   statut                            Statut                  @default(EN_ATTENTE)
+  smartContractAddress              String?                 @unique
   
   // Relations many-to-many avec les apprenants
   liaisons                          LiaisonApprenantEtablissement[]
   documents                         DocumentEtablissement[]
+  certificats                        Certificat[]
 
   @@map("etablissements")
 }
@@ -88,6 +92,32 @@ model DocumentEtablissement {
   @@map("documents_etablissement")
 }
 
+// ===============================================
+//                CERTIFICATS
+// ===============================================
+
+model Certificat {
+  id               Int               @id @default(autoincrement())
+  uuid             String            @unique
+  etablissementId  Int
+  apprenantId      Int
+  titre            String
+  mention          String?
+  dateObtention    DateTime
+  pdfUrl           String?
+  pdfHash          String?
+  statut           StatutCertificat  @default(BROUILLON)
+  txHash           String?
+  contractAddress  String?
+  issuedAt         DateTime?
+  createdAt        DateTime          @default(now())
+
+  etablissement    Etablissement     @relation(fields: [etablissementId], references: [id_etablissement])
+  apprenant        Apprenant         @relation(fields: [apprenantId], references: [id_apprenant])
+
+  @@map("certificats")
+}
+
 enum Statut {
   EN_ATTENTE
   ACTIF
@@ -111,6 +141,26 @@ enum StatutDocument {
   EXPIRED
 }
 
+enum StatutCertificat {
+  BROUILLON
+  A_EMETTRE
+  EMIS
+  REVOQUE
+}
+
+// Coffre-fort pour stocker les clés privées chiffrées
+model WalletVault {
+  id         Int      @id @default(autoincrement())
+  ownerType  String   // 'apprenant' | 'etablissement'
+  ownerId    Int
+  iv         String
+  authTag    String
+  cipherText String
+  createdAt  DateTime @default(now())
+
+  @@index([ownerType, ownerId])
+  @@map("wallet_vault")
+}
 // Nouveau modèle pour gérer les liaisons many-to-many entre apprenants et établissements
 model LiaisonApprenantEtablissement {
   id                Int      @id @default(autoincrement())

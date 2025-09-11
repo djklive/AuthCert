@@ -1,5 +1,6 @@
-//const API_BASE_URL = 'https://authcert-production.up.railway.app/api';
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = 'https://authcert-production.up.railway.app/api';
+//const API_BASE_URL = 'http://localhost:5000/api';
+export const API_BASE = API_BASE_URL;
 
 export interface Document {
   id: number;
@@ -20,6 +21,11 @@ export interface Establishment {
   adresseEtablissement: string;
   typeEtablissement: string;
   documents: Document[];
+}
+
+function authHeaders(): Record<string, string> {
+  const token = localStorage.getItem('authToken');
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 export const api = {
@@ -54,4 +60,85 @@ export const api = {
       throw error;
     }
   },
-}
+
+  // ======== Certificats ========
+  async createCertificateDraft(params: { apprenantId: number; titre: string; mention?: string; dateObtention: string; }) {
+    const res = await fetch(`${API_BASE_URL}/certificats`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(),
+      } as HeadersInit,
+      body: JSON.stringify(params)
+    });
+    if (!res.ok) throw new Error('Erreur création brouillon');
+    return res.json();
+  },
+
+  async generateCertificatePdf(certificatId: number) {
+    const res = await fetch(`${API_BASE_URL}/certificats/${certificatId}/pdf`, {
+      method: 'POST',
+      headers: {
+        ...authHeaders(),
+      } as HeadersInit,
+    });
+    if (!res.ok) throw new Error('Erreur génération PDF');
+    return res.json();
+  },
+
+  async emitCertificate(certificatId: number) {
+    const res = await fetch(`${API_BASE_URL}/certificats/${certificatId}/emit`, {
+      method: 'POST',
+      headers: {
+        ...authHeaders(),
+      } as HeadersInit,
+    });
+    if (!res.ok) throw new Error('Erreur émission on-chain');
+    return res.json();
+  },
+
+  async verifyCertificateOnchain(certificatId: number) {
+    const res = await fetch(`${API_BASE_URL}/certificats/${certificatId}/verify-onchain`, {
+      headers: {
+        ...authHeaders(),
+      } as HeadersInit,
+    });
+    if (!res.ok) throw new Error('Erreur vérification on-chain');
+    return res.json();
+  },
+
+  async listCertificates() {
+    const res = await fetch(`${API_BASE_URL}/certificats`, {
+      headers: {
+        ...authHeaders(),
+      } as HeadersInit,
+    });
+    if (!res.ok) throw new Error('Erreur récupération certificats');
+    return res.json();
+  },
+
+  // Récupérer l'adresse du wallet de l'établissement avec solde
+  async getEstablishmentWallet() {
+    const res = await fetch(`${API_BASE_URL}/etablissement/me/wallet`, {
+      headers: {
+        ...authHeaders(),
+      } as HeadersInit,
+    });
+    if (!res.ok) throw new Error('Erreur récupération wallet');
+    return res.json();
+  },
+
+  // Révoquer un certificat
+  async revokeCertificate(certificatId: number, reason?: string) {
+    const res = await fetch(`${API_BASE_URL}/certificats/${certificatId}/revoke`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(),
+      } as HeadersInit,
+      body: JSON.stringify({ reason })
+    });
+    if (!res.ok) throw new Error('Erreur révocation certificat');
+    return res.json();
+  },
+};

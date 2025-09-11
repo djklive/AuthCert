@@ -53,7 +53,16 @@ const authenticateToken = (req, res, next) => {
 // Middleware pour vérifier le rôle
 const requireRole = (role) => {
   return (req, res, next) => {
+    console.log(`🔐 Vérification du rôle:`, {
+      requiredRole: role,
+      userRole: req.user?.role,
+      userType: req.user?.type,
+      userId: req.user?.id,
+      userData: req.user
+    });
+    
     if (!req.user) {
+      console.log(`❌ Utilisateur non authentifié`);
       return res.status(401).json({ 
         success: false, 
         message: 'Utilisateur non authentifié' 
@@ -61,11 +70,14 @@ const requireRole = (role) => {
     }
     
     if (req.user.role !== role) {
+      console.log(`❌ Rôle incorrect: attendu '${role}', reçu '${req.user.role}'`);
       return res.status(403).json({ 
         success: false, 
         message: `Rôle ${role} requis pour cette action` 
       });
     }
+    
+    console.log(`✅ Rôle correct: ${role}`);
     next();
   };
 };

@@ -2,6 +2,7 @@ import { useUser } from '../../hooks/useUser';
 import { useState } from 'react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
+import { WalletCard } from '../WalletCard';
 //import { Badge } from '../ui/badge';
 //import { Progress } from '../ui/progress';
 import { 
@@ -138,6 +139,9 @@ export function EstablishmentDashboardScreen({ hasData = true, onNavigate }: Est
             </CardContent>
           </Card>
         </div>
+
+        {/* Wallet Card */}
+        <WalletCard className="rounded-2xl" />
 
         {/* Getting Started Cards */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -345,6 +349,9 @@ export function EstablishmentDashboardScreen({ hasData = true, onNavigate }: Est
             ))}
           </CardContent>
         </Card>
+
+        {/* Wallet Card */}
+        <WalletCard className="rounded-2xl" />
 
         {/* Recent Activity */}
         <Card className="rounded-2xl">

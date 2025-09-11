@@ -23,14 +23,27 @@ import {
   User,
   X
 } from 'lucide-react';
+import { api } from '../../../services/api';
+import { useEffect } from 'react';
+import { useUser } from '../../hooks/useUser';
+import authService from '../../../services/authService';
+const API_BASE_URL = 'https://authcert-production.up.railway.app/api';
+//const API_BASE_URL = 'http://localhost:5000/api';
 
-interface Student {
+interface SelectedStudent { id: number; name: string; email: string; }
+
+interface EtudiantLie {
   id: number;
-  name: string;
-  email: string;
-  courses: string[];
-  certificates: number;
-  avatar: string;
+  dateApprobation: string;
+  apprenant: {
+    id_apprenant: number;
+    nom: string;
+    prenom: string;
+    email: string;
+    telephone?: string;
+    dateCreation: string;
+    statut: string;
+  };
 }
 
 interface CreateCertificateScreenProps {
@@ -39,7 +52,7 @@ interface CreateCertificateScreenProps {
 
 export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenProps) {
   const [currentStep, setCurrentStep] = useState(1);
-  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [selectedStudent, setSelectedStudent] = useState<SelectedStudent | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [certificateData, setCertificateData] = useState({
     type: '',
@@ -52,14 +65,64 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
   });
   const [newSkill, setNewSkill] = useState('');
   const [isPublishing, setIsPublishing] = useState(false);
+  const [draftId, setDraftId] = useState<number | null>(null);
+  const [error, setError] = useState<string>('');
+  const { user } = useUser();
+  const [etudiantsLies, setEtudiantsLies] = useState<EtudiantLie[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Mock students data
-  const students = [
-    { id: 1, name: 'Alice Dubois', email: 'alice.dubois@email.com', courses: ['Master Marketing', 'Formation Leadership'], certificates: 3, avatar: 'AD' },
-    { id: 2, name: 'Jean Martin', email: 'jean.martin@email.com', courses: ['Certification Agile', 'Formation Management'], certificates: 1, avatar: 'JM' },
-    { id: 3, name: 'Sophie Laurent', email: 'sophie.laurent@email.com', courses: ['Master Commerce', 'Formation Digital'], certificates: 5, avatar: 'SL' },
-    { id: 4, name: 'Thomas Wilson', email: 'thomas.wilson@email.com', courses: ['Formation Data Science'], certificates: 0, avatar: 'TW' },
-  ];
+  // Charger les données
+  useEffect(() => {
+    loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      
+      if (!user?.id) {
+        throw new Error('Utilisateur non connecté');
+      }
+
+      console.log('🔍 Chargement des étudiants liés...', {
+        userId: user.id,
+        userRole: user.role,
+        authHeaders: authService.getAuthHeaders()
+      });
+
+      // Charger les demandes en attente et les étudiants liés en parallèle
+      const etudiantsResponse = await fetch(`${API_BASE_URL}/etablissement/${user.id}/etudiants`, {
+        headers: authService.getAuthHeaders()
+      });
+      
+      console.log('📡 Réponse API étudiants:', {
+        status: etudiantsResponse.status,
+        statusText: etudiantsResponse.statusText,
+        ok: etudiantsResponse.ok
+      });
+      
+      if (!etudiantsResponse.ok) {
+        const errorText = await etudiantsResponse.text();
+        console.error('❌ Erreur API:', errorText);
+        throw new Error(`Erreur ${etudiantsResponse.status}: ${errorText}`);
+      }
+      const etudiantsData = await etudiantsResponse.json();
+      console.log('✅ Données étudiants reçues:', etudiantsData);
+      setEtudiantsLies(etudiantsData.data || []);
+    } catch (err) {
+      setError('Erreur lors du chargement des données');
+      console.error('Erreur chargement données:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredLinkedStudents = etudiantsLies.filter(etudiant =>
+    `${etudiant.apprenant.prenom} ${etudiant.apprenant.nom}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    etudiant.apprenant.email.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const certificateTypes = [
     { value: 'diploma', label: 'Diplôme' },
@@ -68,20 +131,39 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
     { value: 'competency', label: 'Certification de compétences' }
   ];
 
-  const filteredStudents = students.filter(student =>
-    student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    student.email.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
   const steps = [
     { title: 'Sélection de l\'étudiant', description: 'Choisissez l\'étudiant destinataire du certificat' },
     { title: 'Détails du certificat', description: 'Configurez les informations du certificat' },
     { title: 'Vérification & Publication', description: 'Validez et publiez sur la blockchain' }
   ];
 
-  const handleNext = () => {
-    if (currentStep < 3) {
-      setCurrentStep(currentStep + 1);
+  const handleNext = async () => {
+    setError('');
+    if (currentStep === 1) {
+      if (!selectedStudent) return;
+      setCurrentStep(2);
+      return;
+    }
+    if (currentStep === 2) {
+      // Créer un brouillon côté backend
+      if (!selectedStudent || !certificateData.title || !certificateData.issueDate) {
+        setError('Veuillez sélectionner un étudiant, un titre et une date.');
+        return;
+      }
+      try {
+        const res = await api.createCertificateDraft({
+          apprenantId: selectedStudent.id,
+          titre: certificateData.title,
+          mention: certificateData.grade || undefined,
+          dateObtention: certificateData.issueDate,
+        });
+        const draft = res.data;
+        setDraftId(draft.id);
+        setCurrentStep(3);
+      } catch {
+        setError('Erreur lors de la création du brouillon');
+      }
+      return;
     }
   };
 
@@ -109,11 +191,26 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
   };
 
   const handlePublish = async () => {
+    if (!draftId) {
+      setError('Brouillon introuvable.');
+      return;
+    }
     setIsPublishing(true);
-    // Simulate blockchain publication process
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    setIsPublishing(false);
-    onNavigate('certificates');
+    setError('');
+    try {
+      // 1) Générer le PDF si pas déjà fait
+      const pdfRes = await api.generateCertificatePdf(draftId);
+      if (!pdfRes?.data?.pdfUrl) {
+        throw new Error('PDF non généré');
+      }
+      // 2) Émettre on-chain (MVP)
+      await api.emitCertificate(draftId);
+      onNavigate('certificates');
+    } catch {
+      setError('Erreur lors de la génération du PDF');
+    } finally {
+      setIsPublishing(false);
+    }
   };
 
   const progress = (currentStep / 3) * 100;
@@ -136,6 +233,10 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
         <div className="mb-8">
           <Progress value={progress} className="h-2" />
         </div>
+
+        {error && (
+          <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>
+        )}
 
         <Card className="border-0 shadow-lg rounded-3xl">
           <CardHeader>
@@ -168,7 +269,7 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
 
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <Label>Étudiants liés ({filteredStudents.length})</Label>
+                    <Label>Étudiants liés ({filteredLinkedStudents.length})</Label>
                     <Button 
                       variant="outline" 
                       size="sm"
@@ -180,47 +281,52 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
                     </Button>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {filteredStudents.map((student) => (
-                      <Card 
-                        key={student.id}
-                        className={`cursor-pointer transition-all hover:shadow-md rounded-2xl ${
-                          selectedStudent?.id === student.id ? 'border-primary bg-primary/5' : 'border-border'
-                        }`}
-                        onClick={() => setSelectedStudent(student)}
-                      >
-                        <CardContent className="p-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-12 h-12 bg-gradient-to-br from-primary/20 to-primary/10 rounded-full flex items-center justify-center">
-                              <span className="font-medium">{student.avatar}</span>
-                            </div>
-                            <div className="flex-1">
-                              <h3 className="font-medium">{student.name}</h3>
-                              <p className="text-sm text-muted-foreground">{student.email}</p>
-                              <div className="flex items-center gap-2 mt-2">
-                                <Badge variant="secondary" className="text-xs">
-                                  {student.certificates} certificats
-                                </Badge>
-                                <Badge variant="outline" className="text-xs">
-                                  {student.courses.length} formations
-                                </Badge>
+                  {loading ? (
+                    <div className="text-center py-8 text-sm text-muted-foreground">Chargement des étudiants liés...</div>
+                  ) : filteredLinkedStudents.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {filteredLinkedStudents.map((item) => (
+                        <Card 
+                          key={item.apprenant.id_apprenant}
+                          className={`cursor-pointer transition-all hover:shadow-md rounded-2xl ${
+                            selectedStudent?.id === item.apprenant.id_apprenant ? 'border-primary bg-primary/5' : 'border-border'
+                          }`}
+                          onClick={() => setSelectedStudent({
+                            id: item.apprenant.id_apprenant,
+                            name: `${item.apprenant.prenom} ${item.apprenant.nom}`,
+                            email: item.apprenant.email
+                          })}
+                        >
+                          <CardContent className="p-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-12 h-12 bg-gradient-to-br from-primary/20 to-primary/10 rounded-full flex items-center justify-center">
+                                <span className="font-medium">
+                                  {(item.apprenant.prenom[0] || '').toUpperCase()}{(item.apprenant.nom[0] || '').toUpperCase()}
+                                </span>
                               </div>
+                              <div className="flex-1">
+                                <h3 className="font-medium">{item.apprenant.prenom} {item.apprenant.nom}</h3>
+                                <p className="text-sm text-muted-foreground">{item.apprenant.email}</p>
+                                <div className="flex items-center gap-2 mt-2">
+                                  <Badge variant="secondary" className="text-xs">
+                                    Lié le {new Date(item.dateApprobation).toLocaleDateString('fr-FR')}
+                                  </Badge>
+                                </div>
+                              </div>
+                              {selectedStudent?.id === item.apprenant.id_apprenant && (
+                                <Check className="h-5 w-5 text-primary" />
+                              )}
                             </div>
-                            {selectedStudent?.id === student.id && (
-                              <Check className="h-5 w-5 text-primary" />
-                            )}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-
-                  {filteredStudents.length === 0 && (
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  ) : (
                     <div className="text-center py-8">
                       <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                      <h3 className="font-medium mb-2">Aucun étudiant trouvé</h3>
+                      <h3 className="font-medium mb-2">Aucun étudiant lié</h3>
                       <p className="text-sm text-muted-foreground mb-4">
-                        Modifiez votre recherche ou liez de nouveaux étudiants à votre établissement.
+                        Liez d'abord des étudiants à votre établissement pour émettre des certificats.
                       </p>
                       <Button onClick={() => onNavigate('students')} className="rounded-xl">
                         <Plus className="h-4 w-4 mr-2" />
@@ -514,7 +620,7 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
               {currentStep < 3 ? (
                 <Button 
                   onClick={handleNext}
-                  disabled={currentStep === 1 && !selectedStudent}
+                  disabled={(currentStep === 1 && !selectedStudent) || (currentStep === 2 && (!certificateData.title || !certificateData.issueDate))}
                   className="rounded-xl"
                 >
                   Continuer
@@ -523,7 +629,7 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
               ) : (
                 <Button 
                   onClick={handlePublish}
-                  disabled={isPublishing || !certificateData.type || !certificateData.title}
+                  disabled={isPublishing || !draftId}
                   className="rounded-xl"
                 >
                   <Rocket className="h-4 w-4 mr-2" />

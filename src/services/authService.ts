@@ -1,4 +1,7 @@
 // Service d'authentification pour gérer les JWT
+
+const API_BASE_URL = 'https://authcert-production.up.railway.app/api';
+//const API_BASE_URL = 'http://localhost:5000/api';
 class AuthService {
   private static instance: AuthService;
   private token: string | null = null;
@@ -63,7 +66,7 @@ class AuthService {
     if (!this.token) return false;
 
     try {
-      const response = await fetch('http://localhost:5000/api/auth/verify', {
+      const response = await fetch(`${API_BASE_URL}/auth/verify`, {
         headers: {
           'Authorization': `Bearer ${this.token}`
         }

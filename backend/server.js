@@ -12,6 +12,11 @@ const {
 } = require('./config/jwt');
 const fs = require('fs');
 const path = require('path');
+const PDFDocument = require('pdfkit');
+const crypto = require('crypto');
+const QRCode = require('qrcode');
+const { v4: uuidv4 } = require('uuid');
+const { ethers } = require('ethers');
 
 const app = express();
 const prisma = new PrismaClient();
@@ -57,6 +62,455 @@ if (!fs.existsSync(etablissementsDir)) {
   console.log('📁 Dossier etablissements créé');
 }
 
+// Créer le dossier certificats s'il n'existe pas
+const certificatsDir = path.join(uploadsDir, 'certificats');
+if (!fs.existsSync(certificatsDir)) {
+  fs.mkdirSync(certificatsDir, { recursive: true });
+  console.log('📁 Dossier certificats créé');
+}
+
+// Endpoint pour servir les fichiers depuis Supabase
+app.get('/api/uploads/certificats/:filename', async (req, res) => {
+  try {
+    const { filename } = req.params;
+    const supabaseStorage = require('./services/supabaseStorage');
+    
+    console.log(`🔍 Recherche du fichier certificat: ${filename}`);
+    
+    // Le fichier est stocké avec le chemin complet dans la base de données
+    // Récupérer le certificat pour obtenir le bon chemin
+    const certificat = await prisma.certificat.findFirst({
+      where: {
+        pdfUrl: {
+          contains: filename
+        }
+      }
+    });
+    
+    if (!certificat || !certificat.pdfUrl) {
+      console.log(`❌ Certificat non trouvé pour le fichier: ${filename}`);
+      return res.status(404).json({ success: false, message: 'Fichier non trouvé' });
+    }
+    
+    // Extraire le chemin du fichier depuis l'URL Supabase
+    const urlParts = certificat.pdfUrl.split('/');
+    const filePath = urlParts.slice(-2).join('/'); // Prendre les 2 dernières parties (certificats/filename)
+    
+    console.log(`📁 Chemin du fichier: ${filePath}`);
+    
+    // Générer une URL signée pour le fichier
+    const result = await supabaseStorage.getSignedUrl(filePath, 3600); // 1 heure
+    
+    if (!result.success) {
+      console.log(`❌ Erreur génération URL signée: ${result.error}`);
+      return res.status(404).json({ success: false, message: 'Fichier non trouvé' });
+    }
+    
+    console.log(`✅ URL signée générée: ${result.url}`);
+    
+    // Rediriger vers l'URL signée Supabase
+    res.redirect(result.url);
+    
+  } catch (error) {
+    console.error('❌ Erreur serveur fichier:', error);
+    res.status(500).json({ success: false, message: 'Erreur serveur' });
+  }
+});
+
+// Endpoint pour servir les fichiers d'établissements depuis Supabase
+app.get('/api/uploads/etablissements/:filename', async (req, res) => {
+  try {
+    const { filename } = req.params;
+    const supabaseStorage = require('./services/supabaseStorage');
+    
+    // Générer une URL signée pour le fichier
+    const filePath = `etablissements/${filename}`;
+    const result = await supabaseStorage.getSignedUrl(filePath, 3600); // 1 heure
+    
+    if (!result.success) {
+      return res.status(404).json({ success: false, message: 'Fichier non trouvé' });
+    }
+    
+    // Rediriger vers l'URL signée Supabase
+    res.redirect(result.url);
+    
+  } catch (error) {
+    console.error('❌ Erreur serveur fichier:', error);
+    res.status(500).json({ success: false, message: 'Erreur serveur' });
+  }
+});
+
+// Utilitaires Certificats
+function sha256Hex(buffer) {
+  return crypto.createHash('sha256').update(buffer).digest('hex');
+}
+
+// === Wallet encryption helpers (AES-256-GCM) ===
+function getWalletEncryptionKey() {
+  const raw = process.env.WALLET_ENCRYPTION_KEY;
+  if (!raw) {
+    throw new Error('WALLET_ENCRYPTION_KEY manquant dans les variables d\'environnement');
+  }
+  if (/^[0-9a-fA-F]{64}$/.test(raw)) {
+    return Buffer.from(raw, 'hex');
+  }
+  return crypto.createHash('sha256').update(raw).digest();
+}
+
+function encryptPrivateKey(plainTextPrivateKey) {
+  const key = getWalletEncryptionKey();
+  const iv = crypto.randomBytes(12); // GCM IV 96-bit
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const encrypted = Buffer.concat([
+    cipher.update(plainTextPrivateKey, 'utf8'),
+    cipher.final()
+  ]);
+  const authTag = cipher.getAuthTag();
+  return {
+    iv: iv.toString('base64'),
+    authTag: authTag.toString('base64'),
+    cipherText: encrypted.toString('base64')
+  };
+}
+
+function decryptPrivateKey(encryptedObject) {
+  const key = getWalletEncryptionKey();
+  const iv = Buffer.from(encryptedObject.iv, 'base64');
+  const authTag = Buffer.from(encryptedObject.authTag, 'base64');
+  const cipherText = Buffer.from(encryptedObject.cipherText, 'base64');
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+  decipher.setAuthTag(authTag);
+  const decrypted = Buffer.concat([decipher.update(cipherText), decipher.final()]);
+  return decrypted.toString('utf8');
+}
+
+// Fonction pour récupérer le logo de l'établissement
+async function getEstablishmentLogo(etablissementId) {
+  try {
+    // Récupérer le document logo de l'établissement
+    const logoDocument = await prisma.documentEtablissement.findFirst({
+      where: {
+        etablissementId: etablissementId,
+        typeDocument: 'logo',
+        statut: 'VALIDE'
+      }
+    });
+
+    if (logoDocument && logoDocument.cheminFichier) {
+      // Récupérer l'URL signée depuis Supabase
+      const supabaseStorage = require('./services/supabaseStorage');
+      const result = await supabaseStorage.getSignedUrl(logoDocument.cheminFichier);
+      
+      if (result.success) {
+        console.log(`✅ Logo trouvé: ${result.url}`);
+        return result.url; // Retourner juste l'URL, pas l'objet complet
+      } else {
+        console.log(`❌ Erreur URL signée logo: ${result.error}`);
+        return null;
+      }
+    }
+    
+    console.log(`ℹ️ Aucun logo trouvé pour l'établissement ${etablissementId}`);
+    return null;
+  } catch (error) {
+    console.error('❌ Erreur récupération logo:', error);
+    return null;
+  }
+}
+
+async function generateCertificatePdf({
+  certificat,
+  apprenant,
+  etablissement,
+  verifyBaseUrl
+}) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const uuid = certificat.uuid;
+      const fileName = `${uuid}.pdf`;
+
+      // QR vers la page publique de vérification
+      const verifyUrl = `${verifyBaseUrl}?uuid=${encodeURIComponent(uuid)}`;
+      const qrDataUrl = await QRCode.toDataURL(verifyUrl, { 
+        margin: 2, 
+        width: 200,
+        color: {
+          dark: '#1f2937',  // Gris foncé
+          light: '#ffffff'  // Blanc
+        }
+      });
+
+      // Récupérer le logo de l'établissement
+      const logoUrl = await getEstablishmentLogo(etablissement.id_etablissement);
+
+      // Configuration du document PDF
+      const doc = new PDFDocument({ 
+        size: 'A4', 
+        margin: 0,
+        info: {
+          Title: `Certificat - ${certificat.titre}`,
+          Author: etablissement.nomEtablissement,
+          Subject: 'Certificat de formation',
+          Creator: 'AuthCert Platform'
+        }
+      });
+      const chunks = [];
+      
+      doc.on('data', chunk => chunks.push(chunk));
+      doc.on('end', async () => {
+        try {
+          const pdfBuffer = Buffer.concat(chunks);
+          const hashHex = sha256Hex(pdfBuffer);
+
+          // Upload vers Supabase Storage
+          const supabaseStorage = require('./services/supabaseStorage');
+          const uploadResult = await supabaseStorage.uploadFile(
+            pdfBuffer,
+            fileName,
+            'certificats',
+            'application/pdf'
+          );
+
+          if (!uploadResult.success) {
+            throw new Error(`Erreur upload Supabase: ${uploadResult.error}`);
+          }
+
+          console.log(`✅ PDF généré et uploadé: ${uploadResult.url}`);
+          resolve({ 
+            filePath: uploadResult.path, 
+            publicUrl: uploadResult.url, 
+            hashHex 
+          });
+
+        } catch (error) {
+          console.error('❌ Erreur upload PDF:', error);
+          reject(error);
+        }
+      });
+
+      // ===========================================
+      // DESIGN PROFESSIONNEL DU CERTIFICAT
+      // ===========================================
+
+      const pageWidth = doc.page.width;
+      const pageHeight = doc.page.height;
+      const margin = 60;
+
+      // Couleurs de la marque
+      const primaryColor = '#F43F5E';  // Rose principal
+      const secondaryColor = '#1f2937'; // Gris foncé
+      const accentColor = '#6b7280';   // Gris moyen
+      const lightGray = '#f9fafb';     // Gris très clair
+
+      // ===========================================
+      // ARRIÈRE-PLAN ET BORDURE
+      // ===========================================
+      
+      // Bordure décorative
+      doc.rect(margin - 10, margin - 10, pageWidth - 2 * margin + 20, pageHeight - 2 * margin + 20)
+         .lineWidth(3)
+         .stroke(primaryColor);
+
+      // Bordure intérieure
+      doc.rect(margin, margin, pageWidth - 2 * margin, pageHeight - 2 * margin)
+         .lineWidth(1)
+         .stroke(accentColor);
+
+      // ===========================================
+      // EN-TÊTE AVEC LOGO
+      // ===========================================
+      
+      const headerY = margin + 30;
+      
+      // Logo de l'établissement
+      if (logoUrl) {
+        try {
+          // Télécharger le logo depuis Supabase
+          const logoResponse = await fetch(logoUrl);
+          if (logoResponse.ok) {
+            const logoBuffer = await logoResponse.buffer();
+            doc.image(logoBuffer, pageWidth / 2 - 30, headerY - 10, { width: 60, height: 60 });
+          } else {
+            throw new Error('Logo non accessible');
+          }
+        } catch (error) {
+          console.warn('⚠️ Impossible de charger le logo, utilisation du placeholder:', error.message);
+          // Fallback vers le placeholder
+          doc.circle(pageWidth / 2, headerY + 20, 30)
+             .fill(primaryColor);
+          
+          doc.fontSize(16)
+             .fillColor('white')
+             .text('🏆', pageWidth / 2 - 15, headerY + 5, { width: 30, align: 'center' });
+        }
+      } else {
+        // Placeholder par défaut
+        doc.circle(pageWidth / 2, headerY + 20, 30)
+           .fill(primaryColor);
+        
+        doc.fontSize(16)
+           .fillColor('white')
+           .text('🏆', pageWidth / 2 - 15, headerY + 5, { width: 30, align: 'center' });
+      }
+
+      // Nom de l'établissement
+      doc.fontSize(18)
+         .fillColor(secondaryColor)
+         .text(etablissement.nomEtablissement, margin, headerY + 60, { 
+           width: pageWidth - 2 * margin, 
+           align: 'center',
+           lineGap: 2
+         });
+
+      // Ligne de séparation
+      doc.moveTo(margin + 50, headerY + 100)
+         .lineTo(pageWidth - margin - 50, headerY + 100)
+         .lineWidth(2)
+         .stroke(primaryColor);
+
+      // ===========================================
+      // TITRE PRINCIPAL
+      // ===========================================
+      
+      const titleY = headerY + 130;
+      
+      doc.fontSize(12)
+         .fillColor(accentColor)
+         .text('CERTIFICAT DE FORMATION', margin, titleY, { 
+           width: pageWidth - 2 * margin, 
+           align: 'center' 
+         });
+
+      doc.fontSize(28)
+         .fillColor(secondaryColor)
+         .text(certificat.titre, margin, titleY + 20, { 
+           width: pageWidth - 2 * margin, 
+           align: 'center',
+           lineGap: 5
+         });
+
+      // ===========================================
+      // NOM DU RÉCIPIENDAIRE
+      // ===========================================
+      
+      const recipientY = titleY + 100;
+      
+      doc.fontSize(14)
+         .fillColor(accentColor)
+         .text('Décerné à', margin, recipientY, { 
+           width: pageWidth - 2 * margin, 
+           align: 'center' 
+         });
+
+      doc.fontSize(24)
+         .fillColor(primaryColor)
+         .text(`${apprenant.prenom} ${apprenant.nom}`, margin, recipientY + 25, { 
+           width: pageWidth - 2 * margin, 
+           align: 'center',
+           lineGap: 3
+         });
+
+      // ===========================================
+      // DÉTAILS DU CERTIFICAT
+      // ===========================================
+      
+      const detailsY = recipientY + 80;
+      const detailsWidth = (pageWidth - 2 * margin) / 2;
+      
+      // Colonne gauche
+      doc.fontSize(12)
+         .fillColor(secondaryColor)
+         .text('Date d\'obtention:', margin, detailsY)
+         .text(new Date(certificat.dateObtention).toLocaleDateString('fr-FR', {
+           year: 'numeric',
+           month: 'long',
+           day: 'numeric'
+         }), margin + 130, detailsY);
+
+      if (certificat.mention) {
+        doc.text('Mention:', margin, detailsY + 25)
+           .text(certificat.mention, margin + 130, detailsY + 25);
+      }
+
+      // Colonne droite - QR Code
+      const qrX = pageWidth - margin - 120;
+      const qrY = detailsY - 10;
+      
+      // Intégrer le QR code
+      const qrBase64 = qrDataUrl.replace(/^data:image\/(png|jpg);base64,/, '');
+      const qrBuffer = Buffer.from(qrBase64, 'base64');
+      doc.image(qrBuffer, qrX, qrY, { width: 100, height: 100 });
+
+      // Texte sous le QR
+      doc.fontSize(8)
+         .fillColor(accentColor)
+         .text('Vérifiez l\'authenticité', qrX, qrY + 105, { width: 100, align: 'center' })
+         .text('en scannant ce code', qrX, qrY + 115, { width: 100, align: 'center' });
+
+      // ===========================================
+      // FOOTER
+      // ===========================================
+      
+      const footerY = pageHeight - margin - 80;
+      
+      // Ligne de séparation
+      doc.moveTo(margin + 50, footerY - 20)
+         .lineTo(pageWidth - margin - 50, footerY - 20)
+         .lineWidth(1)
+         .stroke(accentColor);
+
+      // Informations de vérification
+      doc.fontSize(8)
+         .fillColor(accentColor)
+         .text(`Identifiant unique: ${uuid}`, margin, footerY, { width: pageWidth - 2 * margin, align: 'center' })
+         .text(`Vérification: ${verifyUrl}`, margin, footerY + 12, { width: pageWidth - 2 * margin, align: 'center' })
+         .text('Ce certificat est sécurisé par la technologie blockchain', margin, footerY + 24, { width: pageWidth - 2 * margin, align: 'center' })
+         .text('© 2025 AuthCert Platform - Tous droits réservés', margin, footerY + 36, { width: pageWidth - 2 * margin, align: 'center' });
+
+      // ===========================================
+      // ÉLÉMENTS DÉCORATIFS
+      // ===========================================
+      
+      // Coins décoratifs
+      const cornerSize = 20;
+      const cornerThickness = 3;
+      
+      // Coin supérieur gauche
+      doc.moveTo(margin, margin + cornerSize)
+         .lineTo(margin, margin)
+         .lineTo(margin + cornerSize, margin)
+         .lineWidth(cornerThickness)
+         .stroke(primaryColor);
+      
+      // Coin supérieur droit
+      doc.moveTo(pageWidth - margin - cornerSize, margin)
+         .lineTo(pageWidth - margin, margin)
+         .lineTo(pageWidth - margin, margin + cornerSize)
+         .lineWidth(cornerThickness)
+         .stroke(primaryColor);
+      
+      // Coin inférieur gauche
+      doc.moveTo(margin, pageHeight - margin - cornerSize)
+         .lineTo(margin, pageHeight - margin)
+         .lineTo(margin + cornerSize, pageHeight - margin)
+         .lineWidth(cornerThickness)
+         .stroke(primaryColor);
+      
+      // Coin inférieur droit
+      doc.moveTo(pageWidth - margin - cornerSize, pageHeight - margin)
+         .lineTo(pageWidth - margin, pageHeight - margin)
+         .lineTo(pageWidth - margin, pageHeight - margin - cornerSize)
+         .lineWidth(cornerThickness)
+         .stroke(primaryColor);
+
+      doc.end();
+
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
 // Route d'inscription d'un apprenant
 app.post('/api/register/apprenant', async (req, res) => {
   try {
@@ -86,19 +540,41 @@ app.post('/api/register/apprenant', async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(motDePasse, salt);
 
-    // Création de l'apprenant
-    const apprenant = await prisma.apprenant.create({
-      data: {
-        email,
-        motDePasse: hashedPassword,
-        nom,
-        prenom,
-        telephone: telephone || null,
-        statut: 'ACTIF',
-        dateCreation: new Date(),
-        dateModification: new Date()
-      }
-    });
+    // Génération d'un wallet pour l'apprenant + chiffrement de la clé privée
+    let apprenant;
+    try {
+      const wallet = ethers.Wallet.createRandom();
+      const enc = encryptPrivateKey(wallet.privateKey);
+
+      // Création de l'apprenant avec l'adresse publique
+      apprenant = await prisma.apprenant.create({
+        data: {
+          email,
+          motDePasse: hashedPassword,
+          nom,
+          prenom,
+          telephone: telephone || null,
+          statut: 'ACTIF',
+          dateCreation: new Date(),
+          dateModification: new Date(),
+          walletAddress: wallet.address
+        }
+      });
+
+      // Stocker la clé privée chiffrée dans le coffre-fort
+      await prisma.walletVault.create({
+        data: {
+          ownerType: 'apprenant',
+          ownerId: apprenant.id_apprenant,
+          iv: enc.iv,
+          authTag: enc.authTag,
+          cipherText: enc.cipherText
+        }
+      });
+    } catch (e) {
+      console.error('Erreur création wallet apprenant:', e);
+      return res.status(500).json({ success: false, message: 'Erreur création du portefeuille' });
+    }
 
     // Créer les demandes de liaison pour chaque établissement sélectionné
     const demandesLiaison = [];
@@ -997,6 +1473,19 @@ app.post('/api/register/etablissement/supabase', async (req, res) => {
     const hashedPassword = await bcrypt.hash(motDePasseEtablissement, salt);
     console.log('✅ Mot de passe hashé');
 
+    // Générer un wallet établissement et stocker la clé privée chiffrée
+    let walletAddress = null;
+    try {
+      const wallet = ethers.Wallet.createRandom();
+      walletAddress = wallet.address;
+      const enc = encryptPrivateKey(wallet.privateKey);
+      // on enregistrera WalletVault après avoir créé l'établissement pour avoir son id
+      var encForVault = enc;
+    } catch (e) {
+      console.error('❌ Erreur génération wallet établissement:', e);
+      return res.status(500).json({ success: false, message: 'Erreur création du portefeuille établissement' });
+    }
+
     // Création de l'établissement
     console.log('🏗️ Création de l\'établissement en base...');
     const etablissement = await prisma.etablissement.create({
@@ -1013,9 +1502,27 @@ app.post('/api/register/etablissement/supabase', async (req, res) => {
         telephoneResponsableEtablissement,
         statut: 'EN_ATTENTE',
         dateCreation: new Date(),
-        dateModification: new Date()
+        dateModification: new Date(),
+        // si vous souhaitez stocker une addresse publique d'admin pour l'établissement (optionnel)
+        // walletAddressEtablissement: walletAddress,
       }
     });
+
+    // Sauvegarder la clé privée chiffrée dans le coffre-fort pour l'établissement
+    try {
+      await prisma.walletVault.create({
+        data: {
+          ownerType: 'etablissement',
+          ownerId: etablissement.id_etablissement,
+          iv: encForVault.iv,
+          authTag: encForVault.authTag,
+          cipherText: encForVault.cipherText
+        }
+      });
+    } catch (e) {
+      console.error('❌ Erreur enregistrement coffre-fort établissement:', e);
+      // on ne bloque pas l'inscription, mais on signale
+    }
 
     // Log des URLs des documents Supabase
     if (documents) {
@@ -1221,19 +1728,26 @@ app.get('/api/admin/document/:id/view', authenticateToken, requireRole('admin'),
       });
     }
     
-    // Construire le chemin complet du fichier
-    const filePath = path.join(__dirname, document.cheminFichier);
+    // Si le document a une URL Supabase, rediriger vers celle-ci
+    if (document.cheminFichier && document.cheminFichier.startsWith('http')) {
+      return res.redirect(document.cheminFichier);
+    }
     
-    // Vérifier que le fichier existe
-    if (!fs.existsSync(filePath)) {
+    // Sinon, utiliser Supabase Storage avec URL signée
+    const supabaseStorage = require('./services/supabaseStorage');
+    const filePath = `etablissements/${document.etablissementId}/${document.nomFichier}`;
+    
+    const result = await supabaseStorage.getSignedUrl(filePath, 3600); // 1 heure
+    
+    if (!result.success) {
       return res.status(404).json({
         success: false,
-        message: 'Fichier physique non trouvé'
+        message: 'Fichier non trouvé dans le stockage'
       });
     }
     
-    // Envoyer le fichier pour visualisation (pas de téléchargement)
-    res.sendFile(filePath);
+    // Rediriger vers l'URL signée Supabase
+    res.redirect(result.url);
     
     console.log(`👁️ Document visualisé: ${document.nomFichier}`);
     
@@ -1272,28 +1786,28 @@ app.get('/api/admin/document/:id/download', authenticateToken, requireRole('admi
       });
     }
     
-    // Construire le chemin complet du fichier
-    const filePath = path.join(__dirname, document.cheminFichier);
+    // Si le document a une URL Supabase, rediriger vers celle-ci
+    if (document.cheminFichier && document.cheminFichier.startsWith('http')) {
+      return res.redirect(document.cheminFichier);
+    }
     
-    // Vérifier que le fichier existe
-    if (!fs.existsSync(filePath)) {
+    // Sinon, utiliser Supabase Storage avec URL signée
+    const supabaseStorage = require('./services/supabaseStorage');
+    const filePath = `etablissements/${document.etablissementId}/${document.nomFichier}`;
+    
+    const result = await supabaseStorage.getSignedUrl(filePath, 3600); // 1 heure
+    
+    if (!result.success) {
       return res.status(404).json({
         success: false,
-        message: 'Fichier physique non trouvé'
+        message: 'Fichier non trouvé dans le stockage'
       });
     }
     
-    // Définir le nom du fichier pour le téléchargement
-    const fileName = document.nomFichier;
+    // Rediriger vers l'URL signée Supabase
+    res.redirect(result.url);
     
-    // Définir les headers pour le téléchargement
-    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-    res.setHeader('Content-Type', document.typeMime || 'application/octet-stream');
-    
-    // Envoyer le fichier
-    res.sendFile(filePath);
-    
-    console.log(`📥 Document téléchargé: ${fileName} (${document.cheminFichier})`);
+    console.log(`📥 Document téléchargé: ${document.nomFichier}`);
     
   } catch (error) {
     console.error('Erreur téléchargement document:', error);
@@ -1793,6 +2307,460 @@ app.post('/api/liaison/demande', authenticateToken, async (req, res) => {
   }
 });
 
+// ========================================
+// ROUTES POUR CERTIFICATS
+// ========================================
+
+// Créer un brouillon de certificat
+app.post('/api/certificats', authenticateToken, requireRole('establishment'), async (req, res) => {
+  try {
+    const { apprenantId, titre, mention, dateObtention } = req.body;
+    const etablissementId = req.user.id;
+
+    if (!apprenantId || !titre || !dateObtention) {
+      return res.status(400).json({ success: false, message: 'Champs requis manquants' });
+    }
+
+    // Vérifier que l'apprenant est lié (approuvé) à l'établissement
+    const liaison = await prisma.liaisonApprenantEtablissement.findFirst({
+      where: { apprenantId: parseInt(apprenantId), etablissementId, statutLiaison: 'APPROUVE' }
+    });
+    if (!liaison) {
+      return res.status(403).json({ success: false, message: 'Apprenant non lié à votre établissement' });
+    }
+
+    const uuid = uuidv4();
+    const certificat = await prisma.certificat.create({
+      data: {
+        uuid,
+        etablissementId,
+        apprenantId: parseInt(apprenantId),
+        titre,
+        mention: mention || null,
+        dateObtention: new Date(dateObtention),
+        statut: 'BROUILLON'
+      }
+    });
+
+    res.status(201).json({ success: true, data: certificat });
+  } catch (error) {
+    console.error('❌ Erreur création brouillon certificat:', error);
+    res.status(500).json({ success: false, message: 'Erreur serveur', error: error.message });
+  }
+});
+
+// Générer le PDF et calculer le hash
+app.post('/api/certificats/:id/pdf', authenticateToken, requireRole('establishment'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const etablissementId = req.user.id;
+
+    const certificat = await prisma.certificat.findUnique({
+      where: { id: parseInt(id) },
+      include: {
+        apprenant: true,
+        etablissement: true
+      }
+    });
+    if (!certificat || certificat.etablissementId !== etablissementId) {
+      return res.status(404).json({ success: false, message: 'Certificat introuvable' });
+    }
+
+    // URL de vérification selon l'environnement
+    const { getVerifyUrl } = require('./config/environments');
+    const verifyBaseUrl = getVerifyUrl();
+    const { publicUrl, hashHex } = await generateCertificatePdf({
+      certificat,
+      apprenant: certificat.apprenant,
+      etablissement: certificat.etablissement,
+      verifyBaseUrl: verifyBaseUrl.endsWith('/') ? verifyBaseUrl : verifyBaseUrl + '/'
+    });
+
+    const updated = await prisma.certificat.update({
+      where: { id: certificat.id },
+      data: { pdfUrl: publicUrl, pdfHash: hashHex }
+    });
+
+    res.json({ success: true, data: updated });
+  } catch (error) {
+    console.error('❌ Erreur génération PDF:', error);
+    res.status(500).json({ success: false, message: 'Erreur serveur', error: error.message });
+  }
+});
+
+// Émettre un certificat on-chain (MVP sur un contrat central unique)
+app.post('/api/certificats/:id/emit', authenticateToken, requireRole('establishment'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const etablissementId = req.user.id;
+
+    const certificat = await prisma.certificat.findUnique({ where: { id: parseInt(id) } });
+    if (!certificat || certificat.etablissementId !== etablissementId) {
+      return res.status(404).json({ success: false, message: 'Certificat introuvable' });
+    }
+    if (!certificat.pdfHash) {
+      return res.status(400).json({ success: false, message: 'PDF non généré' });
+    }
+
+    const rpcUrl = process.env.CHAIN_RPC_URL;
+    const contractAddress = process.env.CERT_CONTRACT_ADDRESS;
+    if (!rpcUrl || !contractAddress) {
+      return res.status(500).json({ success: false, message: 'Config blockchain manquante' });
+    }
+
+    const provider = new ethers.JsonRpcProvider(rpcUrl);
+    // Charger la clé chiffrée de l'établissement
+    const vault = await prisma.walletVault.findFirst({ where: { ownerType: 'etablissement', ownerId: etablissementId } });
+    if (!vault) {
+      return res.status(500).json({ success: false, message: 'Clé établissement manquante (vault)' });
+    }
+    let signer;
+    try {
+      const pk = decryptPrivateKey({ iv: vault.iv, authTag: vault.authTag, cipherText: vault.cipherText });
+      signer = new ethers.Wallet(pk, provider);
+    } catch (e) {
+      console.error('❌ Erreur déchiffrement clé établissement:', e);
+      return res.status(500).json({ success: false, message: 'Erreur déchiffrement clé établissement' });
+    }
+
+    // New minimal ABI
+    const abi = [
+      'function issue(bytes32 pdfHash, address student) external',
+      'function isIssued(bytes32 pdfHash) external view returns (bool)',
+      'event CertificateIssued(bytes32 indexed pdfHash, address indexed student, address indexed issuer, uint64 issuedAt)'
+    ];
+    const contract = new ethers.Contract(contractAddress, abi, signer);
+
+    // recipient: student's wallet if exists
+    let recipient = ethers.ZeroAddress;
+    try {
+      const apprenant = await prisma.apprenant.findUnique({ where: { id_apprenant: certificat.apprenantId } });
+      if (apprenant) {
+        if (apprenant.walletAddress) {
+          recipient = apprenant.walletAddress;
+        } else {
+          // Générer un wallet si manquant (MVP) et stocker
+          const newWallet = ethers.Wallet.createRandom();
+          const enc = encryptPrivateKey(newWallet.privateKey);
+          const updatedApprenant = await prisma.apprenant.update({
+            where: { id_apprenant: apprenant.id_apprenant },
+            data: { walletAddress: newWallet.address }
+          });
+          const existingVault = await prisma.walletVault.findFirst({
+            where: { ownerType: 'apprenant', ownerId: updatedApprenant.id_apprenant }
+          });
+          if (!existingVault) {
+            await prisma.walletVault.create({
+              data: {
+                ownerType: 'apprenant',
+                ownerId: updatedApprenant.id_apprenant,
+                iv: enc.iv,
+                authTag: enc.authTag,
+                cipherText: enc.cipherText
+              }
+            });
+          }
+          recipient = newWallet.address;
+        }
+      }
+    } catch {}
+
+    // Convert stored hex hash string to bytes32
+    const hashHexRaw = certificat.pdfHash.startsWith('0x') ? certificat.pdfHash : '0x' + certificat.pdfHash;
+    // Ensure 32 bytes (sha256 hex is 64 chars + 0x)
+    if (hashHexRaw.length !== 66) {
+      return res.status(400).json({ success: false, message: 'Hash PDF invalide' });
+    }
+    const hashBytes32 = hashHexRaw;
+
+    // Idempotence: ne pas ré émettre si déjà présent on-chain
+    try {
+      const already = await contract.isIssued(hashBytes32);
+      if (already) {
+        const updated = await prisma.certificat.update({
+          where: { id: certificat.id },
+          data: { statut: 'EMIS', contractAddress }
+        });
+        return res.json({ success: true, data: updated, message: 'Certificat déjà émis on-chain' });
+      }
+    } catch {}
+
+    const tx = await contract.issue(hashBytes32, recipient);
+    const receipt = await tx.wait();
+
+    const updated = await prisma.certificat.update({
+      where: { id: certificat.id },
+      data: {
+        statut: 'EMIS',
+        txHash: receipt?.hash || tx.hash,
+        contractAddress: contractAddress,
+        issuedAt: new Date()
+      }
+    });
+
+    res.json({ success: true, data: updated });
+  } catch (error) {
+    console.error('❌ Erreur émission on-chain:', error);
+    res.status(500).json({ success: false, message: 'Erreur émission on-chain', error: error.message });
+  }
+});
+
+// Vérifier on-chain un certificat (lecture-only)
+app.get('/api/certificats/:id/verify-onchain', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userRole = req.user.role;
+    const userId = req.user.id;
+
+    const certificat = await prisma.certificat.findUnique({ where: { id: parseInt(id) } });
+    if (!certificat) {
+      return res.status(404).json({ success: false, message: 'Certificat introuvable' });
+    }
+
+    // Contrôle d'accès: établissement propriétaire ou apprenant destinataire
+    if (userRole === 'establishment' && certificat.etablissementId !== userId) {
+      return res.status(403).json({ success: false, message: 'Non autorisé' });
+    }
+    if (userRole === 'student' && certificat.apprenantId !== userId) {
+      return res.status(403).json({ success: false, message: 'Non autorisé' });
+    }
+
+    if (!certificat.pdfHash) {
+      return res.json({ success: true, data: { onchain: false, reason: 'Aucun hash' } });
+    }
+
+    const rpcUrl = process.env.CHAIN_RPC_URL;
+    const contractAddress = process.env.CERT_CONTRACT_ADDRESS;
+    if (!rpcUrl || !contractAddress) {
+      return res.status(500).json({ success: false, message: 'Config blockchain manquante' });
+    }
+
+    const provider = new ethers.JsonRpcProvider(rpcUrl);
+    const abi = [
+      'function isIssued(bytes32 pdfHash) external view returns (bool)',
+      'function getRecord(bytes32 pdfHash) external view returns (address issuer, address student, uint256 issuedAt)'
+    ];
+    const contract = new ethers.Contract(contractAddress, abi, provider);
+
+    const hashHexRaw = certificat.pdfHash.startsWith('0x') ? certificat.pdfHash : '0x' + certificat.pdfHash;
+    if (hashHexRaw.length !== 66) {
+      return res.json({ success: true, data: { onchain: false, reason: 'Hash invalide' } });
+    }
+
+    const onchain = await contract.isIssued(hashHexRaw);
+    if (!onchain) {
+      return res.json({ success: true, data: { onchain: false } });
+    }
+
+    let record = null;
+    try {
+      const r = await contract.getRecord(hashHexRaw);
+      record = { issuer: r.issuer, student: r.student, issuedAt: Number(r.issuedAt) * 1000 };
+    } catch {}
+
+    return res.json({ success: true, data: { onchain: true, record, contractAddress, txHash: certificat.txHash || null } });
+  } catch (error) {
+    console.error('❌ Erreur vérification on-chain:', error);
+    res.status(500).json({ success: false, message: 'Erreur vérification on-chain', error: error.message });
+  }
+});
+
+// Route pour révoquer un certificat (établissement/admin uniquement)
+app.post('/api/certificats/:id/revoke', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    // Vérifier les permissions
+    if (req.user.role !== 'establishment' && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Accès refusé' });
+    }
+
+    const certificat = await prisma.certificat.findUnique({
+      where: { id: parseInt(id) },
+      include: { etablissement: true, apprenant: true }
+    });
+
+    if (!certificat) {
+      return res.status(404).json({ success: false, message: 'Certificat non trouvé' });
+    }
+
+    // Vérifier que l'établissement est propriétaire du certificat (sauf admin)
+    if (req.user.role === 'establishment' && certificat.etablissementId !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'Vous ne pouvez révoquer que vos propres certificats' });
+    }
+
+    // Vérifier que le certificat est émis
+    if (certificat.statut !== 'EMIS') {
+      return res.status(400).json({ success: false, message: 'Seuls les certificats émis peuvent être révoqués' });
+    }
+
+    // TODO: Implémenter la révocation on-chain si nécessaire
+    // Pour l'instant, on met juste à jour le statut en base
+
+    await prisma.certificat.update({
+      where: { id: parseInt(id) },
+      data: { 
+        statut: 'REVOQUE',
+        // Ajouter un champ pour la raison si nécessaire
+      }
+    });
+
+    console.log(`✅ Certificat ${id} révoqué par ${req.user.role} ${req.user.id}`);
+
+    res.json({
+      success: true,
+      message: 'Certificat révoqué avec succès',
+      data: {
+        certificatId: parseInt(id),
+        statut: 'REVOQUE',
+        revokedAt: new Date().toISOString(),
+        revokedBy: req.user.role,
+        reason: reason || null
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur révocation certificat:', error);
+    res.status(500).json({ success: false, message: 'Erreur lors de la révocation', error: error.message });
+  }
+});
+
+// Lister les certificats (établissement: les siens, étudiant: les siens)
+app.get('/api/certificats', authenticateToken, async (req, res) => {
+  try {
+    const role = req.user.role;
+    const userId = req.user.id;
+    let where = {};
+    if (role === 'establishment') where = { etablissementId: userId };
+    else if (role === 'student') where = { apprenantId: userId };
+    else return res.status(403).json({ success: false, message: 'Non autorisé' });
+
+    const certificats = await prisma.certificat.findMany({
+      where,
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json({ success: true, data: certificats });
+  } catch (error) {
+    console.error('❌ Erreur listing certificats:', error);
+    res.status(500).json({ success: false, message: 'Erreur serveur', error: error.message });
+  }
+});
+
+// Endpoint public pour vérifier par uuid
+app.get('/api/certificats/public/:uuid', async (req, res) => {
+  try {
+    const { uuid } = req.params;
+    const certificat = await prisma.certificat.findUnique({ where: { uuid } });
+    if (!certificat) return res.status(404).json({ success: false, message: 'Inconnu' });
+    res.json({ success: true, data: certificat });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Erreur serveur', error: error.message });
+  }
+});
+
+// Endpoint public: vérifier on-chain par uuid
+app.get('/api/certificats/public/:uuid/verify', async (req, res) => {
+  try {
+    const { uuid } = req.params;
+    const certificat = await prisma.certificat.findUnique({ where: { uuid } });
+    if (!certificat) return res.status(404).json({ success: false, message: 'Inconnu' });
+
+    if (!certificat.pdfHash) {
+      return res.json({ success: true, data: { onchain: false, reason: 'Aucun hash' } });
+    }
+
+    const rpcUrl = process.env.CHAIN_RPC_URL;
+    const contractAddress = process.env.CERT_CONTRACT_ADDRESS;
+    if (!rpcUrl || !contractAddress) {
+      return res.status(500).json({ success: false, message: 'Config blockchain manquante' });
+    }
+
+    const provider = new ethers.JsonRpcProvider(rpcUrl);
+    const abi = [
+      'function isIssued(bytes32 pdfHash) external view returns (bool)',
+      'function getRecord(bytes32 pdfHash) external view returns (address issuer, address student, uint256 issuedAt)'
+    ];
+    const contract = new ethers.Contract(contractAddress, abi, provider);
+
+    const hashHexRaw = certificat.pdfHash.startsWith('0x') ? certificat.pdfHash : '0x' + certificat.pdfHash;
+    if (hashHexRaw.length !== 66) {
+      return res.json({ success: true, data: { onchain: false, reason: 'Hash invalide' } });
+    }
+
+    const onchain = await contract.isIssued(hashHexRaw);
+    if (!onchain) {
+      return res.json({ success: true, data: { onchain: false } });
+    }
+
+    let record = null;
+    try {
+      const r = await contract.getRecord(hashHexRaw);
+      record = { issuer: r.issuer, student: r.student, issuedAt: Number(r.issuedAt) * 1000 };
+    } catch {}
+
+    return res.json({ success: true, data: { onchain: true, record, contractAddress, txHash: certificat.txHash || null } });
+  } catch (error) {
+    console.error('❌ Erreur vérification on-chain publique:', error);
+    res.status(500).json({ success: false, message: 'Erreur vérification on-chain', error: error.message });
+  }
+});
+
+// Obtenir l'adresse du wallet établissement avec solde (pour funding)
+app.get('/api/etablissement/me/wallet', authenticateToken, requireRole('establishment'), async (req, res) => {
+  try {
+    const etablissementId = req.user.id;
+    const vault = await prisma.walletVault.findFirst({ where: { ownerType: 'etablissement', ownerId: etablissementId } });
+    if (!vault) return res.status(404).json({ success: false, message: 'Vault introuvable' });
+    
+    // Dériver l'adresse depuis la clé privée
+    let address;
+    try {
+      const pk = decryptPrivateKey({ iv: vault.iv, authTag: vault.authTag, cipherText: vault.cipherText });
+      const wallet = new ethers.Wallet(pk);
+      address = wallet.address;
+      console.log('🔑 Clé privée déchiffrée avec succès');
+      console.log('📍 Adresse dérivée:', address);
+    } catch (err) {
+      console.error('❌ Erreur déchiffrement clé privée:', err);
+      return res.status(500).json({ success: false, message: 'Erreur lecture wallet' });
+    }
+
+    // Récupérer le solde MATIC
+    let balance = '0';
+    let balanceError = null;
+    try {
+      const rpcUrl = process.env.AMOY_RPC_URL || 'https://polygon-amoy.g.alchemy.com/v2/41EXpeJsOFHfwzaQHCvmJ';
+      console.log('🔗 RPC URL utilisée:', rpcUrl);
+      console.log('📍 Adresse wallet:', address);
+      
+      const provider = new ethers.JsonRpcProvider(rpcUrl);
+      const balanceWei = await provider.getBalance(address);
+      balance = ethers.formatEther(balanceWei);
+      console.log('💰 Solde récupéré:', balance, 'MATIC');
+    } catch (err) {
+      console.warn('⚠️ Erreur récupération solde:', err.message);
+      balanceError = err.message;
+    }
+
+    return res.json({ 
+      success: true, 
+      data: { 
+        address,
+        balance: parseFloat(balance).toFixed(4), // 4 décimales
+        balanceError,
+        network: 'Polygon Amoy Testnet',
+        explorerUrl: `https://amoy.polygonscan.com/address/${address}`,
+        faucetUrl: 'https://faucet.polygon.technology/',
+        currency: 'MATIC'
+      } 
+    });
+  } catch (error) {
+    console.error('❌ Erreur wallet établissement:', error);
+    res.status(500).json({ success: false, message: 'Erreur serveur', error: error.message });
+  }
+});
+
 // Route pour récupérer les demandes de liaison d'un établissement
 app.get('/api/etablissement/:id/demandes', authenticateToken, requireRole('establishment'), async (req, res) => {
   try {
@@ -1990,9 +2958,16 @@ app.get('/api/etablissement/:id/etudiants', authenticateToken, requireRole('esta
     const userId = req.user.id;
 
     console.log(`🔍 Récupération des étudiants liés pour l'établissement ${id}`);
+    console.log(`👤 Utilisateur connecté:`, {
+      id: userId,
+      role: req.user.role,
+      type: req.user.type,
+      nom: req.user.nom
+    });
 
     // Vérifier que l'établissement appartient à l'utilisateur connecté
     if (parseInt(id) !== userId) {
+      console.log(`❌ Accès refusé: ID établissement (${id}) !== ID utilisateur (${userId})`);
       return res.status(403).json({
         success: false,
         message: 'Accès non autorisé à cet établissement'
@@ -2120,12 +3095,32 @@ app.get('/api/health', (req, res) => {
 // Export de l'app pour le fichier start.js
 module.exports = app;
 
+// Initialiser Supabase Storage au démarrage
+async function initializeSupabase() {
+  try {
+    const supabaseStorage = require('./services/supabaseStorage');
+    const result = await supabaseStorage.ensureBucketExists();
+    
+    if (result.success) {
+      console.log('✅ Supabase Storage initialisé');
+    } else {
+      console.error('❌ Erreur initialisation Supabase:', result.error);
+    }
+  } catch (error) {
+    console.error('❌ Erreur initialisation Supabase:', error);
+  }
+}
+
 // Démarrage du serveur (seulement si appelé directement)
 if (require.main === module) {
-  app.listen(PORT, () => {
-    console.log(`🚀 Serveur démarré sur le port ${PORT}`);
-    console.log(`📡 API disponible sur http://localhost:${PORT}/api`);
-    console.log(`🔗 DATABASE_URL: ${process.env.DATABASE_URL || 'Non défini'}`);
+  // Initialiser Supabase avant de démarrer le serveur
+  initializeSupabase().then(() => {
+    app.listen(PORT, () => {
+      console.log(`🚀 Serveur démarré sur le port ${PORT}`);
+      console.log(`📡 API disponible sur http://localhost:${PORT}/api`);
+      console.log(`🔗 DATABASE_URL: ${process.env.DATABASE_URL || 'Non défini'}`);
+      console.log(`☁️ Supabase Storage: ${process.env.SUPABASE_URL ? 'Configuré' : 'Non configuré'}`);
+    });
   });
 
   // Gestion de la fermeture

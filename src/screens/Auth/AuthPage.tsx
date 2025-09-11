@@ -18,8 +18,8 @@ import { useAuth } from "../../hooks/useAuth";
 import authService from "../../services/authService";
 import { Button } from "../../components/ui/button";
 
-//const API_BASE_URL = 'https://authcert-production.up.railway.app/api';
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = 'https://authcert-production.up.railway.app/api';
+//const API_BASE_URL = 'http://localhost:5000/api';
 
 interface AuthPageProps {
   defaultTab?: "login" | "signup";

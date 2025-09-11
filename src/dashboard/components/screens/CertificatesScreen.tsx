@@ -1,109 +1,86 @@
 import { useUser } from '../../hooks/useUser';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from '../ui/button';
 import { Card, CardContent } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
 import { 
   Award, 
   Search, 
   Grid3X3, 
   List, 
-  Eye, 
   Download, 
   QrCode, 
   Share2,
   Building2,
   ExternalLink,
   Shield,
-  Verified
+  Verified,
+  Ban,
+  AlertTriangle
 } from 'lucide-react';
-
-// Mock data
-const mockCertificates = [
-  {
-    id: 1,
-    title: "Certification React Advanced",
-    institution: "Tech Academy",
-    institutionLogo: "🎓",
-    date: "15 Jan 2024",
-    status: "verified",
-    views: 24,
-    category: "Développement",
-    description: "Certification avancée en développement React avec hooks, context et performance",
-    skills: ["React", "JavaScript", "Hooks", "Performance"],
-    issueDate: "15 Jan 2024",
-    expiryDate: "15 Jan 2027",
-    credentialId: "REACT-ADV-2024-001",
-    color: "bg-primary"
-  },
-  {
-    id: 2,
-    title: "UX/UI Design Professional",
-    institution: "Design Institute",
-    institutionLogo: "🎨",
-    date: "08 Déc 2023",
-    status: "verified",
-    views: 15,
-    category: "Design",
-    description: "Certification professionnelle en design UX/UI avec projets pratiques",
-    skills: ["Figma", "Prototyping", "User Research", "Design Systems"],
-    issueDate: "08 Déc 2023",
-    expiryDate: "08 Déc 2026",
-    credentialId: "UX-PRO-2023-089",
-    color: "bg-chart-2"
-  },
-  {
-    id: 3,
-    title: "Project Management PMP",
-    institution: "Business School",
-    institutionLogo: "📊",
-    date: "22 Nov 2023",
-    status: "pending",
-    views: 3,
-    category: "Management",
-    description: "Certification Project Management Professional reconnue internationalement",
-    skills: ["Leadership", "Agile", "Risk Management", "Communication"],
-    issueDate: "22 Nov 2023",
-    expiryDate: "22 Nov 2026",
-    credentialId: "PMP-2023-145",
-    color: "bg-chart-4"
-  },
-  {
-    id: 4,
-    title: "Data Science Fundamentals",
-    institution: "Data University",
-    institutionLogo: "📈",
-    date: "10 Oct 2023",
-    status: "verified",
-    views: 31,
-    category: "Data",
-    description: "Formation complète aux fondamentaux de la science des données",
-    skills: ["Python", "Machine Learning", "Statistics", "Visualization"],
-    issueDate: "10 Oct 2023",
-    expiryDate: "10 Oct 2026",
-    credentialId: "DS-FUND-2023-067",
-    color: "bg-chart-5"
-  }
-];
+import { api, API_BASE } from '../../../services/api';
+// QR code lib will be loaded dynamically to avoid TS type resolution issues
 
 interface CertificatesScreenProps {
   onNavigate: (screen: string) => void;
 }
 
+interface CertificateDto {
+  id: number;
+  uuid: string;
+  titre: string;
+  mention?: string;
+  dateObtention: string;
+  pdfUrl?: string;
+  pdfHash?: string;
+  statut: 'BROUILLON' | 'A_EMETTRE' | 'EMIS' | 'REVOQUE';
+  txHash?: string;
+  contractAddress?: string;
+  createdAt: string;
+}
+
 export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [selectedStatus, setSelectedStatus] = useState('all');
-  const [selectedCertificate, setSelectedCertificate] = useState<typeof mockCertificates[0] | null>(null);
+  const [selectedStatus, setSelectedStatus] = useState<'all' | 'EMIS' | 'BROUILLON'>('all');
+  const [selectedCertificate, setSelectedCertificate] = useState<CertificateDto | null>(null);
+  const [certificates, setCertificates] = useState<CertificateDto[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  // QR modal state
+  const [isQrOpen, setIsQrOpen] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [qrLink, setQrLink] = useState<string>('');
+  const [qrLoading, setQrLoading] = useState(false);
+
+  // Revoke modal state
+  const [isRevokeOpen, setIsRevokeOpen] = useState(false);
+  const [revokeReason, setRevokeReason] = useState('');
+  const [revoking, setRevoking] = useState(false);
 
   const { user } = useUser();
 
-  // Generer le bouton en fonction du role de l'utilisateur
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setLoading(true);
+        setError('');
+        const res = await api.listCertificates();
+        setCertificates(res.data || []);
+      } catch {
+        setError('Erreur lors du chargement des certificats');
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
+
   const generateButton = () => {
     if (user?.role === 'establishment') {
       return (
@@ -113,111 +90,139 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
         </Button>
       );
     } else {
-      return (
-        <Button onClick={() => onNavigate('requests')} className="rounded-xl">
-          <Award className="mr-2 h-4 w-4" />
-          Nouveau certificat
-        </Button>
-      );
+      return null;
     }
-  }
+  };
 
-  const filteredCertificates = mockCertificates.filter(cert => {
-    const matchesSearch = cert.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         cert.institution.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategory === 'all' || cert.category === selectedCategory;
-    const matchesStatus = selectedStatus === 'all' || cert.status === selectedStatus;
+  const filteredCertificates = useMemo(() => {
+    return certificates.filter((cert) => {
+      const matchesSearch = cert.titre.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesStatus = selectedStatus === 'all' || cert.statut === selectedStatus;
+      return matchesSearch && matchesStatus;
+    });
+  }, [certificates, searchQuery, selectedStatus]);
+
+  const handleDownload = (cert: CertificateDto) => {
+    if (cert.pdfUrl) {
+      const url = cert.pdfUrl.startsWith('http') ? cert.pdfUrl : `${API_BASE.replace(/\/$/, '')}${cert.pdfUrl}`;
+      window.open(url, '_blank');
+    }
+  };
+
+  const openQr = async (cert: CertificateDto) => {
+    const link = `${window.location.origin}/verifier-certificat?uuid=${cert.uuid}`;
+    setQrLoading(true);
+    setQrDataUrl(null);
+    setQrLink(link);
+    try {
+      type QrToDataURL = (text: string, opts?: { width?: number; margin?: number }) => Promise<string>;
+      type QrModule = { default: { toDataURL: QrToDataURL } } | { toDataURL: QrToDataURL };
+      const mod = (await import('qrcode')) as QrModule;
+      const toDataURL: QrToDataURL = 'default' in mod ? mod.default.toDataURL : mod.toDataURL;
+      const dataUrl = await toDataURL(link, { width: 256, margin: 1 });
+      setQrDataUrl(dataUrl);
+      setIsQrOpen(true);
+    } catch {
+      // ignore
+    } finally {
+      setQrLoading(false);
+    }
+  };
+
+  const handleRevoke = async () => {
+    if (!selectedCertificate) return;
     
-    return matchesSearch && matchesCategory && matchesStatus;
-  });
+    try {
+      setRevoking(true);
+      await api.revokeCertificate(selectedCertificate.id, revokeReason);
+      
+      // Mettre à jour la liste des certificats
+      setCertificates(prev => 
+        prev.map(cert => 
+          cert.id === selectedCertificate.id 
+            ? { ...cert, statut: 'REVOQUE' as const }
+            : cert
+        )
+      );
+      
+      setIsRevokeOpen(false);
+      setRevokeReason('');
+      setSelectedCertificate(null);
+      
+      // Recharger la liste
+      const res = await api.listCertificates();
+      setCertificates(res.data || []);
+      
+    } catch (error) {
+      console.error('Erreur révocation:', error);
+    } finally {
+      setRevoking(false);
+    }
+  };
 
-  const CertificateCard = ({ certificate, isGridView }: { certificate: typeof mockCertificates[0], isGridView: boolean }) => (
+  const CertificateCard = ({ certificate, isGridView }: { certificate: CertificateDto, isGridView: boolean }) => (
     <Card className={`group hover:shadow-lg transition-all duration-200 cursor-pointer ${
       isGridView ? 'h-full' : 'mb-4'
     }`} onClick={() => setSelectedCertificate(certificate)}>
       <CardContent className={`p-6 ${isGridView ? 'h-full flex flex-col' : ''}`}>
         <div className={`flex ${isGridView ? 'flex-col' : 'items-center space-x-4'}`}>
           {/* Certificate Icon/Logo */}
-          <div className={`${certificate.color}/10 rounded-xl flex items-center justify-center ${
+          <div className={`bg-primary/10 rounded-xl flex items-center justify-center ${
             isGridView ? 'w-16 h-16 mb-4 mx-auto' : 'w-12 h-12 flex-shrink-0'
           }`}>
-            <Award className={`${certificate.color.replace('bg-', 'text-')} ${isGridView ? 'h-8 w-8' : 'h-6 w-6'}`} />
+            <Award className={`${isGridView ? 'h-8 w-8' : 'h-6 w-6'} text-primary`} />
           </div>
 
           <div className={`${isGridView ? 'text-center flex-1' : 'flex-1 min-w-0'}`}>
-            {/* Title and Institution */}
             <h3 className={`font-semibold ${isGridView ? 'mb-2' : 'mb-1'} line-clamp-2`}>
-              {certificate.title}
+              {certificate.titre}
             </h3>
             <div className={`flex items-center ${isGridView ? 'justify-center' : ''} text-sm text-muted-foreground mb-2`}>
               <Building2 className="mr-1 h-3 w-3" />
-              <span>{certificate.institution}</span>
+              <span>Émis le {new Date(certificate.dateObtention).toLocaleDateString('fr-FR')}</span>
             </div>
 
-            {/* Status and Date */}
             <div className={`flex items-center ${isGridView ? 'justify-center' : ''} space-x-2 mb-3`}>
-              <Badge variant={certificate.status === 'verified' ? 'default' : 'secondary'} className="text-xs">
-                {certificate.status === 'verified' ? (
+              <Badge variant={certificate.statut === 'EMIS' ? 'default' : 'secondary'} className="text-xs">
+                {certificate.statut === 'EMIS' ? (
                   <><Verified className="mr-1 h-3 w-3" /> Vérifié</>
                 ) : (
-                  <>En attente</>
+                  <>Brouillon</>
                 )}
               </Badge>
-              <span className="text-xs text-muted-foreground">{certificate.date}</span>
+              {certificate.mention && (
+                <Badge variant="outline" className="text-xs">{certificate.mention}</Badge>
+              )}
             </div>
-
-            {/* Stats */}
-            <div className={`flex items-center ${isGridView ? 'justify-center' : ''} text-sm text-muted-foreground`}>
-              <Eye className="mr-1 h-3 w-3" />
-              <span>{certificate.views} vues</span>
-            </div>
-
-            {/* Skills (Grid only) */}
-            {isGridView && (
-              <div className="flex flex-wrap justify-center gap-1 mt-3">
-                {certificate.skills.slice(0, 2).map((skill, index) => (
-                  <Badge key={index} variant="outline" className="text-xs">
-                    {skill}
-                  </Badge>
-                ))}
-                {certificate.skills.length > 2 && (
-                  <Badge variant="outline" className="text-xs">
-                    +{certificate.skills.length - 2}
-                  </Badge>
-                )}
-              </div>
-            )}
           </div>
 
-          {/* Actions (List view) */}
           {!isGridView && (
             <div className="flex items-center space-x-2">
-              <Button variant="ghost" size="sm">
+              <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openQr(certificate); }}>
                 <QrCode className="h-4 w-4" />
               </Button>
-              <Button variant="ghost" size="sm">
+              <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleDownload(certificate); }} disabled={!certificate.pdfUrl}>
                 <Download className="h-4 w-4" />
               </Button>
-              <Button variant="ghost" size="sm">
+              <Button variant="ghost" size="sm" onClick={(e) => e.stopPropagation()}>
                 <Share2 className="h-4 w-4" />
               </Button>
             </div>
           )}
         </div>
 
-        {/* Quick Actions (Grid view) */}
         {isGridView && (
           <div className="mt-4 opacity-0 group-hover:opacity-100 transition-opacity">
             <div className="flex justify-center space-x-2">
-              <Button size="sm" variant="outline">
+              <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); openQr(certificate); }}>
                 <QrCode className="mr-1 h-3 w-3" />
                 QR
               </Button>
-              <Button size="sm" variant="outline">
+              <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); handleDownload(certificate); }} disabled={!certificate.pdfUrl}>
                 <Download className="mr-1 h-3 w-3" />
                 PDF
               </Button>
-              <Button size="sm" variant="outline">
+              <Button size="sm" variant="outline" onClick={(e) => e.stopPropagation()}>
                 <Share2 className="mr-1 h-3 w-3" />
                 Partager
               </Button>
@@ -230,7 +235,6 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
-      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
         <div>
           <h1 className="text-3xl font-bold">Mes Certificats</h1>
@@ -239,49 +243,32 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
         {generateButton()}
       </div>
 
-      {/* Search and Filters */}
       <Card>
         <CardContent className="p-6">
           <div className="flex flex-col md:flex-row gap-4">
-            {/* Search */}
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Rechercher par titre, institution..."
+                placeholder="Rechercher par titre..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10"
               />
             </div>
 
-            {/* Filters */}
             <div className="flex gap-3">
-              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                <SelectTrigger className="w-40">
-                  <SelectValue placeholder="Catégorie" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Toutes catégories</SelectItem>
-                  <SelectItem value="Développement">Développement</SelectItem>
-                  <SelectItem value="Design">Design</SelectItem>
-                  <SelectItem value="Management">Management</SelectItem>
-                  <SelectItem value="Data">Data</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+              <Select value={selectedStatus} onValueChange={(v) => setSelectedStatus(v as 'all' | 'EMIS' | 'BROUILLON')}>
                 <SelectTrigger className="w-32">
                   <SelectValue placeholder="Statut" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Tous</SelectItem>
-                  <SelectItem value="verified">Vérifiés</SelectItem>
-                  <SelectItem value="pending">En attente</SelectItem>
+                  <SelectItem value="EMIS">Émis</SelectItem>
+                  <SelectItem value="BROUILLON">Brouillons</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {/* View Toggle */}
             <div className="flex border rounded-lg">
               <Button
                 variant={viewMode === 'grid' ? 'default' : 'ghost'}
@@ -304,61 +291,46 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
         </CardContent>
       </Card>
 
-      {/* Results */}
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          {filteredCertificates.length} certificat{filteredCertificates.length !== 1 ? 's' : ''} trouvé{filteredCertificates.length !== 1 ? 's' : ''}
-        </p>
-        <Select defaultValue="recent">
-          <SelectTrigger className="w-40">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="recent">Plus récents</SelectItem>
-            <SelectItem value="oldest">Plus anciens</SelectItem>
-            <SelectItem value="name">Par nom</SelectItem>
-            <SelectItem value="institution">Par établissement</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      {loading && <div className="text-sm text-muted-foreground">Chargement...</div>}
+      {error && <div className="text-sm text-red-600">{error}</div>}
 
-      {/* Certificates Grid/List */}
-      {viewMode === 'grid' ? (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {filteredCertificates.map((certificate) => (
-            <CertificateCard key={certificate.id} certificate={certificate} isGridView={true} />
-          ))}
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {filteredCertificates.map((certificate) => (
-            <CertificateCard key={certificate.id} certificate={certificate} isGridView={false} />
-          ))}
-        </div>
+      {!loading && (
+        viewMode === 'grid' ? (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {filteredCertificates.map((certificate) => (
+              <CertificateCard key={certificate.id} certificate={certificate} isGridView={true} />
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {filteredCertificates.map((certificate) => (
+              <CertificateCard key={certificate.id} certificate={certificate} isGridView={false} />
+            ))}
+          </div>
+        )
       )}
 
-      {/* Certificate Detail Modal */}
       <Dialog open={!!selectedCertificate} onOpenChange={() => setSelectedCertificate(null)}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           {selectedCertificate && (
             <>
               <DialogHeader>
                 <div className="flex items-center space-x-4 mb-4">
-                  <div className={`w-16 h-16 ${selectedCertificate.color}/10 rounded-xl flex items-center justify-center`}>
-                    <Award className={`h-8 w-8 ${selectedCertificate.color.replace('bg-', 'text-')}`} />
+                  <div className={`w-16 h-16 bg-primary/10 rounded-xl flex items-center justify-center`}>
+                    <Award className={`h-8 w-8 text-primary`} />
                   </div>
                   <div className="flex-1">
-                    <DialogTitle className="text-xl">{selectedCertificate.title}</DialogTitle>
+                    <DialogTitle className="text-xl">{selectedCertificate.titre}</DialogTitle>
                     <DialogDescription className="flex items-center mt-1">
                       <Building2 className="mr-1 h-4 w-4" />
-                      {selectedCertificate.institution}
+                      Émis le {new Date(selectedCertificate.dateObtention).toLocaleDateString('fr-FR')}
                     </DialogDescription>
                   </div>
-                  <Badge variant={selectedCertificate.status === 'verified' ? 'default' : 'secondary'}>
-                    {selectedCertificate.status === 'verified' ? (
+                  <Badge variant={selectedCertificate.statut === 'EMIS' ? 'default' : 'secondary'}>
+                    {selectedCertificate.statut === 'EMIS' ? (
                       <><Verified className="mr-1 h-3 w-3" /> Vérifié</>
                     ) : (
-                      <>En attente</>
+                      <>Brouillon</>
                     )}
                   </Badge>
                 </div>
@@ -374,32 +346,7 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
                 <TabsContent value="details" className="space-y-6">
                   <div>
                     <h4 className="font-semibold mb-2">Description</h4>
-                    <p className="text-muted-foreground">{selectedCertificate.description}</p>
-                  </div>
-
-                  <div>
-                    <h4 className="font-semibold mb-3">Compétences acquises</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedCertificate.skills.map((skill, index) => (
-                        <Badge key={index} variant="outline">{skill}</Badge>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <h4 className="font-semibold mb-1">Date d'émission</h4>
-                      <p className="text-muted-foreground">{selectedCertificate.issueDate}</p>
-                    </div>
-                    <div>
-                      <h4 className="font-semibold mb-1">Date d'expiration</h4>
-                      <p className="text-muted-foreground">{selectedCertificate.expiryDate}</p>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className="font-semibold mb-1">ID Credential</h4>
-                    <p className="text-muted-foreground font-mono text-sm">{selectedCertificate.credentialId}</p>
+                    <p className="text-muted-foreground">Hash: {selectedCertificate.pdfHash || '—'}</p>
                   </div>
                 </TabsContent>
 
@@ -412,31 +359,52 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
                     </div>
                   </div>
 
-                  <div>
-                    <h4 className="font-semibold mb-3">Informations de vérification</h4>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Hash blockchain:</span>
-                        <span className="font-mono">0x7f8a...9e2d</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Timestamp:</span>
-                        <span>{selectedCertificate.issueDate}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Statut:</span>
-                        <Badge variant="outline" className="text-xs">
-                          <Verified className="mr-1 h-2 w-2" />
-                          Vérifié
-                        </Badge>
-                      </div>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Transaction:</span>
+                      <span className="font-mono">{selectedCertificate.txHash || '—'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Contrat:</span>
+                      <span className="font-mono">{selectedCertificate.contractAddress || '—'}</span>
                     </div>
                   </div>
 
-                  <Button variant="outline" className="w-full">
-                    <ExternalLink className="mr-2 h-4 w-4" />
-                    Vérifier sur la blockchain
-                  </Button>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={async () => {
+                        if (!selectedCertificate) return;
+                        try {
+                          const res = await api.verifyCertificateOnchain(selectedCertificate.id);
+                          const ok = res?.data?.onchain === true;
+                          const msg = ok
+                            ? `On-chain: Oui\nStudent: ${res.data.record?.student || '—'}\nIssuer: ${res.data.record?.issuer || '—'}`
+                            : 'On-chain: Non';
+                          alert(msg);
+                        } catch {
+                          alert('Erreur vérification on-chain');
+                        }
+                      }}
+                    >
+                      <Shield className="mr-2 h-4 w-4" />
+                      Vérifier on-chain
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => {
+                        if (!selectedCertificate?.txHash) return;
+                        const url = `https://amoy.polygonscan.com/tx/${selectedCertificate.txHash}`;
+                        window.open(url, '_blank');
+                      }}
+                      disabled={!selectedCertificate.txHash}
+                    >
+                      <ExternalLink className="mr-2 h-4 w-4" />
+                      Voir sur Polygonscan
+                    </Button>
+                  </div>
                 </TabsContent>
 
                 <TabsContent value="share" className="space-y-6">
@@ -450,38 +418,142 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
-                    <Button variant="outline">
+                    <Button variant="outline" onClick={() => handleDownload(selectedCertificate)} disabled={!selectedCertificate.pdfUrl}>
                       <Download className="mr-2 h-4 w-4" />
-                      Télécharger QR
+                      Télécharger PDF
                     </Button>
-                    <Button variant="outline">
+                    <Button variant="outline" onClick={() => navigator.clipboard.writeText(`${window.location.origin}/verifier-certificat?uuid=${selectedCertificate.uuid}`)}>
                       <Share2 className="mr-2 h-4 w-4" />
                       Copier lien
                     </Button>
-                  </div>
-
-                  <div>
-                    <h4 className="font-semibold mb-2">Statistiques</h4>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Vues totales:</span>
-                      <span className="font-semibold">{selectedCertificate.views}</span>
-                    </div>
                   </div>
                 </TabsContent>
               </Tabs>
 
               <div className="flex justify-end space-x-3 pt-4 border-t">
-                <Button variant="outline">
+                <Button variant="outline" onClick={() => handleDownload(selectedCertificate)} disabled={!selectedCertificate.pdfUrl}>
                   <Download className="mr-2 h-4 w-4" />
                   Télécharger PDF
-                </Button>
-                <Button>
-                  <Share2 className="mr-2 h-4 w-4" />
-                  Partager
                 </Button>
               </div>
             </>
           )}
+          
+          {/* Actions Footer */}
+          {selectedCertificate && (
+            <DialogFooter className="flex gap-2 pt-4 border-t">
+              <Button
+                variant="outline"
+                onClick={() => setSelectedCertificate(null)}
+              >
+                Fermer
+              </Button>
+              
+              {selectedCertificate.statut === 'EMIS' && user?.role === 'establishment' && (
+                <Button
+                  variant="destructive"
+                  onClick={() => setIsRevokeOpen(true)}
+                  className="flex items-center gap-2"
+                >
+                  <Ban className="h-4 w-4" />
+                  Révoquer
+                </Button>
+              )}
+            </DialogFooter>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* QR Modal */}
+      <Dialog open={isQrOpen} onOpenChange={setIsQrOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Vérifier le certificat</DialogTitle>
+            <DialogDescription>Scannez ce QR ou utilisez le lien</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col items-center gap-3">
+            {qrLoading ? (
+              <div className="text-sm text-muted-foreground">Génération du QR...</div>
+            ) : qrDataUrl ? (
+              <img src={qrDataUrl} alt="QR Code" className="w-56 h-56" />
+            ) : (
+              <div className="text-sm text-red-600">Erreur de génération</div>
+            )}
+            <Input readOnly value={qrLink} className="text-xs" />
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => navigator.clipboard.writeText(qrLink)}>
+                Copier lien
+              </Button>
+              {qrDataUrl && (
+                <a href={qrDataUrl} download={`qr-${Date.now()}.png`}>
+                  <Button variant="outline">Télécharger QR</Button>
+                </a>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Revoke Confirmation Modal */}
+      <Dialog open={isRevokeOpen} onOpenChange={setIsRevokeOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              Révoquer le certificat
+            </DialogTitle>
+            <DialogDescription>
+              Cette action est irréversible. Le certificat sera marqué comme révoqué et ne pourra plus être utilisé.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">Certificat à révoquer</label>
+              <p className="text-sm text-muted-foreground">{selectedCertificate?.titre}</p>
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium">Raison de la révocation (optionnel)</label>
+              <textarea
+                value={revokeReason}
+                onChange={(e) => setRevokeReason(e.target.value)}
+                placeholder="Ex: Erreur dans les informations, certificat frauduleux..."
+                className="w-full mt-1 p-2 border rounded-md text-sm"
+                rows={3}
+              />
+            </div>
+          </div>
+          
+          <DialogFooter className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsRevokeOpen(false);
+                setRevokeReason('');
+              }}
+            >
+              Annuler
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleRevoke}
+              disabled={revoking}
+              className="flex items-center gap-2"
+            >
+              {revoking ? (
+                <>
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  Révocation...
+                </>
+              ) : (
+                <>
+                  <Ban className="h-4 w-4" />
+                  Confirmer la révocation
+                </>
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

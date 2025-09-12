@@ -346,7 +346,8 @@ async function generateCertificatePdf({
           // Télécharger le logo depuis Supabase
           const logoResponse = await fetch(logoUrl);
           if (logoResponse.ok) {
-            const logoBuffer = await logoResponse.buffer();
+            const logoArrayBuffer = await logoResponse.arrayBuffer();
+            const logoBuffer = Buffer.from(logoArrayBuffer);
             doc.image(logoBuffer, pageWidth / 2 - 30, headerY - 10, { width: 60, height: 60 });
             console.log(`✅ Logo chargé avec succès`);
           } else {

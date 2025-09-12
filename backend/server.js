@@ -296,6 +296,11 @@ async function generateCertificatePdf({
 
         } catch (error) {
           console.error('❌ Erreur upload PDF:', error);
+          console.error('❌ Erreur upload PDF:', error.message);
+          console.error('❌ Erreur upload PDF:', error.stack);
+          console.error('❌ Erreur upload PDF:', error.code);
+          console.error('❌ Erreur upload PDF:', error.details);
+          console.error('❌ Erreur upload PDF:', error.hint);
           reject(error);
         }
       });

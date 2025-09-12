@@ -33,6 +33,12 @@ export const VerifierCertificat = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Fonction pour tronquer les adresses longues
+  const truncateAddress = (address: string, startLength: number = 6, endLength: number = 4): string => {
+    if (!address || address.length <= startLength + endLength) return address;
+    return `${address.slice(0, startLength)}...${address.slice(-endLength)}`;
+  };
+
   const fileUrl = useMemo(() => {
     if (!result?.pdfUrl) return undefined;
     return result.pdfUrl.startsWith('http') ? result.pdfUrl : `${API_BASE.replace(/\/$/, '')}${result.pdfUrl}`;
@@ -230,7 +236,7 @@ export const VerifierCertificat = () => {
                           <div>
                             <p className="text-gray-500">Transaction</p>
                             {onchain.txHash ? (
-                              <a className="text-rose-600 underline" target="_blank" rel="noreferrer" href={`https://amoy.polygonscan.com/tx/${onchain.txHash}`}>{onchain.txHash}</a>
+                              <a className="text-rose-600 underline" target="_blank" rel="noreferrer" href={`https://amoy.polygonscan.com/tx/${onchain.txHash}`}>{truncateAddress(onchain.txHash, 8, 8)}</a>
                             ) : (
                               <p className="font-mono break-all">—</p>
                             )}

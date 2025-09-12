@@ -73,7 +73,6 @@ if (!fs.existsSync(certificatsDir)) {
 app.get('/api/uploads/certificats/:filename', async (req, res) => {
   try {
     const { filename } = req.params;
-    const supabaseStorage = require('./services/supabaseStorage');
     
     console.log(`🔍 Recherche du fichier certificat: ${filename}`);
     
@@ -121,7 +120,6 @@ app.get('/api/uploads/certificats/:filename', async (req, res) => {
 app.get('/api/uploads/etablissements/:filename', async (req, res) => {
   try {
     const { filename } = req.params;
-    const supabaseStorage = require('./services/supabaseStorage');
     
     // Générer une URL signée pour le fichier
     const filePath = `etablissements/${filename}`;
@@ -278,7 +276,6 @@ async function generateCertificatePdf({
           const hashHex = sha256Hex(pdfBuffer);
 
           // Upload vers Supabase Storage
-          const supabaseStorage = require('./services/supabaseStorage');
           const uploadResult = await supabaseStorage.uploadFile(
             pdfBuffer,
             fileName,
@@ -525,6 +522,7 @@ async function generateCertificatePdf({
 
     } catch (e) {
       reject(e);
+      console.error('❌ Erreur génération PDF:', e);
     }
   });
 }
@@ -1752,7 +1750,6 @@ app.get('/api/admin/document/:id/view', authenticateToken, requireRole('admin'),
     }
     
     // Sinon, utiliser Supabase Storage avec URL signée
-    const supabaseStorage = require('./services/supabaseStorage');
     const filePath = `etablissements/${document.etablissementId}/${document.nomFichier}`;
     
     const result = await supabaseStorage.getSignedUrl(filePath, 3600); // 1 heure
@@ -1810,7 +1807,6 @@ app.get('/api/admin/document/:id/download', authenticateToken, requireRole('admi
     }
     
     // Sinon, utiliser Supabase Storage avec URL signée
-    const supabaseStorage = require('./services/supabaseStorage');
     const filePath = `etablissements/${document.etablissementId}/${document.nomFichier}`;
     
     const result = await supabaseStorage.getSignedUrl(filePath, 3600); // 1 heure
@@ -2519,6 +2515,7 @@ app.post('/api/certificats/:id/emit', authenticateToken, requireRole('establishm
     res.json({ success: true, data: updated });
   } catch (error) {
     console.error('❌ Erreur émission on-chain:', error);
+    console.error('❌ Erreur émission on-chain:', error.message);
     res.status(500).json({ success: false, message: 'Erreur émission on-chain', error: error.message });
   }
 });
@@ -3116,7 +3113,6 @@ module.exports = app;
 // Initialiser Supabase Storage au démarrage
 async function initializeSupabase() {
   try {
-    const supabaseStorage = require('./services/supabaseStorage');
     const result = await supabaseStorage.ensureBucketExists();
     
     if (result.success) {

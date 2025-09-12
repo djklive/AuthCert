@@ -20,7 +20,9 @@ import {
   Shield,
   Verified,
   Ban,
-  AlertTriangle
+  AlertTriangle,
+  RefreshCw,
+  Copy
 } from 'lucide-react';
 import { api, API_BASE } from '../../../services/api';
 // QR code lib will be loaded dynamically to avoid TS type resolution issues
@@ -63,7 +65,26 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
   const [revokeReason, setRevokeReason] = useState('');
   const [revoking, setRevoking] = useState(false);
 
+  // Republish state
+  const [republishing, setRepublishing] = useState<number | null>(null);
+
   const { user } = useUser();
+
+  // Fonction pour tronquer les adresses longues
+  const truncateAddress = (address: string, startLength: number = 6, endLength: number = 4): string => {
+    if (!address || address.length <= startLength + endLength) return address;
+    return `${address.slice(0, startLength)}...${address.slice(-endLength)}`;
+  };
+
+  // Fonction pour copier dans le presse-papiers
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      // Vous pourriez ajouter une notification de succès ici
+    } catch (err) {
+      console.error('Erreur lors de la copie:', err);
+    }
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -160,6 +181,31 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
     }
   };
 
+  const handleRepublish = async (certificateId: number) => {
+    try {
+      setRepublishing(certificateId);
+      
+      // 1) Générer le PDF si pas déjà fait
+      const pdfRes = await api.generateCertificatePdf(certificateId);
+      if (!pdfRes?.data?.pdfUrl) {
+        throw new Error('PDF non généré');
+      }
+      
+      // 2) Émettre sur la blockchain
+      await api.emitCertificate(certificateId);
+      
+      // 3) Recharger la liste des certificats
+      const res = await api.listCertificates();
+      setCertificates(res.data || []);
+      
+    } catch (error) {
+      console.error('Erreur republication:', error);
+      // Vous pourriez ajouter une notification d'erreur ici
+    } finally {
+      setRepublishing(null);
+    }
+  };
+
   const CertificateCard = ({ certificate, isGridView }: { certificate: CertificateDto, isGridView: boolean }) => (
     <Card className={`group hover:shadow-lg transition-all duration-200 cursor-pointer ${
       isGridView ? 'h-full' : 'mb-4'
@@ -186,12 +232,33 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
               <Badge variant={certificate.statut === 'EMIS' ? 'default' : 'secondary'} className="text-xs">
                 {certificate.statut === 'EMIS' ? (
                   <><Verified className="mr-1 h-3 w-3" /> Vérifié</>
+                ) : certificate.statut === 'BROUILLON' ? (
+                  <><AlertTriangle className="mr-1 h-3 w-3" /> Brouillon</>
                 ) : (
                   <>Brouillon</>
                 )}
               </Badge>
               {certificate.mention && (
                 <Badge variant="outline" className="text-xs">{certificate.mention}</Badge>
+              )}
+              {certificate.statut === 'BROUILLON' && user?.role === 'establishment' && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-xs h-6 px-2"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleRepublish(certificate.id);
+                  }}
+                  disabled={republishing === certificate.id}
+                >
+                  {republishing === certificate.id ? (
+                    <RefreshCw className="mr-1 h-3 w-3 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-1 h-3 w-3" />
+                  )}
+                  Republier
+                </Button>
               )}
             </div>
           </div>
@@ -344,9 +411,76 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
                 </TabsList>
 
                 <TabsContent value="details" className="space-y-6">
-                  <div>
-                    <h4 className="font-semibold mb-2">Description</h4>
-                    <p className="text-muted-foreground">Hash: {selectedCertificate.pdfHash || '—'}</p>
+                  <div className="space-y-4">
+                    <div>
+                      <h4 className="font-semibold mb-2">Informations du certificat</h4>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Titre:</span>
+                          <span className="font-medium">{selectedCertificate.titre}</span>
+                        </div>
+                        {selectedCertificate.mention && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Mention:</span>
+                            <span className="font-medium">{selectedCertificate.mention}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Date d'obtention:</span>
+                          <span className="font-medium">{new Date(selectedCertificate.dateObtention).toLocaleDateString('fr-FR')}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Statut:</span>
+                          <Badge variant={selectedCertificate.statut === 'EMIS' ? 'default' : 'secondary'} className="text-xs">
+                            {selectedCertificate.statut === 'EMIS' ? (
+                              <><Verified className="mr-1 h-3 w-3" /> Vérifié</>
+                            ) : (
+                              <><AlertTriangle className="mr-1 h-3 w-3" /> Brouillon</>
+                            )}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <h4 className="font-semibold mb-2">Identifiants techniques</h4>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between items-center">
+                          <span className="text-muted-foreground">UUID:</span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs bg-muted px-2 py-1 rounded">
+                              {truncateAddress(selectedCertificate.uuid, 8, 8)}
+                            </span>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 w-6 p-0"
+                              onClick={() => copyToClipboard(selectedCertificate.uuid)}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-muted-foreground">Hash PDF:</span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs bg-muted px-2 py-1 rounded">
+                              {selectedCertificate.pdfHash ? truncateAddress(selectedCertificate.pdfHash, 8, 8) : '—'}
+                            </span>
+                            {selectedCertificate.pdfHash && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 w-6 p-0"
+                                onClick={() => copyToClipboard(selectedCertificate.pdfHash || '')}
+                              >
+                                <Copy className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </TabsContent>
 
@@ -359,14 +493,62 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
                     </div>
                   </div>
 
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Transaction:</span>
-                      <span className="font-mono">{selectedCertificate.txHash || '—'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Contrat:</span>
-                      <span className="font-mono">{selectedCertificate.contractAddress || '—'}</span>
+                  <div className="space-y-3 text-sm">
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">Hash PDF:</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs bg-muted px-2 py-1 rounded">
+                            {selectedCertificate.pdfHash ? truncateAddress(selectedCertificate.pdfHash, 8, 8) : '—'}
+                          </span>
+                          {selectedCertificate.pdfHash && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 w-6 p-0"
+                              onClick={() => copyToClipboard(selectedCertificate.pdfHash || '')}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">Transaction:</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs bg-muted px-2 py-1 rounded">
+                            {selectedCertificate.txHash ? truncateAddress(selectedCertificate.txHash, 8, 8) : '—'}
+                          </span>
+                          {selectedCertificate.txHash && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 w-6 p-0"
+                              onClick={() => copyToClipboard(selectedCertificate.txHash || '')}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">Contrat:</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs bg-muted px-2 py-1 rounded">
+                            {selectedCertificate.contractAddress ? truncateAddress(selectedCertificate.contractAddress, 8, 8) : '—'}
+                          </span>
+                          {selectedCertificate.contractAddress && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 w-6 p-0"
+                              onClick={() => copyToClipboard(selectedCertificate.contractAddress || '')}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
 
@@ -431,6 +613,21 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
               </Tabs>
 
               <div className="flex justify-end space-x-3 pt-4 border-t">
+                {selectedCertificate.statut === 'BROUILLON' && user?.role === 'establishment' && (
+                  <Button 
+                    variant="default" 
+                    onClick={() => handleRepublish(selectedCertificate.id)}
+                    disabled={republishing === selectedCertificate.id}
+                    className="flex items-center gap-2"
+                  >
+                    {republishing === selectedCertificate.id ? (
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4" />
+                    )}
+                    {republishing === selectedCertificate.id ? 'Republication...' : 'Republier sur blockchain'}
+                  </Button>
+                )}
                 <Button variant="outline" onClick={() => handleDownload(selectedCertificate)} disabled={!selectedCertificate.pdfUrl}>
                   <Download className="mr-2 h-4 w-4" />
                   Télécharger PDF

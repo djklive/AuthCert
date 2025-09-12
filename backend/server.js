@@ -184,6 +184,9 @@ function decryptPrivateKey(encryptedObject) {
   return decrypted.toString('utf8');
 }
 
+// Import du service Supabase au niveau du module
+const supabaseStorage = require('./services/supabaseStorage');
+
 // Fonction pour récupérer le logo de l'établissement
 async function getEstablishmentLogo(etablissementId) {
   try {
@@ -197,16 +200,21 @@ async function getEstablishmentLogo(etablissementId) {
     });
 
     if (logoDocument && logoDocument.cheminFichier) {
-      // Récupérer l'URL signée depuis Supabase
-      const supabaseStorage = require('./services/supabaseStorage');
-      const result = await supabaseStorage.getSignedUrl(logoDocument.cheminFichier);
-      
-      if (result.success) {
-        console.log(`✅ Logo trouvé: ${result.url}`);
-        return result.url; // Retourner juste l'URL, pas l'objet complet
+      // Vérifier si c'est déjà une URL publique ou un chemin de fichier
+      if (logoDocument.cheminFichier.startsWith('http')) {
+        console.log(`✅ Logo URL publique trouvée: ${logoDocument.cheminFichier}`);
+        return logoDocument.cheminFichier; // URL publique directe
       } else {
-        console.log(`❌ Erreur URL signée logo: ${result.error}`);
-        return null;
+        // Récupérer l'URL signée depuis Supabase pour les chemins de fichiers
+        const result = await supabaseStorage.getSignedUrl(logoDocument.cheminFichier);
+        
+        if (result.success) {
+          console.log(`✅ Logo URL signée générée: ${result.url}`);
+          return result.url;
+        } else {
+          console.log(`❌ Erreur URL signée logo: ${result.error}`);
+          return null;
+        }
       }
     }
     
@@ -241,7 +249,14 @@ async function generateCertificatePdf({
       });
 
       // Récupérer le logo de l'établissement
-      const logoUrl = await getEstablishmentLogo(etablissement.id_etablissement);
+      let logoUrl = null;
+      try {
+        logoUrl = await getEstablishmentLogo(etablissement.id_etablissement);
+        console.log(`🖼️ Logo URL: ${logoUrl || 'Aucun logo'}`);
+      } catch (logoError) {
+        console.warn('⚠️ Erreur récupération logo, utilisation du placeholder:', logoError.message);
+        logoUrl = null;
+      }
 
       // Configuration du document PDF
       const doc = new PDFDocument({ 
@@ -325,13 +340,15 @@ async function generateCertificatePdf({
       // Logo de l'établissement
       if (logoUrl) {
         try {
+          console.log(`🔄 Téléchargement du logo: ${logoUrl}`);
           // Télécharger le logo depuis Supabase
           const logoResponse = await fetch(logoUrl);
           if (logoResponse.ok) {
             const logoBuffer = await logoResponse.buffer();
             doc.image(logoBuffer, pageWidth / 2 - 30, headerY - 10, { width: 60, height: 60 });
+            console.log(`✅ Logo chargé avec succès`);
           } else {
-            throw new Error('Logo non accessible');
+            throw new Error(`Logo non accessible: ${logoResponse.status} ${logoResponse.statusText}`);
           }
         } catch (error) {
           console.warn('⚠️ Impossible de charger le logo, utilisation du placeholder:', error.message);
@@ -344,6 +361,7 @@ async function generateCertificatePdf({
              .text('🏆', pageWidth / 2 - 15, headerY + 5, { width: 30, align: 'center' });
         }
       } else {
+        console.log(`ℹ️ Aucun logo fourni, utilisation du placeholder`);
         // Placeholder par défaut
         doc.circle(pageWidth / 2, headerY + 20, 30)
            .fill(primaryColor);

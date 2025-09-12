@@ -22,7 +22,10 @@ function getVerifyUrl() {
   const frontendUrl = process.env.FRONTEND_URL || config.frontendUrl;
   const verifyPath = config.verifyPath;
   
-  const fullUrl = `${frontendUrl}${verifyPath}`;
+  // Nettoyer l'URL pour éviter les doubles slashes
+  const cleanFrontendUrl = frontendUrl.replace(/\/+$/, ''); // Supprimer les slashes en fin
+  const cleanVerifyPath = verifyPath.replace(/^\/+/, '/'); // S'assurer qu'il y a un slash au début
+  const fullUrl = `${cleanFrontendUrl}${cleanVerifyPath}`;
   
   console.log(`🌐 Configuration URL vérification:`, {
     environment: env,

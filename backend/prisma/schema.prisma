@@ -21,7 +21,14 @@ model Apprenant {
   
   // Relations many-to-many avec les établissements
   liaisons         LiaisonApprenantEtablissement[]
-  certificats     Certificat[]
+  certificats      Certificat[]
+  demandesCertificat DemandeCertificat[]
+  
+  // Relation avec le coffre-fort des clés privées
+  walletVault      WalletVault? @relation("ApprenantWallet")
+  
+  // Relations avec les sessions
+  sessions         Session[] @relation("ApprenantSessions")
 
   @@map("apprenants")
 }
@@ -46,7 +53,14 @@ model Etablissement {
   // Relations many-to-many avec les apprenants
   liaisons                          LiaisonApprenantEtablissement[]
   documents                         DocumentEtablissement[]
-  certificats                        Certificat[]
+  certificats                       Certificat[]
+  demandesCertificat                DemandeCertificat[]
+  
+  // Relation avec le coffre-fort des clés privées
+  walletVault                       WalletVault? @relation("EtablissementWallet")
+  
+  // Relations avec les sessions
+  sessions                          Session[] @relation("EtablissementSessions")
 
   @@map("etablissements")
 }
@@ -60,17 +74,30 @@ model Admin {
   dateModification DateTime @updatedAt
   nom              String
   prenom           String
+  
+  // Relations avec les sessions
+  sessions         Session[] @relation("AdminSessions")
 
   @@map("admins")
 }
 
 model Session {
-  id        String   @id @default(cuid())
+  id        Int   @id @default(autoincrement())
   userId    Int
   userType  String
   token     String   @unique
   expiresAt DateTime
   createdAt DateTime @default(now())
+
+  // Relations optionnelles pour l'intégrité référentielle
+  // Note: Une seule relation sera non-null selon userType
+  apprenantId     Int?
+  etablissementId Int?
+  adminId         Int?
+
+  apprenant     Apprenant?     @relation("ApprenantSessions", fields: [apprenantId], references: [id_apprenant], onDelete: Cascade)
+  etablissement Etablissement? @relation("EtablissementSessions", fields: [etablissementId], references: [id_etablissement], onDelete: Cascade)
+  admin         Admin?         @relation("AdminSessions", fields: [adminId], references: [id_admin], onDelete: Cascade)
 
   @@map("sessions")
 }
@@ -158,6 +185,14 @@ model WalletVault {
   cipherText String
   createdAt  DateTime @default(now())
 
+  // Relations optionnelles pour l'intégrité référentielle
+  // Note: Une seule relation sera non-null selon ownerType
+  apprenantId     Int? @unique
+  etablissementId Int? @unique
+
+  apprenant     Apprenant?     @relation("ApprenantWallet", fields: [apprenantId], references: [id_apprenant], onDelete: Cascade)
+  etablissement Etablissement? @relation("EtablissementWallet", fields: [etablissementId], references: [id_etablissement], onDelete: Cascade)
+
   @@index([ownerType, ownerId])
   @@map("wallet_vault")
 }
@@ -187,4 +222,50 @@ enum StatutLiaison {
   APPROUVE
   REJETE
   SUSPENDU
+}
+
+// Nouveau modèle pour les demandes de certificat
+model DemandeCertificat {
+  id                Int      @id @default(autoincrement())
+  apprenantId       Int
+  etablissementId   Int
+  titre             String
+  description       String?
+  messageDemande    String?
+  statutDemande     StatutDemandeCertificat @default(EN_ATTENTE)
+  dateDemande       DateTime @default(now())
+  dateTraitement    DateTime?
+  messageReponse    String?
+  traitePar         Int?     // ID de l'admin qui a traité
+  
+  // Relations
+  apprenant         Apprenant @relation(fields: [apprenantId], references: [id_apprenant], onDelete: Cascade)
+  etablissement     Etablissement @relation(fields: [etablissementId], references: [id_etablissement], onDelete: Cascade)
+  
+  // Documents joints
+  documents         DocumentDemandeCertificat[]
+  
+  @@map("demandes_certificat")
+}
+
+model DocumentDemandeCertificat {
+  id                Int      @id @default(autoincrement())
+  demandeId         Int
+  nomFichier        String
+  typeMime          String
+  tailleFichier     Int
+  cheminFichier     String
+  dateUpload        DateTime @default(now())
+  
+  // Relations
+  demande           DemandeCertificat @relation(fields: [demandeId], references: [id], onDelete: Cascade)
+  
+  @@map("documents_demande_certificat")
+}
+
+enum StatutDemandeCertificat {
+  EN_ATTENTE
+  APPROUVE
+  REJETE
+  EN_COURS_TRAITEMENT
 }

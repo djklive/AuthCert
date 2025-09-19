@@ -23,11 +23,11 @@ import {
   User,
   X
 } from 'lucide-react';
-import { api } from '../../../services/api';
+import { api, API_BASE } from '../../../services/api';
 import { useEffect } from 'react';
 import { useUser } from '../../hooks/useUser';
 import authService from '../../../services/authService';
-const API_BASE_URL = 'https://authcert-production.up.railway.app/api';
+//const API_BASE_URL = 'https://authcert-production.up.railway.app/api';
 //const API_BASE_URL = 'http://localhost:5000/api';
 
 interface SelectedStudent { id: number; name: string; email: string; }
@@ -93,7 +93,7 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
       });
 
       // Charger les demandes en attente et les étudiants liés en parallèle
-      const etudiantsResponse = await fetch(`${API_BASE_URL}/etablissement/${user.id}/etudiants`, {
+      const etudiantsResponse = await fetch(`${API_BASE}/etablissement/${user.id}/etudiants`, {
         headers: authService.getAuthHeaders()
       });
       

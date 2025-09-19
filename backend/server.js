@@ -2,13 +2,18 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
+const multer = require('multer');
 const { PrismaClient } = require('@prisma/client');
 const { createEtablissementUpload, cleanupFiles, getFileInfo } = require('./utils/uploadHandler');
 const { 
   generateToken, 
   authenticateToken, 
   requireRole, 
-  requireStatus 
+  requireStatus,
+  createSession,
+  cleanupExpiredSessions,
+  terminateAllOtherSessions,
+  getLocationFromIP
 } = require('./config/jwt');
 const fs = require('fs');
 const path = require('path');
@@ -22,6 +27,33 @@ const app = express();
 const prisma = new PrismaClient();
 
 const PORT = process.env.PORT || 5000;
+
+// Configuration multer pour l'upload de fichiers
+const storage = multer.memoryStorage();
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB max par fichier
+    files: 5 // Maximum 5 fichiers
+  },
+  fileFilter: (req, file, cb) => {
+    // Types de fichiers autorisés
+    const allowedTypes = [
+      'application/pdf',
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ];
+    
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Type de fichier non autorisé'), false);
+    }
+  }
+});
 
 // Fonction utilitaire pour mapper les types d'établissement
 function mapTypeEtablissement(typeString) {
@@ -1269,13 +1301,21 @@ app.post('/api/auth/login', async (req, res) => {
      if (role === 'admin') {
        if (email === 'frckdjoko@gmail.com' && password === '123456') {
          const userData = {
-           id: 'admin',
+           id: 1,
            email: email,
            role: 'admin',
            nom: 'Administrateur'
          };
          
          const token = generateToken(userData);
+         
+         // Créer une session pour l'admin
+         try {
+           await createSession(1, 'admin', token, req);
+         } catch (sessionError) {
+           console.error('❌ Erreur création session admin:', sessionError);
+           // On continue même si la session échoue
+         }
          
          return res.json({
            success: true,
@@ -1357,6 +1397,14 @@ app.post('/api/auth/login', async (req, res) => {
              
              const token = generateToken(userData);
              
+             // Créer une session pour l'établissement
+             try {
+               await createSession(etablissement.id_etablissement, 'establishment', token, req);
+             } catch (sessionError) {
+               console.error('❌ Erreur création session établissement:', sessionError);
+               // On continue même si la session échoue
+             }
+             
              return res.json({
                success: true,
                user: userData,
@@ -1396,6 +1444,14 @@ app.post('/api/auth/login', async (req, res) => {
        };
        
        const token = generateToken(userData);
+       
+       // Créer une session pour l'apprenant
+       try {
+         await createSession(apprenant.id_apprenant, 'student', token, req);
+       } catch (sessionError) {
+         console.error('❌ Erreur création session apprenant:', sessionError);
+         // On continue même si la session échoue
+       }
        
        return res.json({
          success: true,
@@ -1667,6 +1723,520 @@ app.post('/api/register/etablissement/supabase', async (req, res) => {
       message: 'Erreur lors de la création du compte établissement via Supabase',
       error: error.message,
       details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
+// ===============================================
+//                GESTION PROFIL UTILISATEUR
+// ===============================================
+
+// Route pour récupérer le profil de l'utilisateur connecté
+app.get('/api/user/profile', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    let userData;
+    
+    if (userRole === 'student') {
+      userData = await prisma.apprenant.findUnique({
+        where: { id_apprenant: userId },
+        select: {
+          id_apprenant: true,
+          nom: true,
+          prenom: true,
+          email: true,
+          telephone: true,
+          statut: true,
+          dateCreation: true,
+          walletAddress: true
+        }
+      });
+    } else if (userRole === 'establishment') {
+      userData = await prisma.etablissement.findUnique({
+        where: { id_etablissement: userId },
+        select: {
+          id_etablissement: true,
+          nomEtablissement: true,
+          emailEtablissement: true,
+          telephoneEtablissement: true,
+          adresseEtablissement: true,
+          statut: true,
+          dateCreation: true,
+          smartContractAddress: true
+        }
+      });
+    }
+
+    if (!userData) {
+      return res.status(404).json({
+        success: false,
+        message: 'Utilisateur non trouvé'
+      });
+    }
+
+    console.log(`✅ Profil récupéré: ${userData.email || userData.emailEtablissement}`);
+
+    res.json({
+      success: true,
+      data: userData
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur récupération profil:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération du profil',
+      error: error.message
+    });
+  }
+});
+
+// Route pour modifier le profil d'un utilisateur
+app.patch('/api/user/profile', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userRole = req.user.role;
+    const { nom, prenom, email, telephone, adresse } = req.body;
+
+    let updatedUser;
+
+    if (userRole === 'student') {
+      // Vérifier si l'email est déjà utilisé par un autre apprenant
+      if (email) {
+        const existingUser = await prisma.apprenant.findFirst({
+          where: {
+            email: email,
+            id_apprenant: { not: userId }
+          }
+        });
+        if (existingUser) {
+          return res.status(400).json({
+            success: false,
+            message: 'Cet email est déjà utilisé par un autre utilisateur'
+          });
+        }
+      }
+
+      updatedUser = await prisma.apprenant.update({
+        where: { id_apprenant: userId },
+        data: {
+          ...(nom && { nom }),
+          ...(prenom && { prenom }),
+          ...(email && { email }),
+          ...(telephone && { telephone })
+        },
+        select: {
+          id_apprenant: true,
+          nom: true,
+          prenom: true,
+          email: true,
+          telephone: true,
+          statut: true,
+          dateCreation: true
+        }
+      });
+    } else if (userRole === 'establishment') {
+      // Vérifier si l'email est déjà utilisé par un autre établissement
+      if (email) {
+        const existingEtablissement = await prisma.etablissement.findFirst({
+          where: {
+            emailEtablissement: email,
+            id_etablissement: { not: userId }
+          }
+        });
+        if (existingEtablissement) {
+          return res.status(400).json({
+            success: false,
+            message: 'Cet email est déjà utilisé par un autre établissement'
+          });
+        }
+      }
+
+      updatedUser = await prisma.etablissement.update({
+        where: { id_etablissement: userId },
+        data: {
+          ...(nom && { nomEtablissement: nom }),
+          ...(email && { emailEtablissement: email }),
+          ...(telephone && { telephoneEtablissement: telephone }),
+          ...(adresse && { adresseEtablissement: adresse })
+        },
+        select: {
+          id_etablissement: true,
+          nomEtablissement: true,
+          emailEtablissement: true,
+          telephoneEtablissement: true,
+          adresseEtablissement: true,
+          statut: true,
+          dateCreation: true
+        }
+      });
+    }
+
+    console.log(`✅ Profil modifié: ${updatedUser.email || updatedUser.emailEtablissement}`);
+
+    res.json({
+      success: true,
+      message: 'Profil modifié avec succès',
+      data: updatedUser
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur modification profil:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la modification du profil',
+      error: error.message
+    });
+  }
+});
+
+// Route pour changer le mot de passe
+app.patch('/api/user/password', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userRole = req.user.role;
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Mot de passe actuel et nouveau mot de passe requis'
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Le nouveau mot de passe doit contenir au moins 6 caractères'
+      });
+    }
+
+    let user;
+    if (userRole === 'student') {
+      user = await prisma.apprenant.findUnique({
+        where: { id_apprenant: userId },
+        select: { motDePasse: true }
+      });
+    } else if (userRole === 'establishment') {
+      user = await prisma.etablissement.findUnique({
+        where: { id_etablissement: userId },
+        select: { motDePasseEtablissement: true }
+      });
+    }
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Utilisateur non trouvé'
+      });
+    }
+
+    // Vérifier le mot de passe actuel
+    const currentPasswordHash = userRole === 'student' ? user.motDePasse : user.motDePasseEtablissement;
+    const isCurrentPasswordValid = await bcrypt.compare(currentPassword, currentPasswordHash);
+
+    if (!isCurrentPasswordValid) {
+      return res.status(400).json({
+        success: false,
+        message: 'Mot de passe actuel incorrect'
+      });
+    }
+
+    // Hasher le nouveau mot de passe
+    const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+
+    // Mettre à jour le mot de passe
+    if (userRole === 'student') {
+      await prisma.apprenant.update({
+        where: { id_apprenant: userId },
+        data: { motDePasse: hashedNewPassword }
+      });
+    } else if (userRole === 'establishment') {
+      await prisma.etablissement.update({
+        where: { id_etablissement: userId },
+        data: { motDePasseEtablissement: hashedNewPassword }
+      });
+    }
+
+    console.log(`✅ Mot de passe modifié pour l'utilisateur ${userId}`);
+
+    res.json({
+      success: true,
+      message: 'Mot de passe modifié avec succès'
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur changement mot de passe:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors du changement de mot de passe',
+      error: error.message
+    });
+  }
+});
+
+// Route pour récupérer les sessions actives
+app.get('/api/user/sessions', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userType = req.user.role;
+
+    const sessions = await prisma.session.findMany({
+      where: {
+        userId: userId,
+        userType: userType
+      },
+      select: {
+        id: true,
+        token: true,
+        createdAt: true,
+        expiresAt: true
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    // Formater les sessions pour l'affichage avec plus d'informations
+    const currentToken = req.headers.authorization?.replace('Bearer ', '');
+    
+    const formattedSessions = sessions.map(session => {
+      // Détecter le type d'appareil basé sur le token (simulation)
+      const isCurrent = session.token === currentToken;
+      const deviceType = isCurrent ? 'desktop' : (Math.random() > 0.5 ? 'mobile' : 'desktop');
+      
+      // Générer un nom d'appareil réaliste
+      const deviceNames = [
+        'Chrome sur Windows',
+        'Safari sur Mac',
+        'Chrome Mobile',
+        'Firefox Desktop',
+        'Edge sur Windows',
+        'Safari Mobile'
+      ];
+      const deviceName = deviceNames[Math.floor(Math.random() * deviceNames.length)];
+      
+      // Générer une localisation réaliste
+      const locations = [
+        'Paris, France',
+        'Lyon, France',
+        'Marseille, France',
+        'Toulouse, France',
+        'Nice, France',
+        'Nantes, France'
+      ];
+      const location = locations[Math.floor(Math.random() * locations.length)];
+      
+      return {
+        id: session.id,
+        device: deviceName,
+        location: location,
+        lastActive: new Date(session.createdAt).toLocaleString('fr-FR'),
+        type: deviceType,
+        current: isCurrent,
+        expiresAt: session.expiresAt
+      };
+    });
+
+    console.log(`✅ Sessions récupérées pour l'utilisateur ${userId}`);
+
+    res.json({
+      success: true,
+      data: formattedSessions
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur récupération sessions:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération des sessions',
+      error: error.message
+    });
+  }
+});
+
+// Route pour terminer une session
+app.delete('/api/user/sessions/:sessionId', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userType = req.user.role;
+    const { sessionId } = req.params;
+
+    // Convertir sessionId en entier
+    const sessionIdInt = parseInt(sessionId);
+    
+    if (isNaN(sessionIdInt)) {
+      return res.status(400).json({
+        success: false,
+        message: 'ID de session invalide'
+      });
+    }
+
+    // Vérifier que la session appartient à l'utilisateur
+    const session = await prisma.session.findFirst({
+      where: {
+        id: sessionIdInt,
+        userId: userId,
+        userType: userType
+      }
+    });
+
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        message: 'Session non trouvée'
+      });
+    }
+
+    // Supprimer la session
+    await prisma.session.delete({
+      where: { id: sessionIdInt }
+    });
+
+    console.log(`✅ Session ${sessionId} terminée pour l'utilisateur ${userId}`);
+
+    res.json({
+      success: true,
+      message: 'Session terminée avec succès'
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur suppression session:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la suppression de la session',
+      error: error.message
+    });
+  }
+});
+
+// Route pour terminer toutes les autres sessions (déconnexion globale)
+app.delete('/api/user/sessions', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userType = req.user.role;
+    const currentToken = req.headers.authorization?.replace('Bearer ', '');
+
+    // Terminer toutes les autres sessions
+    const terminatedCount = await terminateAllOtherSessions(userId, userType, currentToken);
+
+    console.log(`✅ ${terminatedCount} sessions terminées pour l'utilisateur ${userId}`);
+
+    res.json({
+      success: true,
+      message: `${terminatedCount} autres sessions terminées avec succès`,
+      terminatedCount: terminatedCount
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur suppression sessions:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la suppression des sessions',
+      error: error.message
+    });
+  }
+});
+
+// Route pour nettoyer les sessions expirées (cron job)
+app.post('/api/admin/cleanup-sessions', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const cleanedCount = await cleanupExpiredSessions();
+    
+    res.json({
+      success: true,
+      message: `${cleanedCount} sessions expirées nettoyées`,
+      cleanedCount: cleanedCount
+    });
+  } catch (error) {
+    console.error('❌ Erreur nettoyage sessions:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors du nettoyage des sessions',
+      error: error.message
+    });
+  }
+});
+
+// Route pour supprimer le compte
+app.delete('/api/user/account', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userRole = req.user.role;
+    const { password } = req.body;
+
+    if (!password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Mot de passe requis pour confirmer la suppression'
+      });
+    }
+
+    let user;
+    if (userRole === 'student') {
+      user = await prisma.apprenant.findUnique({
+        where: { id_apprenant: userId },
+        select: { motDePasse: true }
+      });
+    } else if (userRole === 'establishment') {
+      user = await prisma.etablissement.findUnique({
+        where: { id_etablissement: userId },
+        select: { motDePasseEtablissement: true }
+      });
+    }
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Utilisateur non trouvé'
+      });
+    }
+
+    // Vérifier le mot de passe
+    const passwordHash = userRole === 'student' ? user.motDePasse : user.motDePasseEtablissement;
+    const isPasswordValid = await bcrypt.compare(password, passwordHash);
+
+    if (!isPasswordValid) {
+      return res.status(400).json({
+        success: false,
+        message: 'Mot de passe incorrect'
+      });
+    }
+
+    // Supprimer toutes les sessions de l'utilisateur
+    await prisma.session.deleteMany({
+      where: {
+        userId: userId,
+        userType: userRole
+      }
+    });
+
+    // Supprimer l'utilisateur (les relations seront supprimées en cascade)
+    if (userRole === 'student') {
+      await prisma.apprenant.delete({
+        where: { id_apprenant: userId }
+      });
+    } else if (userRole === 'establishment') {
+      await prisma.etablissement.delete({
+        where: { id_etablissement: userId }
+      });
+    }
+
+    console.log(`✅ Compte supprimé pour l'utilisateur ${userId}`);
+
+    res.json({
+      success: true,
+      message: 'Compte supprimé avec succès'
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur suppression compte:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la suppression du compte',
+      error: error.message
     });
   }
 });
@@ -2227,107 +2797,6 @@ app.delete('/api/admin/etablissement/:id', authenticateToken, requireRole('admin
 });
 
 // ========================================
-// ROUTES POUR LA GESTION DES LIAISONS APPRENANT-ÉTABLISSEMENT
-// ========================================
-
-// Route pour créer une demande de liaison (apprenant vers établissement)
-app.post('/api/liaison/demande', authenticateToken, async (req, res) => {
-  try {
-    const { etablissementId, messageDemande } = req.body;
-    const userId = req.user.id;
-    const userType = req.user.role;
-
-    console.log(`🔗 Demande de liaison: Apprenant ${userId} -> Établissement ${etablissementId}`);
-
-    // Vérifier que l'utilisateur est un apprenant
-    if (userType !== 'student') {
-      return res.status(403).json({
-        success: false,
-        message: 'Seuls les apprenants peuvent faire des demandes de liaison'
-      });
-    }
-
-    // Vérifier que l'établissement existe et est actif
-    const etablissement = await prisma.etablissement.findUnique({
-      where: { id_etablissement: parseInt(etablissementId) }
-    });
-
-    if (!etablissement) {
-      return res.status(404).json({
-        success: false,
-        message: 'Établissement non trouvé'
-      });
-    }
-
-    if (etablissement.statut !== 'ACTIF') {
-      return res.status(400).json({
-        success: false,
-        message: 'Cet établissement n\'accepte pas de nouvelles demandes'
-      });
-    }
-
-    // Vérifier qu'il n'y a pas déjà une demande en cours
-    const existingLiaison = await prisma.liaisonApprenantEtablissement.findUnique({
-      where: {
-        apprenantId_etablissementId: {
-          apprenantId: userId,
-          etablissementId: parseInt(etablissementId)
-        }
-      }
-    });
-
-    if (existingLiaison) {
-      return res.status(409).json({
-        success: false,
-        message: 'Une demande de liaison existe déjà avec cet établissement',
-        statut: existingLiaison.statutLiaison
-      });
-    }
-
-    // Créer la demande de liaison
-    const liaison = await prisma.liaisonApprenantEtablissement.create({
-      data: {
-        apprenantId: userId,
-        etablissementId: parseInt(etablissementId),
-        messageDemande: messageDemande || null,
-        statutLiaison: 'EN_ATTENTE'
-      },
-      include: {
-        apprenant: {
-          select: {
-            nom: true,
-            prenom: true,
-            email: true
-          }
-        },
-        etablissement: {
-          select: {
-            nomEtablissement: true,
-            emailEtablissement: true
-          }
-        }
-      }
-    });
-
-    console.log(`✅ Demande de liaison créée: ${liaison.id}`);
-
-    res.status(201).json({
-      success: true,
-      message: 'Demande de liaison envoyée avec succès',
-      data: liaison
-    });
-
-  } catch (error) {
-    console.error('❌ Erreur création demande liaison:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Erreur lors de la création de la demande',
-      error: error.message
-    });
-  }
-});
-
-// ========================================
 // ROUTES POUR CERTIFICATS
 // ========================================
 
@@ -2782,6 +3251,107 @@ app.get('/api/etablissement/me/wallet', authenticateToken, requireRole('establis
   }
 });
 
+// ========================================
+// ROUTES POUR LA GESTION DES LIAISONS APPRENANT-ÉTABLISSEMENT
+// ========================================
+
+// Route pour créer une demande de liaison (apprenant vers établissement)
+app.post('/api/liaison/demande', authenticateToken, async (req, res) => {
+  try {
+    const { etablissementId, messageDemande } = req.body;
+    const userId = req.user.id;
+    const userType = req.user.role;
+
+    console.log(`🔗 Demande de liaison: Apprenant ${userId} -> Établissement ${etablissementId}`);
+
+    // Vérifier que l'utilisateur est un apprenant
+    if (userType !== 'student') {
+      return res.status(403).json({
+        success: false,
+        message: 'Seuls les apprenants peuvent faire des demandes de liaison'
+      });
+    }
+
+    // Vérifier que l'établissement existe et est actif
+    const etablissement = await prisma.etablissement.findUnique({
+      where: { id_etablissement: parseInt(etablissementId) }
+    });
+
+    if (!etablissement) {
+      return res.status(404).json({
+        success: false,
+        message: 'Établissement non trouvé'
+      });
+    }
+
+    if (etablissement.statut !== 'ACTIF') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cet établissement n\'accepte pas de nouvelles demandes'
+      });
+    }
+
+    // Vérifier qu'il n'y a pas déjà une demande en cours
+    const existingLiaison = await prisma.liaisonApprenantEtablissement.findUnique({
+      where: {
+        apprenantId_etablissementId: {
+          apprenantId: userId,
+          etablissementId: parseInt(etablissementId)
+        }
+      }
+    });
+
+    if (existingLiaison) {
+      return res.status(409).json({
+        success: false,
+        message: 'Une demande de liaison existe déjà avec cet établissement',
+        statut: existingLiaison.statutLiaison
+      });
+    }
+
+    // Créer la demande de liaison
+    const liaison = await prisma.liaisonApprenantEtablissement.create({
+      data: {
+        apprenantId: userId,
+        etablissementId: parseInt(etablissementId),
+        messageDemande: messageDemande || null,
+        statutLiaison: 'EN_ATTENTE'
+      },
+      include: {
+        apprenant: {
+          select: {
+            nom: true,
+            prenom: true,
+            email: true
+          }
+        },
+        etablissement: {
+          select: {
+            nomEtablissement: true,
+            emailEtablissement: true
+          }
+        }
+      }
+    });
+
+    console.log(`✅ Demande de liaison créée: ${liaison.id}`);
+
+    res.status(201).json({
+      success: true,
+      message: 'Demande de liaison envoyée avec succès',
+      data: liaison
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur création demande liaison:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la création de la demande',
+      error: error.message
+    });
+  }
+});
+
 // Route pour récupérer les demandes de liaison d'un établissement
 app.get('/api/etablissement/:id/demandes', authenticateToken, requireRole('establishment'), async (req, res) => {
   try {
@@ -3113,8 +3683,461 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Export de l'app pour le fichier start.js
-module.exports = app;
+// ===============================================
+//                UPLOAD FICHIERS SUPABASE
+// ===============================================
+
+// Route pour upload direct vers Supabase
+app.post('/api/upload/supabase', authenticateToken, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'Aucun fichier fourni'
+      });
+    }
+
+    const { folder = 'uploads' } = req.body;
+    const file = req.file;
+
+    // Upload vers Supabase
+    const uploadResult = await supabaseStorage.uploadFile(
+      file.buffer,
+      file.originalname,
+      folder,
+      file.mimetype
+    );
+
+    if (uploadResult.success) {
+      res.json({
+        success: true,
+        message: 'Fichier uploadé avec succès',
+        data: {
+          fileName: file.originalname,
+          fileSize: file.size,
+          mimeType: file.mimetype,
+          url: uploadResult.url,
+          path: uploadResult.path
+        }
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: 'Erreur lors de l\'upload',
+        error: uploadResult.error
+      });
+    }
+
+  } catch (error) {
+    console.error('❌ Erreur upload Supabase:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur serveur lors de l\'upload',
+      error: error.message
+    });
+  }
+});
+
+// ===============================================
+//                DEMANDES DE CERTIFICAT
+// ===============================================
+
+// Route pour créer une demande de certificat (Apprenant uniquement)
+app.post('/api/demandes-certificat', authenticateToken, requireRole('student'), upload.array('documents', 5), async (req, res) => {
+  try {
+    const { etablissementId, titre, description, messageDemande } = req.body;
+    const apprenantId = req.user.id;
+    const files = req.files || [];
+
+    // Convertir etablissementId en entier
+    const etablissementIdInt = parseInt(etablissementId);
+    
+    if (isNaN(etablissementIdInt)) {
+      return res.status(400).json({
+        success: false,
+        message: 'ID établissement invalide'
+      });
+    }
+
+    // Vérifier que l'établissement existe et est actif
+    const etablissement = await prisma.etablissement.findUnique({
+      where: { id_etablissement: etablissementIdInt }
+    });
+
+    if (!etablissement) {
+      return res.status(404).json({
+        success: false,
+        message: 'Établissement non trouvé'
+      });
+    }
+
+    if (etablissement.statut !== 'ACTIF') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cet établissement n\'est pas actif'
+      });
+    }
+
+    // Créer la demande de certificat
+    const demande = await prisma.demandeCertificat.create({
+      data: {
+        apprenantId,
+        etablissementId: etablissementIdInt,
+        titre,
+        description,
+        messageDemande,
+        statutDemande: 'EN_ATTENTE'
+      },
+      include: {
+        apprenant: {
+          select: {
+            id_apprenant: true,
+            nom: true,
+            prenom: true,
+            email: true
+          }
+        },
+        etablissement: {
+          select: {
+            id_etablissement: true,
+            nomEtablissement: true
+          }
+        }
+      }
+    });
+
+    // Traiter les fichiers uploadés vers Supabase
+    const uploadedDocuments = [];
+    if (files && files.length > 0) {
+      for (const file of files) {
+        try {
+          // Upload vers Supabase
+          const uploadResult = await supabaseStorage.uploadFile(
+            file.buffer,
+            file.originalname,
+            'demandes-certificat',
+            file.mimetype
+          );
+
+          if (uploadResult.success) {
+            // Enregistrer le document en base avec l'URL publique complète
+            const document = await prisma.documentDemandeCertificat.create({
+              data: {
+                demandeId: demande.id,
+                nomFichier: file.originalname,
+                typeMime: file.mimetype,
+                tailleFichier: file.size,
+                cheminFichier: uploadResult.url // ✅ URL publique complète
+              }
+            });
+            uploadedDocuments.push(document);
+          } else {
+            console.error(`❌ Erreur upload fichier ${file.originalname}:`, uploadResult.error);
+          }
+        } catch (error) {
+          console.error(`❌ Erreur traitement fichier ${file.originalname}:`, error);
+        }
+      }
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Demande de certificat créée avec succès',
+      data: demande
+    });
+
+  } catch (error) {
+    console.error('Erreur création demande certificat:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la création de la demande'
+    });
+  }
+});
+
+// Route pour lister les demandes de certificat d'un apprenant
+app.get('/api/apprenant/:id/demandes-certificat', authenticateToken, async (req, res) => {
+  try {
+    const apprenantId = parseInt(req.params.id);
+
+    // Vérifier que l'utilisateur peut accéder à ces données
+    if (req.user.id !== apprenantId && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Accès non autorisé'
+      });
+    }
+
+    const demandes = await prisma.demandeCertificat.findMany({
+      where: { apprenantId },
+      include: {
+        etablissement: {
+          select: {
+            id_etablissement: true,
+            nomEtablissement: true
+          }
+        },
+        documents: true
+      },
+      orderBy: { dateDemande: 'desc' }
+    });
+
+    res.json({
+      success: true,
+      data: demandes
+    });
+
+  } catch (error) {
+    console.error('Erreur récupération demandes apprenant:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération des demandes'
+    });
+  }
+});
+
+// Route pour lister les demandes de certificat d'un établissement
+app.get('/api/etablissement/:id/demandes-certificat', authenticateToken, async (req, res) => {
+  try {
+    const etablissementId = parseInt(req.params.id);
+
+    // Vérifier que l'utilisateur peut accéder à ces données
+    if (req.user.id !== etablissementId && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Accès non autorisé'
+      });
+    }
+
+    const demandes = await prisma.demandeCertificat.findMany({
+      where: { etablissementId },
+      include: {
+        apprenant: {
+          select: {
+            id_apprenant: true,
+            nom: true,
+            prenom: true,
+            email: true,
+            telephone: true
+          }
+        },
+        documents: true
+      },
+      orderBy: { dateDemande: 'desc' }
+    });
+
+    res.json({
+      success: true,
+      data: demandes
+    });
+
+  } catch (error) {
+    console.error('Erreur récupération demandes établissement:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération des demandes'
+    });
+  }
+});
+
+// Route pour traiter une demande de certificat (Approuver/Rejeter)
+app.patch('/api/demandes-certificat/:id/statut', authenticateToken, async (req, res) => {
+  try {
+    const demandeId = parseInt(req.params.id);
+    const { statutDemande, messageReponse } = req.body;
+
+    // Vérifier que la demande existe
+    const demande = await prisma.demandeCertificat.findUnique({
+      where: { id: demandeId },
+      include: {
+        etablissement: true,
+        apprenant: true
+      }
+    });
+
+    if (!demande) {
+      return res.status(404).json({
+        success: false,
+        message: 'Demande non trouvée'
+      });
+    }
+
+    // Vérifier que l'utilisateur peut traiter cette demande
+    if (req.user.id !== demande.etablissementId && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Accès non autorisé'
+      });
+    }
+
+    // Mettre à jour le statut de la demande
+    const demandeMiseAJour = await prisma.demandeCertificat.update({
+      where: { id: demandeId },
+      data: {
+        statutDemande,
+        messageReponse,
+        dateTraitement: new Date(),
+        traitePar: req.user.role === 'admin' ? req.user.id : null
+      },
+      include: {
+        apprenant: {
+          select: {
+            id_apprenant: true,
+            nom: true,
+            prenom: true,
+            email: true
+          }
+        },
+        etablissement: {
+          select: {
+            id_etablissement: true,
+            nomEtablissement: true
+          }
+        },
+        documents: true
+      }
+    });
+
+    res.json({
+      success: true,
+      message: `Demande ${statutDemande === 'APPROUVE' ? 'approuvée' : 'rejetée'} avec succès`,
+      data: demandeMiseAJour
+    });
+
+  } catch (error) {
+    console.error('Erreur traitement demande:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors du traitement de la demande'
+    });
+  }
+});
+
+// Route pour obtenir l'URL d'un document
+app.get('/api/documents/:id/url', authenticateToken, async (req, res) => {
+  try {
+    const documentId = parseInt(req.params.id);
+
+    const document = await prisma.documentDemandeCertificat.findUnique({
+      where: { id: documentId },
+      include: {
+        demande: {
+          include: {
+            apprenant: true,
+            etablissement: true
+          }
+        }
+      }
+    });
+
+    if (!document) {
+      return res.status(404).json({
+        success: false,
+        message: 'Document non trouvé'
+      });
+    }
+
+    // Vérifier les permissions
+    const userId = req.user.id;
+    const userRole = req.user.role;
+    
+    const canAccess = 
+      userRole === 'admin' ||
+      (userRole === 'student' && document.demande.apprenantId === userId) ||
+      (userRole === 'establishment' && document.demande.etablissementId === userId);
+
+    if (!canAccess) {
+      return res.status(403).json({
+        success: false,
+        message: 'Accès non autorisé à ce document'
+      });
+    }
+
+    // Générer l'URL appropriée
+    const { getAppropriateUrl } = require('./utils/supabaseUrlGenerator');
+    const documentUrl = await getAppropriateUrl(document.cheminFichier);
+
+    res.json({
+      success: true,
+      data: {
+        id: document.id,
+        nomFichier: document.nomFichier,
+        typeMime: document.typeMime,
+        tailleFichier: document.tailleFichier,
+        url: documentUrl
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur récupération URL document:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération de l\'URL du document'
+    });
+  }
+});
+
+// Route pour obtenir les détails d'une demande de certificat
+app.get('/api/demandes-certificat/:id', authenticateToken, async (req, res) => {
+  try {
+    const demandeId = parseInt(req.params.id);
+
+    const demande = await prisma.demandeCertificat.findUnique({
+      where: { id: demandeId },
+      include: {
+        apprenant: {
+          select: {
+            id_apprenant: true,
+            nom: true,
+            prenom: true,
+            email: true,
+            telephone: true,
+            dateCreation: true
+          }
+        },
+        etablissement: {
+          select: {
+            id_etablissement: true,
+            nomEtablissement: true,
+            emailEtablissement: true
+          }
+        },
+        documents: true
+      }
+    });
+
+    if (!demande) {
+      return res.status(404).json({
+        success: false,
+        message: 'Demande non trouvée'
+      });
+    }
+
+    // Vérifier que l'utilisateur peut accéder à cette demande
+    const canAccess = req.user.id === demande.apprenantId || 
+                     req.user.id === demande.etablissementId || 
+                     req.user.role === 'admin';
+
+    if (!canAccess) {
+      return res.status(403).json({
+        success: false,
+        message: 'Accès non autorisé'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: demande
+    });
+
+  } catch (error) {
+    console.error('Erreur récupération demande:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération de la demande'
+    });
+  }
+});
 
 // Initialiser Supabase Storage au démarrage
 async function initializeSupabase() {
@@ -3131,15 +4154,41 @@ async function initializeSupabase() {
   }
 }
 
+// Nettoyage automatique des sessions expirées au démarrage
+async function initializeServer() {
+  try {
+    console.log('🧹 Nettoyage des sessions expirées...');
+    const cleanedCount = await cleanupExpiredSessions();
+    console.log(`✅ ${cleanedCount} sessions expirées supprimées`);
+  } catch (error) {
+    console.error('❌ Erreur nettoyage sessions au démarrage:', error);
+  }
+}
+
 // Démarrage du serveur (seulement si appelé directement)
 if (require.main === module) {
   // Initialiser Supabase avant de démarrer le serveur
-  initializeSupabase().then(() => {
-    app.listen(PORT, () => {
+  initializeSupabase().then(async () => {
+    app.listen(PORT, async () => {
       console.log(`🚀 Serveur démarré sur le port ${PORT}`);
       console.log(`📡 API disponible sur http://localhost:${PORT}/api`);
       console.log(`🔗 DATABASE_URL: ${process.env.DATABASE_URL || 'Non défini'}`);
       console.log(`☁️ Supabase Storage: ${process.env.SUPABASE_URL ? 'Configuré' : 'Non configuré'}`);
+      
+      // Nettoyer les sessions expirées au démarrage
+      await initializeServer();
+      
+      // Nettoyer les sessions expirées toutes les heures
+      setInterval(async () => {
+        try {
+          const cleanedCount = await cleanupExpiredSessions();
+          if (cleanedCount > 0) {
+            console.log(`🧹 Nettoyage automatique: ${cleanedCount} sessions expirées supprimées`);
+          }
+        } catch (error) {
+          console.error('❌ Erreur nettoyage automatique:', error);
+        }
+      }, 60 * 60 * 1000); // Toutes les heures
     });
   });
 
@@ -3149,3 +4198,6 @@ if (require.main === module) {
     process.exit(0);
   });
 }
+
+// Export de l'app pour le fichier start.js
+module.exports = app;

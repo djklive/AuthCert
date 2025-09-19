@@ -17,8 +17,9 @@ import { AnimatedSection, AnimatedCard } from "../../components/animations/Scrol
 import { useAuth } from "../../hooks/useAuth";
 import authService from "../../services/authService";
 import { Button } from "../../components/ui/button";
+import { API_BASE } from "../../services/api";
 
-const API_BASE_URL = 'https://authcert-production.up.railway.app/api';
+//const API_BASE_URL = 'https://authcert-production.up.railway.app/api';
 //const API_BASE_URL = 'http://localhost:5000/api';
 
 interface AuthPageProps {
@@ -84,7 +85,7 @@ export default function AuthPage({ defaultTab = "login" }: AuthPageProps) {
       }
 
       // Appel à l'API de connexion
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      const response = await fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -6,9 +6,9 @@ import { Label } from "./ui/label";
 import { MultiSelect } from "./ui/multi-select";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
-import { api, type Establishment } from '../services/api';
+import { api, type Establishment, API_BASE } from '../services/api';
 
-const API_BASE_URL = 'https://authcert-production.up.railway.app/api';
+//const API_BASE_URL = 'https://authcert-production.up.railway.app/api';
 //const API_BASE_URL = 'http://localhost:5000/api';
 
 export interface SignupFormApprenantData {
@@ -98,7 +98,7 @@ export function SignupFormApprenant() {
     
     try {
       // Appel à l'API avec les bonnes données
-      const response = await axios.post(`${API_BASE_URL}/register/apprenant`, {
+      const response = await axios.post(`${API_BASE}/register/apprenant`, {
         email: formData.email,
         motDePasse: formData.password,
         nom: formData.lastName,

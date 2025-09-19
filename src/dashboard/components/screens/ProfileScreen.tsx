@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Input } from '../ui/input';
@@ -8,6 +8,11 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Badge } from '../ui/badge';
 import { Separator } from '../ui/separator';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
+import { useUser } from '../../hooks/useUser';
+import { api } from '../../../services/api';
+import { useAuth } from '../../../hooks/useAuth';
+import { useNavigate } from 'react-router-dom';
 import { 
   User, 
   Mail, 
@@ -22,46 +27,61 @@ import {
   Monitor,
   Trash2,
   Save,
-  Edit
+  Edit,
+  AlertTriangle,
+  Loader2
 } from 'lucide-react';
 
-// Mock user data
-const mockUser = {
-  name: "Marie Dubois",
-  email: "marie.dubois@email.com",
-  phone: "+33 6 12 34 56 78",
-  location: "Paris, France",
-  avatar: "",
-  bio: "Développeuse Full-Stack passionnée par les nouvelles technologies et l'apprentissage continu.",
-  memberSince: "Janvier 2023"
-};
+interface UserProfile {
+  id_apprenant?: number;
+  id_etablissement?: number;
+  nom?: string;
+  prenom?: string;
+  nomEtablissement?: string;
+  email?: string;
+  emailEtablissement?: string;
+  telephone?: string;
+  telephoneEtablissement?: string;
+  adresseEtablissement?: string;
+  statut: string;
+  dateCreation: string;
+  walletAddress?: string;
+  smartContractAddress?: string;
+}
 
-const mockSessions = [
-  {
-    id: 1,
-    device: "MacBook Pro",
-    location: "Paris, France",
-    lastActive: "Maintenant",
-    type: "desktop",
-    current: true
-  },
-  {
-    id: 2,
-    device: "iPhone 13",
-    location: "Paris, France",
-    lastActive: "Il y a 2h",
-    type: "mobile",
-    current: false
-  }
-];
-
-/*interface ProfileScreenProps {
-  onNavigate: (screen: string) => void;
-}*/
+interface Session {
+  id: string;
+  device: string;
+  location: string;
+  lastActive: string;
+  type: 'desktop' | 'mobile';
+  current: boolean;
+  expiresAt: string;
+}
 
 export function ProfileScreen() {
-  const [user, setUser] = useState(mockUser);
+  const { user: contextUser } = useUser();
+  const { logout } = useAuth();
+  const navigate = useNavigate();
+  
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [sessions, setSessions] = useState<Session[]>([]);
   const [isEditing, setIsEditing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  
+  // États pour les modales
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
+  const [deletePassword, setDeletePassword] = useState('');
+  
   const [notifications, setNotifications] = useState({
     newCertificates: true,
     verifications: true,
@@ -74,15 +94,185 @@ export function ProfileScreen() {
     showStats: false
   });
 
-  const handleSaveProfile = () => {
-    setIsEditing(false);
-    // Save logic here
+  // Charger les données du profil au montage du composant
+  useEffect(() => {
+    loadUserProfile();
+    loadSessions();
+  }, []);
+
+  const loadUserProfile = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      const response = await api.getUserProfile();
+      if (response.success) {
+        setUserProfile(response.data);
+      }
+    } catch (err) {
+      setError('Erreur lors du chargement du profil');
+      console.error('Erreur chargement profil:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleTerminateSession = (sessionId: number) => {
-    // Terminate session logic
-    console.log('Terminating session:', sessionId);
+  const loadSessions = async () => {
+    try {
+      const response = await api.getUserSessions();
+      if (response.success) {
+        setSessions(response.data);
+      }
+    } catch (err) {
+      console.error('Erreur chargement sessions:', err);
+    }
   };
+
+  const handleSaveProfile = async () => {
+    if (!userProfile) return;
+    
+    try {
+      setSaving(true);
+      setError('');
+      setSuccess('');
+      
+      const profileData: UserProfile = {
+        statut: userProfile.statut,
+        dateCreation: userProfile.dateCreation
+      };
+      
+      // Adapter les données selon le type d'utilisateur
+      if (contextUser?.role === 'student') {
+        if (userProfile.nom) profileData.nom = userProfile.nom;
+        if (userProfile.prenom) profileData.prenom = userProfile.prenom;
+        if (userProfile.email) profileData.email = userProfile.email;
+        if (userProfile.telephone) profileData.telephone = userProfile.telephone;
+      } else if (contextUser?.role === 'establishment') {
+        if (userProfile.nomEtablissement) profileData.nom = userProfile.nomEtablissement;
+        if (userProfile.emailEtablissement) profileData.email = userProfile.emailEtablissement;
+        if (userProfile.telephoneEtablissement) profileData.telephone = userProfile.telephoneEtablissement;
+        if (userProfile.adresseEtablissement) profileData.adresseEtablissement = userProfile.adresseEtablissement;
+      }
+      
+      const response = await api.updateUserProfile(profileData);
+      if (response.success) {
+        setSuccess('Profil modifié avec succès');
+    setIsEditing(false);
+        // Recharger le profil pour avoir les données mises à jour
+        await loadUserProfile();
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erreur lors de la modification du profil');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      setError('Les nouveaux mots de passe ne correspondent pas');
+      return;
+    }
+    
+    if (passwordData.newPassword.length < 6) {
+      setError('Le nouveau mot de passe doit contenir au moins 6 caractères');
+      return;
+    }
+    
+    try {
+      setSaving(true);
+      setError('');
+      
+      await api.changePassword(passwordData.currentPassword, passwordData.newPassword);
+      setSuccess('Mot de passe modifié avec succès');
+      setShowPasswordDialog(false);
+      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erreur lors du changement de mot de passe');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleTerminateSession = async (sessionId: string) => {
+    try {
+      await api.terminateSession(sessionId);
+      setSuccess('Session terminée avec succès');
+      await loadSessions();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erreur lors de la suppression de la session');
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!deletePassword) {
+      setError('Veuillez entrer votre mot de passe pour confirmer la suppression');
+      return;
+    }
+    
+    try {
+      setSaving(true);
+      setError('');
+      
+      await api.deleteAccount(deletePassword);
+      setSuccess('Compte supprimé avec succès');
+      
+      // Déconnexion et redirection
+      setTimeout(() => {
+        logout();
+        navigate('/');
+      }, 2000);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erreur lors de la suppression du compte');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Fonctions utilitaires pour l'affichage
+  const getUserDisplayName = () => {
+    if (!userProfile) return 'Utilisateur';
+    if (contextUser?.role === 'student') {
+      return `${userProfile.prenom || ''} ${userProfile.nom || ''}`.trim() || 'Utilisateur';
+    } else {
+      return userProfile.nomEtablissement || 'Établissement';
+    }
+  };
+
+  const getUserEmail = () => {
+    if (!userProfile) return '';
+    return userProfile.email || userProfile.emailEtablissement || '';
+  };
+
+  const getUserPhone = () => {
+    if (!userProfile) return '';
+    return userProfile.telephone || userProfile.telephoneEtablissement || '';
+  };
+
+  const getUserLocation = () => {
+    if (!userProfile) return '';
+    return userProfile.adresseEtablissement || '';
+  };
+
+  const getMemberSince = () => {
+    if (!userProfile) return '';
+    return new Date(userProfile.dateCreation).toLocaleDateString('fr-FR', { 
+      year: 'numeric', 
+      month: 'long' 
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="p-6 max-w-4xl mx-auto space-y-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+            <p className="text-muted-foreground">Chargement du profil...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
@@ -93,6 +283,25 @@ export function ProfileScreen() {
           <p className="text-muted-foreground">Gérez vos informations personnelles et préférences</p>
         </div>
       </div>
+
+      {/* Messages d'erreur et de succès */}
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+          <div className="flex items-center">
+            <AlertTriangle className="h-5 w-5 mr-2" />
+            {error}
+          </div>
+        </div>
+      )}
+      
+      {success && (
+        <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-green-700">
+          <div className="flex items-center">
+            <Shield className="h-5 w-5 mr-2" />
+            {success}
+          </div>
+        </div>
+      )}
 
       <Tabs defaultValue="profile" className="w-full">
         <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:grid-cols-3">
@@ -113,8 +322,11 @@ export function ProfileScreen() {
                 <Button
                   variant={isEditing ? "default" : "outline"}
                   onClick={isEditing ? handleSaveProfile : () => setIsEditing(true)}
+                  disabled={saving}
                 >
-                  {isEditing ? (
+                  {saving ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Enregistrement...</>
+                  ) : isEditing ? (
                     <><Save className="mr-2 h-4 w-4" /> Enregistrer</>
                   ) : (
                     <><Edit className="mr-2 h-4 w-4" /> Modifier</>
@@ -127,9 +339,9 @@ export function ProfileScreen() {
               <div className="flex items-center space-x-6">
                 <div className="relative">
                   <Avatar className="w-24 h-24">
-                    <AvatarImage src={user.avatar} alt={user.name} />
+                    <AvatarImage src="" alt={getUserDisplayName()} />
                     <AvatarFallback className="text-xl">
-                      {user.name.split(' ').map(n => n[0]).join('')}
+                      {getUserDisplayName().split(' ').map(n => n[0]).join('').slice(0, 2)}
                     </AvatarFallback>
                   </Avatar>
                   {isEditing && (
@@ -142,10 +354,10 @@ export function ProfileScreen() {
                   )}
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold">{user.name}</h3>
-                  <p className="text-muted-foreground">Membre depuis {user.memberSince}</p>
+                  <h3 className="text-lg font-semibold">{getUserDisplayName()}</h3>
+                  <p className="text-muted-foreground">Membre depuis {getMemberSince()}</p>
                   <Badge variant="outline" className="mt-2">
-                    Profil vérifié
+                    {userProfile?.statut === 'ACTIF' ? 'Profil vérifié' : 'En attente'}
                   </Badge>
                 </div>
               </div>
@@ -154,19 +366,51 @@ export function ProfileScreen() {
 
               {/* Personal Information */}
               <div className="grid gap-4 md:grid-cols-2">
+                {contextUser?.role === 'student' ? (
+                  <>
                 <div className="space-y-2">
-                  <Label htmlFor="name">Nom complet</Label>
+                      <Label htmlFor="prenom">Prénom</Label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
-                      id="name"
-                      value={user.name}
-                      onChange={(e) => setUser({...user, name: e.target.value})}
+                          id="prenom"
+                          value={userProfile?.prenom || ''}
+                          onChange={(e) => setUserProfile({...userProfile!, prenom: e.target.value})}
                       disabled={!isEditing}
                       className="pl-10"
                     />
                   </div>
                 </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="nom">Nom</Label>
+                      <div className="relative">
+                        <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          id="nom"
+                          value={userProfile?.nom || ''}
+                          onChange={(e) => setUserProfile({...userProfile!, nom: e.target.value})}
+                          disabled={!isEditing}
+                          className="pl-10"
+                        />
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="nomEtablissement">Nom de l'établissement</Label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="nomEtablissement"
+                        value={userProfile?.nomEtablissement || ''}
+                        onChange={(e) => setUserProfile({...userProfile!, nomEtablissement: e.target.value})}
+                        disabled={!isEditing}
+                        className="pl-10"
+                      />
+                    </div>
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
@@ -175,8 +419,14 @@ export function ProfileScreen() {
                     <Input
                       id="email"
                       type="email"
-                      value={user.email}
-                      onChange={(e) => setUser({...user, email: e.target.value})}
+                      value={getUserEmail()}
+                      onChange={(e) => {
+                        if (contextUser?.role === 'student') {
+                          setUserProfile({...userProfile!, email: e.target.value});
+                        } else {
+                          setUserProfile({...userProfile!, emailEtablissement: e.target.value});
+                        }
+                      }}
                       disabled={!isEditing}
                       className="pl-10"
                     />
@@ -189,27 +439,35 @@ export function ProfileScreen() {
                     <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                       id="phone"
-                      value={user.phone}
-                      onChange={(e) => setUser({...user, phone: e.target.value})}
+                      value={getUserPhone()}
+                      onChange={(e) => {
+                        if (contextUser?.role === 'student') {
+                          setUserProfile({...userProfile!, telephone: e.target.value});
+                        } else {
+                          setUserProfile({...userProfile!, telephoneEtablissement: e.target.value});
+                        }
+                      }}
                       disabled={!isEditing}
                       className="pl-10"
                     />
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="location">Localisation</Label>
+                {contextUser?.role === 'establishment' && (
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="adresse">Adresse</Label>
                   <div className="relative">
                     <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
-                      id="location"
-                      value={user.location}
-                      onChange={(e) => setUser({...user, location: e.target.value})}
+                        id="adresse"
+                        value={getUserLocation()}
+                        onChange={(e) => setUserProfile({...userProfile!, adresseEtablissement: e.target.value})}
                       disabled={!isEditing}
                       className="pl-10"
                     />
                   </div>
                 </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -373,7 +631,7 @@ export function ProfileScreen() {
                     Dernière modification il y a 2 mois
                   </div>
                 </div>
-                <Button variant="outline">
+                <Button variant="outline" onClick={() => setShowPasswordDialog(true)}>
                   <Lock className="mr-2 h-4 w-4" />
                   Changer
                 </Button>
@@ -399,7 +657,12 @@ export function ProfileScreen() {
               <CardDescription>Gérez les appareils connectés à votre compte</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {mockSessions.map((session) => (
+              {sessions.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  Aucune session active trouvée
+                </div>
+              ) : (
+                sessions.map((session) => (
                 <div key={session.id} className="flex items-center justify-between p-4 border rounded-lg">
                   <div className="flex items-center space-x-3">
                     <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center">
@@ -430,7 +693,8 @@ export function ProfileScreen() {
                     )}
                   </div>
                 </div>
-              ))}
+                ))
+              )}
             </CardContent>
           </Card>
 
@@ -447,7 +711,7 @@ export function ProfileScreen() {
                     Supprime définitivement votre compte et toutes vos données
                   </p>
                 </div>
-                <Button variant="destructive" size="sm">
+                <Button variant="destructive" size="sm" onClick={() => setShowDeleteDialog(true)}>
                   Supprimer
                 </Button>
               </div>
@@ -455,6 +719,154 @@ export function ProfileScreen() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Modale de changement de mot de passe */}
+      <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Changer le mot de passe</DialogTitle>
+            <DialogDescription>
+              Entrez votre mot de passe actuel et le nouveau mot de passe
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="currentPassword">Mot de passe actuel</Label>
+              <Input
+                id="currentPassword"
+                type="password"
+                value={passwordData.currentPassword}
+                onChange={(e) => setPasswordData({...passwordData, currentPassword: e.target.value})}
+                placeholder="Votre mot de passe actuel"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="newPassword">Nouveau mot de passe</Label>
+              <Input
+                id="newPassword"
+                type="password"
+                value={passwordData.newPassword}
+                onChange={(e) => setPasswordData({...passwordData, newPassword: e.target.value})}
+                placeholder="Nouveau mot de passe"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Confirmer le nouveau mot de passe</Label>
+              <Input
+                id="confirmPassword"
+                type="password"
+                value={passwordData.confirmPassword}
+                onChange={(e) => setPasswordData({...passwordData, confirmPassword: e.target.value})}
+                placeholder="Confirmer le nouveau mot de passe"
+              />
+            </div>
+          </div>
+          
+          <DialogFooter className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowPasswordDialog(false);
+                setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+                setError('');
+              }}
+            >
+              Annuler
+            </Button>
+            <Button
+              onClick={handleChangePassword}
+              disabled={saving || !passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword}
+              className="flex items-center gap-2"
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Modification...
+                </>
+              ) : (
+                <>
+                  <Lock className="h-4 w-4" />
+                  Changer le mot de passe
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modale de suppression de compte */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              Supprimer le compte
+            </DialogTitle>
+            <DialogDescription>
+              Cette action est irréversible. Toutes vos données seront définitivement supprimées.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+              <p className="text-sm text-destructive font-medium">
+                ⚠️ Attention : Cette action supprimera définitivement :
+              </p>
+              <ul className="text-sm text-destructive mt-2 ml-4 list-disc">
+                <li>Votre profil et toutes vos informations personnelles</li>
+                <li>Tous vos certificats et liaisons</li>
+                <li>Toutes vos sessions actives</li>
+                <li>Toutes les données associées à votre compte</li>
+              </ul>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="deletePassword">Confirmer avec votre mot de passe</Label>
+              <Input
+                id="deletePassword"
+                type="password"
+                value={deletePassword}
+                onChange={(e) => setDeletePassword(e.target.value)}
+                placeholder="Votre mot de passe pour confirmer"
+              />
+            </div>
+          </div>
+          
+          <DialogFooter className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowDeleteDialog(false);
+                setDeletePassword('');
+                setError('');
+              }}
+            >
+              Annuler
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteAccount}
+              disabled={saving || !deletePassword}
+              className="flex items-center gap-2"
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Suppression...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4" />
+                  Supprimer définitivement
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

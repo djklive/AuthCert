@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { API_BASE } from '../../../services/api';
 import { 
   Building2, 
   MapPin, 
@@ -83,7 +84,7 @@ interface EstablishmentsScreenProps {
 }
 
 //const API_BASE_URL = 'https://authcert-production.up.railway.app/api';
-const API_BASE_URL = 'http://localhost:5000/api';
+//const API_BASE_URL = 'http://localhost:5000/api';
 
 interface Liaison {
   id: number;
@@ -153,7 +154,7 @@ export function EstablishmentsScreen({ onNavigate }: EstablishmentsScreenProps) 
       setLoading(true);
       setError('');
       
-      const response = await fetch(`${API_BASE_URL}/apprenant/liaisons`, {
+      const response = await fetch(`${API_BASE}/apprenant/liaisons`, {
         headers: authService.getAuthHeaders()
       });
       
@@ -175,7 +176,7 @@ export function EstablishmentsScreen({ onNavigate }: EstablishmentsScreenProps) 
     try {
       setLoadingEstablishments(true);
       
-      const response = await fetch(`${API_BASE_URL}/accueil/etablissements`);
+      const response = await fetch(`${API_BASE}/accueil/etablissements`);
       
       if (!response.ok) {
         throw new Error('Erreur lors du chargement des établissements');
@@ -209,7 +210,7 @@ export function EstablishmentsScreen({ onNavigate }: EstablishmentsScreenProps) 
         throw new Error('Établissement non trouvé');
       }
       
-      const response = await fetch(`${API_BASE_URL}/liaison/demande`, {
+      const response = await fetch(`${API_BASE}/liaison/demande`, {
         method: 'POST',
         headers: {
           ...authService.getAuthHeaders(),

@@ -22,7 +22,8 @@ import {
   Ban,
   AlertTriangle,
   RefreshCw,
-  Copy
+  Copy,
+  FileText,
 } from 'lucide-react';
 import { api, API_BASE } from '../../../services/api';
 // QR code lib will be loaded dynamically to avoid TS type resolution issues
@@ -358,10 +359,32 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
         </CardContent>
       </Card>
 
-      {loading && <div className="text-sm text-muted-foreground">Chargement...</div>}
+      {/* Error and loading */}
       {error && <div className="text-sm text-red-600">{error}</div>}
 
-      {!loading && (
+      {/* Certificates list */}
+      {loading ? ( 
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+          <p className="text-sm text-muted-foreground mt-2">Chargement des certificats...</p>
+        </div>
+      ) : filteredCertificates.length === 0 ? (
+        <div className="text-center py-8">
+          <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+          <h3 className="font-medium mb-2">
+            {searchQuery ? 'Aucun certificat trouvé' : 'Aucun certificat'}
+          </h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            {searchQuery 
+              ? 'Modifiez votre recherche pour voir d\'autres certificats.' 
+              : 'Aucun certificat n\'a été émis pour le moment.'
+            }
+          </p>
+          {!searchQuery && (
+            generateButton()
+          )}
+        </div>
+      ) : (
         viewMode === 'grid' ? (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filteredCertificates.map((certificate) => (

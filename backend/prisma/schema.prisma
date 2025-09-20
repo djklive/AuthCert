@@ -38,8 +38,9 @@ model Etablissement {
   nomEtablissement                  String
   emailEtablissement                String                  @unique
   motDePasseEtablissement           String
-  rccmEtablissement                 String                  @unique
+  rccmEtablissement                 String?                 @unique
   typeEtablissement                 TypeEtablissement
+  typeOrganisation                  TypeOrganisation         @default(ETABLISSEMENT_ENSEIGNEMENT)
   dateCreation                      DateTime                @default(now())
   dateModification                  DateTime                @updatedAt
   adresseEtablissement              String
@@ -49,6 +50,12 @@ model Etablissement {
   telephoneResponsableEtablissement String
   statut                            Statut                  @default(EN_ATTENTE)
   smartContractAddress              String?                 @unique
+  
+  // Champs spécifiques selon le type d'organisation
+  niu                               String?                 // Numéro d'Identifiant Unique (pour centres de formation)
+  numeroAgrement                    String?                 // Numéro d'agrément MINEFOP
+  arreteCreation                    String?                 // Référence arrêté de création (pour établissements d'enseignement)
+  ministereTutelle                  String?                 // Ministère de tutelle
   
   // Relations many-to-many avec les apprenants
   liaisons                          LiaisonApprenantEtablissement[]
@@ -105,7 +112,7 @@ model Session {
 model DocumentEtablissement {
   id              Int            @id @default(autoincrement())
   etablissementId Int
-  typeDocument    String
+  typeDocument    TypeDocumentEtablissement
   nomFichier      String
   typeMime        String
   tailleFichier   Int
@@ -161,11 +168,39 @@ enum TypeEtablissement {
   AUTRE
 }
 
+enum TypeOrganisation {
+  ETABLISSEMENT_ENSEIGNEMENT    // Établissements d'enseignement (MINESUP, MINESEC, MINEDUB)
+  CENTRE_FORMATION_PROFESSIONNELLE  // Centres de formation professionnelle (MINEFOP)
+  ENTREPRISE                     // Entreprises (pour certifications internes)
+}
+
 enum StatutDocument {
   EN_ATTENTE
   VALIDE
   REJETE
   EXPIRED
+}
+
+enum TypeDocumentEtablissement {
+  // Documents communs
+  CNI_REPRESENTANT
+  LOGO_ETABLISSEMENT
+  PLAQUETTE
+  
+  // Documents pour établissements d'enseignement
+  ARRETE_CREATION
+  AUTORISATION_EXERCER
+  LETTRE_NOMINATION
+  
+  // Documents pour centres de formation professionnelle
+  RCCM
+  NIU
+  AGREMENT_MINEFOP
+  POUVOIR_REPRESENTANT
+  
+  // Documents pour entreprises
+  CARTE_CONTRIBUABLE
+  POUVOIR_DG
 }
 
 enum StatutCertificat {

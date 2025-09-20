@@ -224,7 +224,7 @@ async function getEstablishmentLogo(etablissementId) {
     const logoDocument = await prisma.documentEtablissement.findFirst({
       where: {
         etablissementId: etablissementId,
-        typeDocument: 'logo',
+        typeDocument: 'LOGO_ETABLISSEMENT',
         statut: 'VALIDE'
       }
     });
@@ -1475,16 +1475,17 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// Route d'inscription d'un établissement AVEC Supabase Storage
+// Route d'inscription d'un établissement AVEC Supabase Storage - Système Adaptatif
 app.post('/api/register/etablissement/supabase', async (req, res) => {
   try {
-    console.log('🚀 Début inscription établissement avec Supabase Storage');
+    console.log('🚀 Début inscription établissement avec Supabase Storage - Système Adaptatif');
     console.log('📋 Body reçu:', JSON.stringify(req.body, null, 2));
     
     const {
       nomEtablissement,
       emailEtablissement,
       motDePasseEtablissement,
+      typeOrganisation, // Nouveau champ
       rccmEtablissement,
       typeEtablissement,
       adresseEtablissement,
@@ -1492,8 +1493,24 @@ app.post('/api/register/etablissement/supabase', async (req, res) => {
       nomResponsableEtablissement,
       emailResponsableEtablissement,
       telephoneResponsableEtablissement,
+      // Nouveaux champs spécifiques selon le type d'organisation
+      niu,
+      numeroAgrement,
+      arreteCreation,
+      ministereTutelle,
       documents // URLs des fichiers Supabase
     } = req.body;
+    
+    // Validation du type d'organisation
+    const validTypesOrganisation = ['ETABLISSEMENT_ENSEIGNEMENT', 'CENTRE_FORMATION_PROFESSIONNELLE', 'ENTREPRISE'];
+    if (!typeOrganisation || !validTypesOrganisation.includes(typeOrganisation)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Type d\'organisation invalide. Types valides: ETABLISSEMENT_ENSEIGNEMENT, CENTRE_FORMATION_PROFESSIONNELLE, ENTREPRISE'
+      });
+    }
+    
+    console.log('🏢 Type d\'organisation:', typeOrganisation);
     
     // Mapping des types d'établissement frontend vers backend
     const typeEtablissementMapping = {
@@ -1516,12 +1533,49 @@ app.post('/api/register/etablissement/supabase', async (req, res) => {
     
     console.log('🔄 Type d\'établissement converti:', typeEtablissement, '→', typeEtablissementBackend);
     
-    // Validation des champs requis
+    // Validation adaptative selon le type d'organisation
+    console.log('✅ Validation adaptative selon le type d\'organisation...');
+    
+    // Validation des champs spécifiques selon le type d'organisation
+    if (typeOrganisation === 'ETABLISSEMENT_ENSEIGNEMENT') {
+      if (!arreteCreation || !ministereTutelle) {
+        return res.status(400).json({
+          success: false,
+          message: 'Pour les établissements d\'enseignement, les champs "Référence Arrêté de Création" et "Ministère de Tutelle" sont obligatoires'
+        });
+      }
+    } else if (typeOrganisation === 'CENTRE_FORMATION_PROFESSIONNELLE') {
+      if (!rccmEtablissement || !niu || !numeroAgrement) {
+        return res.status(400).json({
+          success: false,
+          message: 'Pour les centres de formation professionnelle, les champs "RCCM", "NIU" et "Numéro d\'Agrément" sont obligatoires'
+        });
+      }
+    } else if (typeOrganisation === 'ENTREPRISE') {
+      if (!rccmEtablissement) {
+        return res.status(400).json({
+          success: false,
+          message: 'Pour les entreprises, le champ "RCCM" est obligatoire'
+        });
+      }
+    }
+    
+    // Validation des champs requis (adaptative selon le type d'organisation)
     console.log('✅ Validation des champs...');
-    if (!nomEtablissement || !emailEtablissement || !motDePasseEtablissement || 
-        !rccmEtablissement || !typeEtablissement || !adresseEtablissement || 
-        !telephoneEtablissement || !nomResponsableEtablissement || 
-        !emailResponsableEtablissement || !telephoneResponsableEtablissement) {
+    
+    // Champs communs obligatoires
+    const champsCommunsObligatoires = [
+      nomEtablissement, emailEtablissement, motDePasseEtablissement,
+      typeEtablissement, adresseEtablissement, telephoneEtablissement,
+      nomResponsableEtablissement, emailResponsableEtablissement, telephoneResponsableEtablissement
+    ];
+    
+    // RCCM obligatoire seulement pour certains types
+    if (typeOrganisation === 'CENTRE_FORMATION_PROFESSIONNELLE' || typeOrganisation === 'ENTREPRISE') {
+      champsCommunsObligatoires.push(rccmEtablissement);
+    }
+    
+    if (champsCommunsObligatoires.some(champ => !champ)) {
       console.log('❌ Validation échouée - champs manquants');
       return res.status(400).json({
         success: false,
@@ -1571,7 +1625,8 @@ app.post('/api/register/etablissement/supabase', async (req, res) => {
         nomEtablissement,
         emailEtablissement,
         motDePasseEtablissement: hashedPassword,
-        rccmEtablissement,
+        typeOrganisation: typeOrganisation, // Nouveau champ
+        rccmEtablissement: rccmEtablissement || null, // RCCM conditionnel
         typeEtablissement: typeEtablissementBackend,
         adresseEtablissement,
         telephoneEtablissement,
@@ -1581,6 +1636,11 @@ app.post('/api/register/etablissement/supabase', async (req, res) => {
         statut: 'EN_ATTENTE',
         dateCreation: new Date(),
         dateModification: new Date(),
+        // Nouveaux champs spécifiques selon le type d'organisation
+        niu: niu || null,
+        numeroAgrement: numeroAgrement || null,
+        arreteCreation: arreteCreation || null,
+        ministereTutelle: ministereTutelle || null,
         // si vous souhaitez stocker une addresse publique d'admin pour l'établissement (optionnel)
         // walletAddressEtablissement: walletAddress,
       }
@@ -1605,83 +1665,54 @@ app.post('/api/register/etablissement/supabase', async (req, res) => {
     // Log des URLs des documents Supabase
     if (documents) {
       console.log('📋 URLs des documents Supabase reçus:', documents);
-      console.log('🔗 RCCM:', documents.rccmDocument);
-      console.log('🔗 Autorisation:', documents.autorisation);
-      console.log('🔗 Pièce d\'identité:', documents.pieceIdentite);
-      console.log('🔗 Logo:', documents.logo);
-      console.log('🔗 Plaquette:', documents.plaquette);
+      console.log('🏢 Type d\'organisation:', typeOrganisation);
     }
 
-    // Sauvegarder les URLs des documents Supabase dans la base
+    // Sauvegarder les URLs des documents Supabase dans la base (adaptatif selon le type d'organisation)
     if (documents) {
       const documentsToSave = [];
       
-      // Documents obligatoires
-      if (documents.rccmDocument) {
-        documentsToSave.push({
-          etablissementId: etablissement.id_etablissement,
-          typeDocument: 'rccm',
-          nomFichier: 'Document RCCM',
-          typeMime: 'application/pdf',
-          tailleFichier: 0, // Taille non disponible depuis Supabase
-          cheminFichier: documents.rccmDocument, // URL Supabase
-          statut: 'EN_ATTENTE',
-          dateUpload: new Date()
-        });
+      // Fonction helper pour créer un document
+      const createDocument = (typeDocument, nomFichier, url) => {
+        if (url) {
+          documentsToSave.push({
+            etablissementId: etablissement.id_etablissement,
+            typeDocument: typeDocument,
+            nomFichier: nomFichier,
+            typeMime: 'application/pdf',
+            tailleFichier: 0, // Taille non disponible depuis Supabase
+            cheminFichier: url, // URL Supabase
+            statut: 'EN_ATTENTE',
+            dateUpload: new Date()
+          });
+        }
+      };
+      
+      // Documents selon le type d'organisation
+      if (typeOrganisation === 'ETABLISSEMENT_ENSEIGNEMENT') {
+        // Documents pour établissements d'enseignement
+        createDocument('ARRETE_CREATION', 'Arrêté de Création', documents.arreteCreation);
+        createDocument('AUTORISATION_EXERCER', 'Autorisation d\'Exercer', documents.autorisationExercer);
+        createDocument('CNI_REPRESENTANT', 'CNI du Chef d\'Établissement', documents.cniRepresentant);
+        createDocument('LETTRE_NOMINATION', 'Lettre de Nomination', documents.lettreNomination);
+      } else if (typeOrganisation === 'CENTRE_FORMATION_PROFESSIONNELLE') {
+        // Documents pour centres de formation professionnelle
+        createDocument('RCCM', 'Document RCCM', documents.rccmDocument);
+        createDocument('NIU', 'Carte NIU', documents.niu);
+        createDocument('AGREMENT_MINEFOP', 'Agrément MINEFOP', documents.agrementMinefop);
+        createDocument('CNI_REPRESENTANT', 'CNI du Gérant/Directeur', documents.cniRepresentant);
+        createDocument('POUVOIR_REPRESENTANT', 'Pouvoir du Représentant', documents.pouvoirRepresentant);
+      } else if (typeOrganisation === 'ENTREPRISE') {
+        // Documents pour entreprises
+        createDocument('RCCM', 'Document RCCM', documents.rccmDocument);
+        createDocument('CARTE_CONTRIBUABLE', 'Carte de Contribuable', documents.carteContribuable);
+        createDocument('CNI_REPRESENTANT', 'CNI du DG ou DRH', documents.cniRepresentant);
+        createDocument('POUVOIR_DG', 'Pouvoir du DG', documents.pouvoirDg);
       }
       
-      if (documents.autorisation) {
-        documentsToSave.push({
-          etablissementId: etablissement.id_etablissement,
-          typeDocument: 'autorisation',
-          nomFichier: 'Autorisation de fonctionnement',
-          typeMime: 'application/pdf',
-          tailleFichier: 0,
-          cheminFichier: documents.autorisation, // URL Supabase
-          statut: 'EN_ATTENTE',
-          dateUpload: new Date()
-        });
-      }
-      
-      if (documents.pieceIdentite) {
-        documentsToSave.push({
-          etablissementId: etablissement.id_etablissement,
-          typeDocument: 'pieceIdentite',
-          nomFichier: 'Pièce d\'identité du représentant',
-          typeMime: 'application/pdf',
-          tailleFichier: 0,
-          cheminFichier: documents.pieceIdentite, // URL Supabase
-          statut: 'EN_ATTENTE',
-          dateUpload: new Date()
-        });
-      }
-      
-      // Documents optionnels
-      if (documents.logo) {
-        documentsToSave.push({
-          etablissementId: etablissement.id_etablissement,
-          typeDocument: 'logo',
-          nomFichier: 'Logo de l\'établissement',
-          typeMime: 'image/png',
-          tailleFichier: 0,
-          cheminFichier: documents.logo, // URL Supabase
-          statut: 'EN_ATTENTE',
-          dateUpload: new Date()
-        });
-      }
-      
-      if (documents.plaquette) {
-        documentsToSave.push({
-          etablissementId: etablissement.id_etablissement,
-          typeDocument: 'plaquette',
-          nomFichier: 'Plaquette institutionnelle',
-          typeMime: 'application/pdf',
-          tailleFichier: 0,
-          cheminFichier: documents.plaquette, // URL Supabase
-          statut: 'EN_ATTENTE',
-          dateUpload: new Date()
-        });
-      }
+      // Documents optionnels communs
+      createDocument('LOGO_ETABLISSEMENT', 'Logo de l\'établissement', documents.logo);
+      createDocument('PLAQUETTE', 'Plaquette institutionnelle', documents.plaquette);
       
       // Sauvegarder tous les documents
       if (documentsToSave.length > 0) {

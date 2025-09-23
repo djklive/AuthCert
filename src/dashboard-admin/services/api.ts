@@ -1,6 +1,6 @@
 import authService from '../../services/authService';
 
-const API_BASE_URL = import.meta.env.BACKEND_URL;
+const API_BASE_URL = import.meta.env.BACKEND_URL || 'https://authcert-production.up.railway.app/api';
 //const API_BASE_URL = 'https://authcert-production.up.railway.app/api';
 //const API_BASE_URL = 'http://localhost:5000/api';
 

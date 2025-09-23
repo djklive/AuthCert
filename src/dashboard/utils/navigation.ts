@@ -5,6 +5,7 @@ export const getNavigationItems = (userType: UserType | null) => {
     return [
       { screen: 'dashboard' as Screen, label: 'Dashboard', icon: 'Home' },
       { screen: 'students' as Screen, label: 'Étudiants', icon: 'Users' },
+      { screen: 'formations' as Screen, label: 'Formations', icon: 'GraduationCap' },
       { screen: 'certificates' as Screen, label: 'Certificats', icon: 'Award' },
       { screen: 'stats' as Screen, label: 'Statistiques', icon: 'BarChart3' },
       { screen: 'subscription' as Screen, label: 'Abonnement', icon: 'Crown' },

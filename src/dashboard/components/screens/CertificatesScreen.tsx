@@ -44,14 +44,33 @@ interface CertificateDto {
   txHash?: string;
   contractAddress?: string;
   createdAt: string;
+  formation?: {
+    id: number;
+    nomFormation: string;
+    typeFormation: string;
+  };
+}
+
+interface Formation {
+  id: number;
+  nomFormation: string;
+  description?: string;
+  typeFormation: 'DIPLOME' | 'CERTIFICAT_FORMATION' | 'ATTESTATION_PRESENCE' | 'CERTIFICATION_COMPETENCES' | 'FORMATION_CONTINUE' | 'STAGE' | 'SEMINAIRE';
+  dureeFormation?: string;
+  niveauFormation?: 'DEBUTANT' | 'INTERMEDIAIRE' | 'AVANCE' | 'EXPERT';
+  statut: 'ACTIF' | 'INACTIF' | 'ARCHIVE';
+  dateCreation: string;
+  dateModification: string;
 }
 
 export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<'all' | 'EMIS' | 'BROUILLON'>('all');
+  const [selectedFormation, setSelectedFormation] = useState<string>('all');
   const [selectedCertificate, setSelectedCertificate] = useState<CertificateDto | null>(null);
   const [certificates, setCertificates] = useState<CertificateDto[]>([]);
+  const [formations, setFormations] = useState<Formation[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -92,16 +111,30 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
       try {
         setLoading(true);
         setError('');
-        const res = await api.listCertificates();
-        setCertificates(res.data || []);
+        
+              // Charger les certificats et les formations en parallèle
+              const [certificatesRes, formationsRes] = await Promise.all([
+                api.listCertificates(),
+                user?.role === 'establishment' ? api.get(`/etablissement/${user.id}/formations`) : Promise.resolve({ success: true, data: [] })
+              ]);
+              
+              console.log('📊 Certificats chargés:', certificatesRes.data);
+              setCertificates(certificatesRes.data || []);
+              
+              if (formationsRes.success) {
+                console.log('📊 Formations chargées dans CertificatesScreen:', formationsRes.data);
+                setFormations(formationsRes.data || []);
+              } else {
+                console.log('❌ Erreur chargement formations:', formationsRes);
+              }
       } catch {
-        setError('Erreur lors du chargement des certificats');
+        setError('Erreur lors du chargement des données');
       } finally {
         setLoading(false);
       }
     };
     load();
-  }, []);
+  }, [user?.id, user?.role]);
 
   const generateButton = () => {
     if (user?.role === 'establishment') {
@@ -117,12 +150,35 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
   };
 
   const filteredCertificates = useMemo(() => {
-    return certificates.filter((cert) => {
+    const filtered = certificates.filter((cert) => {
       const matchesSearch = cert.titre.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesStatus = selectedStatus === 'all' || cert.statut === selectedStatus;
-      return matchesSearch && matchesStatus;
+      const matchesFormation = selectedFormation === 'all' || 
+        (cert.formation && cert.formation.id === parseInt(selectedFormation));
+      
+      // Filtrage selon le rôle : les étudiants ne voient que les certificats émis
+      const matchesRole = user?.role === 'establishment' || cert.statut === 'EMIS';
+      
+      return matchesSearch && matchesStatus && matchesFormation && matchesRole;
     });
-  }, [certificates, searchQuery, selectedStatus]);
+    
+    console.log('🔍 Filtrage certificats:', {
+      total: certificates.length,
+      filtered: filtered.length,
+      userRole: user?.role,
+      selectedStatus,
+      selectedFormation,
+      formations: formations.length,
+      certificatesWithFormation: certificates.filter(c => c.formation).length,
+      sampleCertificate: certificates[0] ? {
+        id: certificates[0].id,
+        titre: certificates[0].titre,
+        formation: certificates[0].formation
+      } : null
+    });
+    
+    return filtered;
+  }, [certificates, searchQuery, selectedStatus, selectedFormation, user?.role, formations.length]);
 
   const handleDownload = (cert: CertificateDto) => {
     if (cert.pdfUrl) {
@@ -229,6 +285,13 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
               <span>Émis le {new Date(certificate.dateObtention).toLocaleDateString('fr-FR')}</span>
             </div>
 
+            {certificate.formation && (
+              <div className={`flex items-center ${isGridView ? 'justify-center' : ''} text-sm text-muted-foreground mb-2`}>
+                <Award className="mr-1 h-3 w-3" />
+                <span>{certificate.formation.nomFormation}</span>
+              </div>
+            )}
+
             <div className={`flex items-center ${isGridView ? 'justify-center' : ''} space-x-2 mb-3`}>
               <Badge variant={certificate.statut === 'EMIS' ? 'default' : 'secondary'} className="text-xs">
                 {certificate.statut === 'EMIS' ? (
@@ -260,8 +323,8 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
                   )}
                   Republier
                 </Button>
-              )}
-            </div>
+                )}
+              </div>
           </div>
 
           {!isGridView && (
@@ -332,9 +395,27 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
                 <SelectContent>
                   <SelectItem value="all">Tous</SelectItem>
                   <SelectItem value="EMIS">Émis</SelectItem>
-                  <SelectItem value="BROUILLON">Brouillons</SelectItem>
+                  {user?.role === 'establishment' && (
+                    <SelectItem value="BROUILLON">Brouillons</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
+              
+              {formations.length > 0 && (
+                <Select value={selectedFormation} onValueChange={setSelectedFormation}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue placeholder="Formation" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Toutes les formations</SelectItem>
+                    {formations.map((formation) => (
+                      <SelectItem key={formation.id} value={formation.id.toString()}>
+                        {formation.nomFormation}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              )}
             </div>
 
             <div className="flex border rounded-lg">
@@ -383,20 +464,20 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
           {!searchQuery && (
             generateButton()
           )}
-        </div>
+      </div>
       ) : (
         viewMode === 'grid' ? (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {filteredCertificates.map((certificate) => (
-              <CertificateCard key={certificate.id} certificate={certificate} isGridView={true} />
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {filteredCertificates.map((certificate) => (
-              <CertificateCard key={certificate.id} certificate={certificate} isGridView={false} />
-            ))}
-          </div>
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {filteredCertificates.map((certificate) => (
+            <CertificateCard key={certificate.id} certificate={certificate} isGridView={true} />
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {filteredCertificates.map((certificate) => (
+            <CertificateCard key={certificate.id} certificate={certificate} isGridView={false} />
+          ))}
+        </div>
         )
       )}
 
@@ -435,7 +516,7 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
 
                 <TabsContent value="details" className="space-y-6">
                   <div className="space-y-4">
-                    <div>
+                  <div>
                       <h4 className="font-semibold mb-2">Informations du certificat</h4>
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
@@ -446,12 +527,18 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Mention:</span>
                             <span className="font-medium">{selectedCertificate.mention}</span>
-                          </div>
+                  </div>
                         )}
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Date d'obtention:</span>
                           <span className="font-medium">{new Date(selectedCertificate.dateObtention).toLocaleDateString('fr-FR')}</span>
-                        </div>
+                    </div>
+                        {selectedCertificate.formation && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Formation:</span>
+                            <span className="font-medium">{selectedCertificate.formation.nomFormation}</span>
+                  </div>
+                        )}
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Statut:</span>
                           <Badge variant={selectedCertificate.statut === 'EMIS' ? 'default' : 'secondary'} className="text-xs">
@@ -461,11 +548,11 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
                               <><AlertTriangle className="mr-1 h-3 w-3" /> Brouillon</>
                             )}
                           </Badge>
-                        </div>
-                      </div>
                     </div>
-                    
-                    <div>
+                    </div>
+                  </div>
+
+                  <div>
                       <h4 className="font-semibold mb-2">Identifiants techniques</h4>
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between items-center">
@@ -570,7 +657,7 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
                               <Copy className="h-3 w-3" />
                             </Button>
                           )}
-                        </div>
+                      </div>
                       </div>
                     </div>
                   </div>
@@ -606,9 +693,9 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
                       }}
                       disabled={!selectedCertificate.txHash}
                     >
-                      <ExternalLink className="mr-2 h-4 w-4" />
+                    <ExternalLink className="mr-2 h-4 w-4" />
                       Voir sur Polygonscan
-                    </Button>
+                  </Button>
                   </div>
                 </TabsContent>
 

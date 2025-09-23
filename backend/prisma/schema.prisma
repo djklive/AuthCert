@@ -62,6 +62,7 @@ model Etablissement {
   documents                         DocumentEtablissement[]
   certificats                       Certificat[]
   demandesCertificat                DemandeCertificat[]
+  formations                        Formation[]              // Nouvelle relation
   
   // Relation avec le coffre-fort des clés privées
   walletVault                       WalletVault? @relation("EtablissementWallet")
@@ -135,6 +136,7 @@ model Certificat {
   uuid             String            @unique
   etablissementId  Int
   apprenantId      Int
+  formationId      Int?              // Nouveau champ optionnel
   titre            String
   mention          String?
   dateObtention    DateTime
@@ -148,8 +150,32 @@ model Certificat {
 
   etablissement    Etablissement     @relation(fields: [etablissementId], references: [id_etablissement])
   apprenant        Apprenant         @relation(fields: [apprenantId], references: [id_apprenant])
+  formation        Formation?        @relation(fields: [formationId], references: [id]) // Nouvelle relation
 
   @@map("certificats")
+}
+
+// ===============================================
+//                FORMATIONS
+// ===============================================
+
+model Formation {
+  id                Int               @id @default(autoincrement())
+  etablissementId   Int
+  nomFormation      String
+  description       String?
+  typeFormation     TypeFormation
+  dureeFormation    String?           // "6 mois", "2 ans", etc.
+  niveauFormation   NiveauFormation?
+  statut            StatutFormation   @default(ACTIF)
+  dateCreation      DateTime          @default(now())
+  dateModification  DateTime          @updatedAt
+  
+  // Relations
+  etablissement     Etablissement     @relation(fields: [etablissementId], references: [id_etablissement], onDelete: Cascade)
+  certificats       Certificat[]
+  
+  @@map("formations")
 }
 
 enum Statut {
@@ -303,4 +329,31 @@ enum StatutDemandeCertificat {
   APPROUVE
   REJETE
   EN_COURS_TRAITEMENT
+}
+
+// ===============================================
+//                ENUMS FORMATIONS
+// ===============================================
+
+enum TypeFormation {
+  DIPLOME
+  CERTIFICAT_FORMATION
+  ATTESTATION_PRESENCE
+  CERTIFICATION_COMPETENCES
+  FORMATION_CONTINUE
+  STAGE
+  SEMINAIRE
+}
+
+enum NiveauFormation {
+  DEBUTANT
+  INTERMEDIAIRE
+  AVANCE
+  EXPERT
+}
+
+enum StatutFormation {
+  ACTIF
+  INACTIF
+  ARCHIVE
 }

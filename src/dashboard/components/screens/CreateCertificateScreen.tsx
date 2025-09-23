@@ -21,7 +21,8 @@ import {
   Tag,
   FileText,
   User,
-  X
+  X,
+  GraduationCap
 } from 'lucide-react';
 import { api, API_BASE } from '../../../services/api';
 import { useEffect } from 'react';
@@ -46,6 +47,18 @@ interface EtudiantLie {
   };
 }
 
+interface Formation {
+  id: number;
+  nomFormation: string;
+  description?: string;
+  typeFormation: 'DIPLOME' | 'CERTIFICAT_FORMATION' | 'ATTESTATION_PRESENCE' | 'CERTIFICATION_COMPETENCES' | 'FORMATION_CONTINUE' | 'STAGE' | 'SEMINAIRE';
+  dureeFormation?: string;
+  niveauFormation?: 'DEBUTANT' | 'INTERMEDIAIRE' | 'AVANCE' | 'EXPERT';
+  statut: 'ACTIF' | 'INACTIF' | 'ARCHIVE';
+  dateCreation: string;
+  dateModification: string;
+}
+
 interface CreateCertificateScreenProps {
   onNavigate: (screen: string) => void;
 }
@@ -61,7 +74,8 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
     issueDate: '',
     completionDate: '',
     skills: [] as string[],
-    description: ''
+    description: '',
+    formationId: ''
   });
   const [newSkill, setNewSkill] = useState('');
   const [isPublishing, setIsPublishing] = useState(false);
@@ -69,6 +83,7 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
   const [error, setError] = useState<string>('');
   const { user } = useUser();
   const [etudiantsLies, setEtudiantsLies] = useState<EtudiantLie[]>([]);
+  const [formations, setFormations] = useState<Formation[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Charger les données
@@ -92,10 +107,15 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
         authHeaders: authService.getAuthHeaders()
       });
 
-      // Charger les demandes en attente et les étudiants liés en parallèle
-      const etudiantsResponse = await fetch(`${API_BASE}/etablissement/${user.id}/etudiants`, {
-        headers: authService.getAuthHeaders()
-      });
+      // Charger les étudiants liés et les formations en parallèle
+      const [etudiantsResponse, formationsResponse] = await Promise.all([
+        fetch(`${API_BASE}/etablissement/${user.id}/etudiants`, {
+          headers: authService.getAuthHeaders()
+        }),
+        fetch(`${API_BASE}/etablissement/${user.id}/formations`, {
+          headers: authService.getAuthHeaders()
+        })
+      ]);
       
       console.log('📡 Réponse API étudiants:', {
         status: etudiantsResponse.status,
@@ -111,6 +131,16 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
       const etudiantsData = await etudiantsResponse.json();
       console.log('✅ Données étudiants reçues:', etudiantsData);
       setEtudiantsLies(etudiantsData.data || []);
+
+      // Traiter la réponse des formations
+      if (!formationsResponse.ok) {
+        const errorText = await formationsResponse.text();
+        console.error('❌ Erreur API formations:', errorText);
+        throw new Error(`Erreur formations ${formationsResponse.status}: ${errorText}`);
+      }
+      const formationsData = await formationsResponse.json();
+      console.log('✅ Données formations reçues:', formationsData);
+      setFormations(formationsData.data || []);
     } catch (err) {
       setError('Erreur lors du chargement des données');
       console.error('Erreur chargement données:', err);
@@ -124,12 +154,6 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
     etudiant.apprenant.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const certificateTypes = [
-    { value: 'diploma', label: 'Diplôme' },
-    { value: 'certificate', label: 'Certificat de formation' },
-    { value: 'attendance', label: 'Attestation de présence' },
-    { value: 'competency', label: 'Certification de compétences' }
-  ];
 
   const steps = [
     { title: 'Sélection de l\'étudiant', description: 'Choisissez l\'étudiant destinataire du certificat' },
@@ -146,8 +170,8 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
     }
     if (currentStep === 2) {
       // Créer un brouillon côté backend
-      if (!selectedStudent || !certificateData.title || !certificateData.issueDate) {
-        setError('Veuillez sélectionner un étudiant, un titre et une date.');
+      if (!selectedStudent || !certificateData.title || !certificateData.issueDate || !certificateData.formationId) {
+        setError('Veuillez sélectionner un étudiant, une formation, un titre et une date.');
         return;
       }
       try {
@@ -156,6 +180,7 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
           titre: certificateData.title,
           mention: certificateData.grade || undefined,
           dateObtention: certificateData.issueDate,
+          formationId: certificateData.formationId || undefined,
         });
         const draft = res.data;
         setDraftId(draft.id);
@@ -209,7 +234,7 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
     } catch {
       setError('Erreur lors de la génération du PDF');
     } finally {
-      setIsPublishing(false);
+    setIsPublishing(false);
     }
   };
 
@@ -284,11 +309,11 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
                   {loading ? (
                     <div className="text-center py-8 text-sm text-muted-foreground">Chargement des étudiants liés...</div>
                   ) : filteredLinkedStudents.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {filteredLinkedStudents.map((item) => (
-                        <Card 
+                      <Card 
                           key={item.apprenant.id_apprenant}
-                          className={`cursor-pointer transition-all hover:shadow-md rounded-2xl ${
+                        className={`cursor-pointer transition-all hover:shadow-md rounded-2xl ${
                             selectedStudent?.id === item.apprenant.id_apprenant ? 'border-primary bg-primary/5' : 'border-border'
                           }`}
                           onClick={() => setSelectedStudent({
@@ -296,31 +321,31 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
                             name: `${item.apprenant.prenom} ${item.apprenant.nom}`,
                             email: item.apprenant.email
                           })}
-                        >
-                          <CardContent className="p-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-12 h-12 bg-gradient-to-br from-primary/20 to-primary/10 rounded-full flex items-center justify-center">
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 bg-gradient-to-br from-primary/20 to-primary/10 rounded-full flex items-center justify-center">
                                 <span className="font-medium">
                                   {(item.apprenant.prenom[0] || '').toUpperCase()}{(item.apprenant.nom[0] || '').toUpperCase()}
                                 </span>
-                              </div>
-                              <div className="flex-1">
+                            </div>
+                            <div className="flex-1">
                                 <h3 className="font-medium">{item.apprenant.prenom} {item.apprenant.nom}</h3>
                                 <p className="text-sm text-muted-foreground">{item.apprenant.email}</p>
-                                <div className="flex items-center gap-2 mt-2">
-                                  <Badge variant="secondary" className="text-xs">
+                              <div className="flex items-center gap-2 mt-2">
+                                <Badge variant="secondary" className="text-xs">
                                     Lié le {new Date(item.dateApprobation).toLocaleDateString('fr-FR')}
-                                  </Badge>
-                                </div>
+                                </Badge>
                               </div>
-                              {selectedStudent?.id === item.apprenant.id_apprenant && (
-                                <Check className="h-5 w-5 text-primary" />
-                              )}
                             </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
+                              {selectedStudent?.id === item.apprenant.id_apprenant && (
+                              <Check className="h-5 w-5 text-primary" />
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
                   ) : (
                     <div className="text-center py-8">
                       <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
@@ -351,17 +376,26 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <Label htmlFor="type">Type de certificat *</Label>
-                    <Select value={certificateData.type} onValueChange={(value) => setCertificateData({...certificateData, type: value})}>
+                    <Label htmlFor="formation">Formation *</Label>
+                    <Select value={certificateData.formationId} onValueChange={(value) => setCertificateData({...certificateData, formationId: value})}>
                       <SelectTrigger className="h-12 rounded-xl">
-                        <SelectValue placeholder="Sélectionner un type" />
+                        <SelectValue placeholder="Sélectionner une formation" />
                       </SelectTrigger>
                       <SelectContent>
-                        {certificateTypes.map((type) => (
-                          <SelectItem key={type.value} value={type.value}>
-                            {type.label}
+                        {formations.length > 0 ? (
+                          formations.filter(f => f.statut === 'ACTIF').map((formation) => (
+                            <SelectItem key={formation.id} value={formation.id.toString()}>
+                              <div className="flex items-center gap-2">
+                                <GraduationCap className="w-4 h-4" />
+                                {formation.nomFormation}
+                              </div>
                           </SelectItem>
-                        ))}
+                          ))
+                        ) : (
+                          <div className="p-2 text-sm text-gray-500">
+                            Aucune formation disponible. Créez d'abord des formations.
+                          </div>
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
@@ -503,9 +537,9 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
                         <span className="font-medium">{selectedStudent?.name}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Type :</span>
+                        <span className="text-muted-foreground">Formation :</span>
                         <span className="font-medium">
-                          {certificateTypes.find(t => t.value === certificateData.type)?.label}
+                          {formations.find(f => f.id.toString() === certificateData.formationId)?.nomFormation || 'Aucune formation sélectionnée'}
                         </span>
                       </div>
                       <div className="flex justify-between">

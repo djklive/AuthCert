@@ -6,6 +6,7 @@ export type Screen =
   | 'dashboard' 
   | 'certificates' 
   | 'create-certificate'
+  | 'formations'
   | 'establishments' 
   | 'students'
   | 'stats'

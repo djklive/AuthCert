@@ -260,6 +260,7 @@ async function generateCertificatePdf({
   certificat,
   apprenant,
   etablissement,
+  formation,
   verifyBaseUrl
 }) {
   return new Promise(async (resolve, reject) => {
@@ -295,7 +296,7 @@ async function generateCertificatePdf({
         info: {
           Title: `Certificat - ${certificat.titre}`,
           Author: etablissement.nomEtablissement,
-          Subject: 'Certificat de formation',
+          Subject: formation ? formation.nomFormation : 'Certificat de formation',
           Creator: 'AuthCert Platform'
         }
       });
@@ -429,7 +430,7 @@ async function generateCertificatePdf({
       
       doc.fontSize(12)
          .fillColor(accentColor)
-         .text('CERTIFICAT DE FORMATION', margin, titleY, { 
+         .text(formation.nomFormation, margin, titleY, { 
            width: pageWidth - 2 * margin, 
            align: 'center' 
          });
@@ -2828,13 +2829,234 @@ app.delete('/api/admin/etablissement/:id', authenticateToken, requireRole('admin
 });
 
 // ========================================
+// ROUTES POUR FORMATIONS
+// ========================================
+
+// Récupérer les formations d'un établissement
+app.get('/api/etablissement/:id/formations', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    // Vérifier que l'utilisateur peut accéder aux formations de cet établissement
+    if (userRole === 'establishment' && parseInt(id) !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Accès non autorisé aux formations de cet établissement'
+      });
+    }
+
+    const formations = await prisma.formation.findMany({
+      where: { etablissementId: parseInt(id) },
+      orderBy: { dateCreation: 'desc' },
+      select: {
+        id: true,
+        nomFormation: true,
+        description: true,
+        typeFormation: true,
+        dureeFormation: true,
+        niveauFormation: true,
+        statut: true,
+        dateCreation: true,
+        dateModification: true,
+        _count: {
+          select: { certificats: true }
+        }
+      }
+    });
+
+    console.log(`✅ ${formations.length} formations récupérées pour l'établissement ${id}`);
+
+    res.json({
+      success: true,
+      data: formations
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur récupération formations:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération des formations',
+      error: error.message
+    });
+  }
+});
+
+// Créer une nouvelle formation
+app.post('/api/formations', authenticateToken, requireRole('establishment'), async (req, res) => {
+  try {
+    console.log('📥 Données reçues:', req.body);
+    console.log('📥 Headers:', req.headers);
+    
+    const { nomFormation, description, typeFormation, dureeFormation, niveauFormation } = req.body;
+    const etablissementId = req.user.id;
+
+    console.log('🔍 Validation:', { nomFormation, typeFormation, etablissementId });
+
+    if (!nomFormation || !typeFormation) {
+      return res.status(400).json({
+        success: false,
+        message: 'Nom de formation et type de formation sont requis'
+      });
+    }
+
+    // Vérifier que le type de formation est valide
+    const validTypes = ['DIPLOME', 'CERTIFICAT_FORMATION', 'ATTESTATION_PRESENCE', 'CERTIFICATION_COMPETENCES', 'FORMATION_CONTINUE', 'STAGE', 'SEMINAIRE'];
+    if (!validTypes.includes(typeFormation)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Type de formation invalide'
+      });
+    }
+
+    const formation = await prisma.formation.create({
+      data: {
+        etablissementId,
+        nomFormation,
+        description: description || null,
+        typeFormation,
+        dureeFormation: dureeFormation || null,
+        niveauFormation: niveauFormation || null,
+        statut: 'ACTIF'
+      }
+    });
+
+    console.log(`✅ Formation créée: ${formation.nomFormation} (ID: ${formation.id})`);
+
+    res.status(201).json({
+      success: true,
+      message: 'Formation créée avec succès',
+      data: formation
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur création formation:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la création de la formation',
+      error: error.message
+    });
+  }
+});
+
+// Modifier une formation
+app.put('/api/formations/:id', authenticateToken, requireRole('establishment'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nomFormation, description, typeFormation, dureeFormation, niveauFormation, statut } = req.body;
+    const etablissementId = req.user.id;
+
+    // Vérifier que la formation appartient à l'établissement
+    const existingFormation = await prisma.formation.findFirst({
+      where: { id: parseInt(id), etablissementId }
+    });
+
+    if (!existingFormation) {
+      return res.status(404).json({
+        success: false,
+        message: 'Formation non trouvée ou accès non autorisé'
+      });
+    }
+
+    // Vérifier que le type de formation est valide si fourni
+    if (typeFormation) {
+      const validTypes = ['DIPLOME', 'CERTIFICAT_FORMATION', 'ATTESTATION_PRESENCE', 'CERTIFICATION_COMPETENCES', 'FORMATION_CONTINUE', 'STAGE', 'SEMINAIRE'];
+      if (!validTypes.includes(typeFormation)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Type de formation invalide'
+        });
+      }
+    }
+
+    const formation = await prisma.formation.update({
+      where: { id: parseInt(id) },
+      data: {
+        nomFormation: nomFormation || existingFormation.nomFormation,
+        description: description !== undefined ? description : existingFormation.description,
+        typeFormation: typeFormation || existingFormation.typeFormation,
+        dureeFormation: dureeFormation !== undefined ? dureeFormation : existingFormation.dureeFormation,
+        niveauFormation: niveauFormation !== undefined ? niveauFormation : existingFormation.niveauFormation,
+        statut: statut || existingFormation.statut,
+        dateModification: new Date()
+      }
+    });
+
+    console.log(`✅ Formation modifiée: ${formation.nomFormation} (ID: ${formation.id})`);
+
+    res.json({
+      success: true,
+      message: 'Formation modifiée avec succès',
+      data: formation
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur modification formation:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la modification de la formation',
+      error: error.message
+    });
+  }
+});
+
+// Supprimer une formation
+app.delete('/api/formations/:id', authenticateToken, requireRole('establishment'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const etablissementId = req.user.id;
+
+    // Vérifier que la formation appartient à l'établissement
+    const existingFormation = await prisma.formation.findFirst({
+      where: { id: parseInt(id), etablissementId },
+      include: { _count: { select: { certificats: true } } }
+    });
+
+    if (!existingFormation) {
+      return res.status(404).json({
+        success: false,
+        message: 'Formation non trouvée ou accès non autorisé'
+      });
+    }
+
+    // Vérifier qu'aucun certificat n'utilise cette formation
+    if (existingFormation._count.certificats > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Impossible de supprimer une formation utilisée par des certificats'
+      });
+    }
+
+    await prisma.formation.delete({
+      where: { id: parseInt(id) }
+    });
+
+    console.log(`✅ Formation supprimée: ${existingFormation.nomFormation} (ID: ${id})`);
+
+    res.json({
+      success: true,
+      message: 'Formation supprimée avec succès'
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur suppression formation:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la suppression de la formation',
+      error: error.message
+    });
+  }
+});
+
+// ========================================
 // ROUTES POUR CERTIFICATS
 // ========================================
 
 // Créer un brouillon de certificat
 app.post('/api/certificats', authenticateToken, requireRole('establishment'), async (req, res) => {
   try {
-    const { apprenantId, titre, mention, dateObtention } = req.body;
+    const { apprenantId, titre, mention, dateObtention, formationId } = req.body;
     const etablissementId = req.user.id;
 
     if (!apprenantId || !titre || !dateObtention) {
@@ -2850,11 +3072,25 @@ app.post('/api/certificats', authenticateToken, requireRole('establishment'), as
     }
 
     const uuid = uuidv4();
+    // Vérifier que la formation appartient à l'établissement si fournie
+    if (formationId) {
+      const formation = await prisma.formation.findFirst({
+        where: { id: parseInt(formationId), etablissementId }
+      });
+      if (!formation) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Formation non trouvée ou n\'appartient pas à votre établissement' 
+        });
+      }
+    }
+
     const certificat = await prisma.certificat.create({
       data: {
         uuid,
         etablissementId,
         apprenantId: parseInt(apprenantId),
+        formationId: formationId ? parseInt(formationId) : null,
         titre,
         mention: mention || null,
         dateObtention: new Date(dateObtention),
@@ -2879,7 +3115,8 @@ app.post('/api/certificats/:id/pdf', authenticateToken, requireRole('establishme
       where: { id: parseInt(id) },
       include: {
         apprenant: true,
-        etablissement: true
+        etablissement: true,
+        formation: true
       }
     });
     if (!certificat || certificat.etablissementId !== etablissementId) {
@@ -2893,6 +3130,7 @@ app.post('/api/certificats/:id/pdf', authenticateToken, requireRole('establishme
       certificat,
       apprenant: certificat.apprenant,
       etablissement: certificat.etablissement,
+      formation: certificat.formation,
       verifyBaseUrl: verifyBaseUrl.endsWith('/') ? verifyBaseUrl : verifyBaseUrl + '/'
     });
 
@@ -3159,7 +3397,16 @@ app.get('/api/certificats', authenticateToken, async (req, res) => {
 
     const certificats = await prisma.certificat.findMany({
       where,
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
+      include: {
+        formation: {
+          select: {
+            id: true,
+            nomFormation: true,
+            typeFormation: true
+          }
+        }
+      }
     });
     res.json({ success: true, data: certificats });
   } catch (error) {

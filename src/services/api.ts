@@ -1,5 +1,6 @@
+const API_BASE_URL = process.env.BACKEND_URL;
 //const API_BASE_URL = 'https://authcert-production.up.railway.app/api';
-const API_BASE_URL = 'http://localhost:5000/api';
+//const API_BASE_URL = 'http://localhost:5000/api';
 export const API_BASE = API_BASE_URL;
 
 export interface Document {
@@ -59,7 +60,7 @@ export interface DemandeCertificat {
 function authHeaders(): Record<string, string> {
   const token = localStorage.getItem('authToken');
   return token ? { Authorization: `Bearer ${token}` } : {};
-}
+  }
 
   export const api = {
   // Récupérer tous les établissements actifs
@@ -95,7 +96,7 @@ function authHeaders(): Record<string, string> {
     },
 
   // ======== Certificats ========
-  async createCertificateDraft(params: { apprenantId: number; titre: string; mention?: string; dateObtention: string; }) {
+  async createCertificateDraft(params: { apprenantId: number; titre: string; mention?: string; dateObtention: string; formationId?: string; }) {
     const res = await fetch(`${API_BASE_URL}/certificats`, {
       method: 'POST',
       headers: {
@@ -364,6 +365,66 @@ function authHeaders(): Record<string, string> {
     if (!res.ok) {
       const errorData = await res.json();
       throw new Error(errorData.message || 'Erreur récupération URL document');
+    }
+    return res.json();
+  },
+
+  // Méthode générique pour les requêtes GET
+  async get(url: string) {
+    const res = await fetch(`${API_BASE_URL}${url}`, {
+      method: 'GET',
+      headers: authHeaders()
+    });
+    if (!res.ok) {
+      const errorData = await res.json();
+      throw new Error(errorData.message || 'Erreur requête GET');
+    }
+    return res.json();
+  },
+
+  // Méthode générique pour les requêtes POST
+  async post(url: string, data: Record<string, unknown>) {
+    const res = await fetch(`${API_BASE_URL}${url}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(),
+      } as HeadersInit,
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) {
+      const errorData = await res.json();
+      throw new Error(errorData.message || 'Erreur requête POST');
+    }
+    return res.json();
+  },
+
+  // Méthode générique pour les requêtes PUT
+  async put(url: string, data: Record<string, unknown>) {
+    const res = await fetch(`${API_BASE_URL}${url}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(),
+      } as HeadersInit,
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) {
+      const errorData = await res.json();
+      throw new Error(errorData.message || 'Erreur requête PUT');
+    }
+    return res.json();
+  },
+
+  // Méthode générique pour les requêtes DELETE
+  async delete(url: string) {
+    const res = await fetch(`${API_BASE_URL}${url}`, {
+      method: 'DELETE',
+      headers: authHeaders()
+    });
+    if (!res.ok) {
+      const errorData = await res.json();
+      throw new Error(errorData.message || 'Erreur requête DELETE');
     }
     return res.json();
   },

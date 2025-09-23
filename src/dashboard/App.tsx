@@ -61,7 +61,7 @@ export default function App({ onLogout }: AppProps) {
   const handleNavigate: NavigateFunction = (screen) => {
     // Vérifier si c'est un Screen valide
     const validScreens: Screen[] = [
-      'login', 'onboarding', 'dashboard', 'certificates', 'create-certificate',
+      'login', 'onboarding', 'dashboard', 'certificates', 'create-certificate', 'formations',
       'establishments', 'students', 'stats', 'subscription', 'requests', 'profile', 'notifications'
     ];
     

@@ -13,6 +13,7 @@ import { SubscriptionScreen } from './screens/SubscriptionScreen';
 import { RequestsScreen } from './screens/RequestsScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
 import { NotificationsScreen } from './screens/NotificationsScreen';
+import { FormationsScreen } from './screens/FormationsScreen';
 
 interface ScreenRendererProps {
   currentScreen: Screen;
@@ -83,6 +84,13 @@ export function ScreenRenderer({
         return (
           <CreateCertificateScreen 
             onNavigate={onNavigate}
+          />
+        );
+
+      case 'formations':
+        return (
+          <FormationsScreen 
+            
           />
         );
 

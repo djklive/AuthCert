@@ -24,6 +24,7 @@ import {
   RefreshCw,
   Copy,
   FileText,
+  Eye
 } from 'lucide-react';
 import { api, API_BASE } from '../../../services/api';
 // QR code lib will be loaded dynamically to avoid TS type resolution issues
@@ -31,6 +32,8 @@ import { api, API_BASE } from '../../../services/api';
 interface CertificatesScreenProps {
   onNavigate: (screen: string) => void;
 }
+
+type CertificateStatus = 'BROUILLON' | 'A_EMETTRE' | 'EN_COURS_EMISSION' | 'EMIS' | 'EMISSION_ECHEC' | 'EN_COURS_REVOCATION' | 'REVOQUE' | 'REVOQUE_ECHEC';
 
 interface CertificateDto {
   id: number;
@@ -40,7 +43,7 @@ interface CertificateDto {
   dateObtention: string;
   pdfUrl?: string;
   pdfHash?: string;
-  statut: 'BROUILLON' | 'A_EMETTRE' | 'EMIS' | 'REVOQUE';
+  statut: CertificateStatus;
   txHash?: string;
   contractAddress?: string;
   createdAt: string;
@@ -48,6 +51,21 @@ interface CertificateDto {
     id: number;
     nomFormation: string;
     typeFormation: string;
+  };
+  etablissement?: {
+    id_etablissement: number;
+    nomEtablissement: string;
+    typeEtablissement: string;
+  };
+  apprenant?: {
+    id_apprenant: number;
+    nom: string;
+    prenom: string;
+    email: string;
+  };
+  verificationCount?: number; // Nouveau champ pour le nombre de vérifications
+  _count?: {
+    verificationStats: number;
   };
 }
 
@@ -66,8 +84,10 @@ interface Formation {
 export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState<'all' | 'EMIS' | 'BROUILLON'>('all');
+  const [selectedStatus, setSelectedStatus] = useState<'all' | CertificateStatus>('all');
   const [selectedFormation, setSelectedFormation] = useState<string>('all');
+  const [selectedEtablissement, setSelectedEtablissement] = useState<string>('all');
+  const [selectedApprenant, setSelectedApprenant] = useState<string>('all');
   const [selectedCertificate, setSelectedCertificate] = useState<CertificateDto | null>(null);
   const [certificates, setCertificates] = useState<CertificateDto[]>([]);
   const [formations, setFormations] = useState<Formation[]>([]);
@@ -155,11 +175,15 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
       const matchesStatus = selectedStatus === 'all' || cert.statut === selectedStatus;
       const matchesFormation = selectedFormation === 'all' || 
         (cert.formation && cert.formation.id === parseInt(selectedFormation));
+      const matchesEtablissement = selectedEtablissement === 'all' || 
+        (cert.etablissement && cert.etablissement.id_etablissement === parseInt(selectedEtablissement));
+      const matchesApprenant = selectedApprenant === 'all' || 
+        (cert.apprenant && cert.apprenant.id_apprenant === parseInt(selectedApprenant));
       
-      // Filtrage selon le rôle : les étudiants ne voient que les certificats émis
-      const matchesRole = user?.role === 'establishment' || cert.statut === 'EMIS';
+      // Filtrage selon le rôle : les étudiants voient uniquement les certificats émis et révoqués
+      const matchesRole = user?.role === 'establishment' || (cert.statut === 'EMIS' || cert.statut === 'REVOQUE');
       
-      return matchesSearch && matchesStatus && matchesFormation && matchesRole;
+      return matchesSearch && matchesStatus && matchesFormation && matchesEtablissement && matchesApprenant && matchesRole;
     });
     
     console.log('🔍 Filtrage certificats:', {
@@ -178,7 +202,7 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
     });
     
     return filtered;
-  }, [certificates, searchQuery, selectedStatus, selectedFormation, user?.role, formations.length]);
+  }, [certificates, searchQuery, selectedStatus, selectedFormation, selectedEtablissement, selectedApprenant, user?.role, formations.length]);
 
   const handleDownload = (cert: CertificateDto) => {
     if (cert.pdfUrl) {
@@ -212,13 +236,13 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
     
     try {
       setRevoking(true);
-      await api.revokeCertificate(selectedCertificate.id, revokeReason);
+      const response = await api.revokeCertificate(selectedCertificate.id, revokeReason);
       
-      // Mettre à jour la liste des certificats
+      // Mettre à jour la liste des certificats avec le bon statut
       setCertificates(prev => 
         prev.map(cert => 
           cert.id === selectedCertificate.id 
-            ? { ...cert, statut: 'REVOQUE' as const }
+            ? { ...cert, statut: response.data.statut as CertificateStatus }
             : cert
         )
       );
@@ -238,20 +262,76 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
     }
   };
 
+  const handleRetryRevoke = async () => {
+    if (!selectedCertificate) return;
+    
+    try {
+      setRevoking(true);
+      const response = await api.retryRevokeCertificate(selectedCertificate.id, revokeReason);
+      
+      // Mettre à jour la liste des certificats avec le bon statut
+      setCertificates(prev => 
+        prev.map(cert => 
+          cert.id === selectedCertificate.id 
+            ? { ...cert, statut: response.data.statut as CertificateStatus }
+            : cert
+        )
+      );
+      
+      setIsRevokeOpen(false);
+      setRevokeReason('');
+      setSelectedCertificate(null);
+      
+      // Recharger la liste
+      const res = await api.listCertificates();
+      setCertificates(res.data || []);
+      
+    } catch (error) {
+      console.error('Erreur re-révocation:', error);
+    } finally {
+      setRevoking(false);
+    }
+  };
+
   const handleRepublish = async (certificateId: number) => {
     try {
       setRepublishing(certificateId);
       
-      // 1) Générer le PDF si pas déjà fait
-      const pdfRes = await api.generateCertificatePdf(certificateId);
-      if (!pdfRes?.data?.pdfUrl) {
-        throw new Error('PDF non généré');
+      // Trouver le certificat pour déterminer le bon appel API
+      const cert = certificates.find(c => c.id === certificateId);
+      if (!cert) {
+        console.error('Certificat introuvable pour republication');
+        return;
       }
       
-      // 2) Émettre sur la blockchain
-      await api.emitCertificate(certificateId);
+      let response;
+      if (cert.statut === 'EMISSION_ECHEC') {
+        // Re-publication pour les certificats avec émission échouée
+        response = await api.retryEmitCertificate(certificateId);
+      } else if (cert.statut === 'BROUILLON') {
+        // Pour les brouillons, générer d'abord le PDF puis publier
+        console.log('🔄 Génération du PDF pour le certificat brouillon...');
+        const pdfResponse = await api.generateCertificatePdf(certificateId);
+        if (!pdfResponse?.data?.pdfUrl) {
+          throw new Error('Erreur lors de la génération du PDF');
+        }
+        console.log('✅ PDF généré avec succès, publication en cours...');
+        response = await api.emitCertificate(certificateId);
+      } else {
+        console.error('Statut de certificat non supporté pour republication:', cert.statut);
+        return;
+      }
       
-      // 3) Recharger la liste des certificats
+      // Mettre à jour la liste des certificats avec le bon statut
+      setCertificates(prev => 
+        prev.map(cert => 
+          cert.id === certificateId 
+            ? { ...cert, statut: response.data.statut as CertificateStatus }
+            : cert
+        )
+      );
+      
+      // Recharger la liste des certificats
       const res = await api.listCertificates();
       setCertificates(res.data || []);
       
@@ -284,6 +364,35 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
               <Building2 className="mr-1 h-3 w-3" />
               <span>Émis le {new Date(certificate.dateObtention).toLocaleDateString('fr-FR')}</span>
             </div>
+            
+            {/* Affichage de l'établissement pour les étudiants */}
+            {user?.role === 'student' && certificate.etablissement && (
+              <div className={`flex items-center ${isGridView ? 'justify-center' : ''} text-sm text-muted-foreground mb-2`}>
+                <Building2 className="mr-1 h-3 w-3" />
+                <span>{certificate.etablissement.nomEtablissement}</span>
+              </div>
+            )}
+            
+            {/* Affichage de l'étudiant pour les établissements */}
+            {user?.role === 'establishment' && certificate.apprenant && (
+              <div className={`flex items-center ${isGridView ? 'justify-center' : ''} text-sm text-muted-foreground mb-2`}>
+                <Award className="mr-1 h-3 w-3" />
+                <span>{certificate.apprenant.prenom} {certificate.apprenant.nom}</span>
+              </div>
+            )}
+            
+            {/* Affichage du nombre de vérifications */}
+            {(() => {
+              const verificationCount = certificate._count?.verificationStats || certificate.verificationCount;
+              return verificationCount && verificationCount > 0 ? (
+                <div className={`flex items-center ${isGridView ? 'justify-center' : ''} text-sm text-muted-foreground mb-2`}>
+                  <Eye className="mr-1 h-3 w-3" />
+                  <span>
+                    {verificationCount} vérification{verificationCount > 1 ? 's' : ''}
+                  </span>
+                </div>
+              ) : null;
+            })()}
 
             {certificate.formation && (
               <div className={`flex items-center ${isGridView ? 'justify-center' : ''} text-sm text-muted-foreground mb-2`}>
@@ -298,14 +407,43 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
                   <><Verified className="mr-1 h-3 w-3" /> Vérifié</>
                 ) : certificate.statut === 'BROUILLON' ? (
                   <><AlertTriangle className="mr-1 h-3 w-3" /> Brouillon</>
+                ) : certificate.statut === 'REVOQUE' ? (
+                  <><Ban className="mr-1 h-3 w-3" /> Révoqué</>
+                ) : certificate.statut === 'REVOQUE_ECHEC' ? (
+                  <><AlertTriangle className="mr-1 h-3 w-3" /> Révocation échouée</>
+                ) : certificate.statut === 'EN_COURS_REVOCATION' ? (
+                  <><RefreshCw className="mr-1 h-3 w-3 animate-spin" /> Révocation en cours</>
+                ) : certificate.statut === 'EMISSION_ECHEC' ? (
+                  <><AlertTriangle className="mr-1 h-3 w-3" /> Publication échouée</>
+                ) : certificate.statut === 'EN_COURS_EMISSION' ? (
+                  <><RefreshCw className="mr-1 h-3 w-3 animate-spin" /> Publication en cours</>
                 ) : (
-                  <>Brouillon</>
+                  <>Brouillon</> // Default fallback
                 )}
               </Badge>
               {certificate.mention && (
                 <Badge variant="outline" className="text-xs">{certificate.mention}</Badge>
               )}
               {certificate.statut === 'BROUILLON' && user?.role === 'establishment' && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-xs h-6 px-2"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleRepublish(certificate.id);
+                  }}
+                  disabled={republishing === certificate.id}
+                >
+                  {republishing === certificate.id ? (
+                    <RefreshCw className="mr-1 h-3 w-3 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-1 h-3 w-3" />
+                  )}
+                  Publier
+                </Button>
+                )}
+              {certificate.statut === 'EMISSION_ECHEC' && user?.role === 'establishment' && (
                 <Button
                   size="sm"
                   variant="outline"
@@ -388,15 +526,22 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
             </div>
 
             <div className="flex gap-3">
-              <Select value={selectedStatus} onValueChange={(v) => setSelectedStatus(v as 'all' | 'EMIS' | 'BROUILLON')}>
+              <Select value={selectedStatus} onValueChange={(v) => setSelectedStatus(v as 'all' | CertificateStatus)}>
                 <SelectTrigger className="w-32">
                   <SelectValue placeholder="Statut" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Tous</SelectItem>
                   <SelectItem value="EMIS">Émis</SelectItem>
+                  <SelectItem value="REVOQUE">Révoqués</SelectItem>
                   {user?.role === 'establishment' && (
-                    <SelectItem value="BROUILLON">Brouillons</SelectItem>
+                    <>
+                      <SelectItem value="REVOQUE_ECHEC">Révocation échouée</SelectItem>
+                      <SelectItem value="EN_COURS_REVOCATION">En cours de révocation</SelectItem>
+                      <SelectItem value="EMISSION_ECHEC">Publication échouée</SelectItem>
+                      <SelectItem value="EN_COURS_EMISSION">En cours de publication</SelectItem>
+                      <SelectItem value="BROUILLON">Brouillons</SelectItem>
+                    </>
                   )}
                 </SelectContent>
               </Select>
@@ -415,6 +560,40 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
                     ))}
                 </SelectContent>
               </Select>
+              )}
+              
+              {/* Filtre par établissement - visible uniquement pour les étudiants */}
+              {user?.role === 'student' && (
+                <Select value={selectedEtablissement} onValueChange={setSelectedEtablissement}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue placeholder="Établissement" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tous les établissements</SelectItem>
+                    {Array.from(new Set(certificates.map(cert => cert.etablissement).filter(Boolean))).map((etab) => (
+                      <SelectItem key={etab!.id_etablissement} value={etab!.id_etablissement.toString()}>
+                        {etab!.nomEtablissement}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              
+              {/* Filtre par étudiant - visible uniquement pour les établissements */}
+              {user?.role === 'establishment' && (
+                <Select value={selectedApprenant} onValueChange={setSelectedApprenant}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue placeholder="Étudiant" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tous les étudiants</SelectItem>
+                    {Array.from(new Set(certificates.map(cert => cert.apprenant).filter(Boolean))).map((apprenant) => (
+                      <SelectItem key={apprenant!.id_apprenant} value={apprenant!.id_apprenant.toString()}>
+                        {apprenant!.prenom} {apprenant!.nom}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               )}
             </div>
 
@@ -756,14 +935,14 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
                 Fermer
               </Button>
               
-              {selectedCertificate.statut === 'EMIS' && user?.role === 'establishment' && (
+              {(selectedCertificate.statut === 'EMIS' || selectedCertificate.statut === 'REVOQUE_ECHEC') && user?.role === 'establishment' && (
                 <Button
                   variant="destructive"
                   onClick={() => setIsRevokeOpen(true)}
                   className="flex items-center gap-2"
                 >
                   <Ban className="h-4 w-4" />
-                  Révoquer
+                  {selectedCertificate.statut === 'REVOQUE_ECHEC' ? 'Re-révoquer' : 'Révoquer'}
                 </Button>
               )}
             </DialogFooter>
@@ -844,19 +1023,19 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
             </Button>
             <Button
               variant="destructive"
-              onClick={handleRevoke}
+              onClick={selectedCertificate?.statut === 'REVOQUE_ECHEC' ? handleRetryRevoke : handleRevoke}
               disabled={revoking}
               className="flex items-center gap-2"
             >
               {revoking ? (
                 <>
                   <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                  Révocation...
+                  {selectedCertificate?.statut === 'REVOQUE_ECHEC' ? 'Re-révocation...' : 'Révocation...'}
                 </>
               ) : (
                 <>
                   <Ban className="h-4 w-4" />
-                  Confirmer la révocation
+                  {selectedCertificate?.statut === 'REVOQUE_ECHEC' ? 'Confirmer la re-révocation' : 'Confirmer la révocation'}
                 </>
               )}
             </Button>

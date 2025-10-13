@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
@@ -7,106 +7,130 @@ import {
   Bell, 
   Award, 
   Eye, 
-  Building2, 
   CheckCircle,
   Star,
   AlertTriangle,
   Trash2,
   Mail,
-  Filter
+  Clock,
+  XCircle,
+  FileText,
+  UserPlus,
+  Ban,
+  RefreshCw
 } from 'lucide-react';
+import { api } from '../../../services/api';
 
-// Mock notifications data
-const mockNotifications = [
-  {
-    id: 1,
-    type: 'certificate',
-    title: 'Nouveau certificat disponible',
-    description: 'Votre certificat "React Advanced" de Tech Academy est maintenant disponible',
-    time: 'Il y a 2 heures',
-    read: false,
-    important: true,
-    icon: Award,
-    color: 'text-primary',
-    bgColor: 'bg-primary/10'
-  },
-  {
-    id: 2,
-    type: 'verification',
-    title: 'Nouvelles vérifications',
-    description: '5 nouvelles vérifications de vos certificats cette semaine',
-    time: 'Il y a 4 heures',
-    read: false,
-    important: false,
-    icon: Eye,
-    color: 'text-chart-2',
-    bgColor: 'bg-chart-2/10'
-  },
-  {
-    id: 3,
-    type: 'request',
-    title: 'Demande approuvée',
-    description: 'Votre demande pour "UX Research Specialist" a été approuvée',
-    time: 'Il y a 1 jour',
-    read: true,
-    important: true,
-    icon: CheckCircle,
-    color: 'text-green-600',
-    bgColor: 'bg-green-100'
-  },
-  {
-    id: 4,
-    type: 'establishment',
-    title: 'Nouvel établissement connecté',
-    description: 'Business School Paris a accepté votre demande de connexion',
-    time: 'Il y a 2 jours',
-    read: true,
-    important: false,
-    icon: Building2,
-    color: 'text-chart-4',
-    bgColor: 'bg-chart-4/10'
-  },
-  {
-    id: 5,
-    type: 'security',
-    title: 'Connexion depuis un nouvel appareil',
-    description: 'Une connexion depuis iPhone a été détectée à Paris',
-    time: 'Il y a 3 jours',
-    read: true,
-    important: false,
-    icon: AlertTriangle,
-    color: 'text-orange-600',
-    bgColor: 'bg-orange-100'
-  },
-  {
-    id: 6,
-    type: 'system',
-    title: 'Mise à jour de la plateforme',
-    description: 'Nouvelles fonctionnalités disponibles dans votre dashboard',
-    time: 'Il y a 1 semaine',
-    read: true,
-    important: false,
-    icon: Star,
-    color: 'text-purple-600',
-    bgColor: 'bg-purple-100'
-  }
-];
+interface NotificationData {
+  id: number;
+  type: string;
+  titre: string;
+  message: string;
+  lu: boolean;
+  important: boolean;
+  lienAction?: string;
+  createdAt: string;
+  readAt?: string;
+}
+
+interface NotificationDisplay extends NotificationData {
+  icon: React.ComponentType<{ className?: string }>;
+  color: string;
+  bgColor: string;
+  timeAgo: string;
+}
 
 /*interface NotificationsScreenProps {
   onNavigate: (screen: string) => void;
 }*/
 
 export function NotificationsScreen() {
-  const [notifications, setNotifications] = useState(mockNotifications);
+  const [notifications, setNotifications] = useState<NotificationDisplay[]>([]);
   const [activeTab, setActiveTab] = useState('all');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  const unreadCount = notifications.filter(n => !n.read).length;
-  const importantCount = notifications.filter(n => n.important && !n.read).length;
+  // Fonction pour mapper le type de notification à son icône et ses couleurs
+  const getNotificationStyle = (type: string) => {
+    const typeMap: Record<string, { icon: typeof Award; color: string; bgColor: string }> = {
+      'NOUVEAU_CERTIFICAT': { icon: Award, color: 'text-primary', bgColor: 'bg-primary/10' },
+      'VERIFICATION_CERTIFICAT': { icon: Eye, color: 'text-chart-2', bgColor: 'bg-chart-2/10' },
+      'DEMANDE_LIAISON_APPRENANT': { icon: UserPlus, color: 'text-orange-600', bgColor: 'bg-orange-100' },
+      'DEMANDE_LIAISON_APPROUVEE': { icon: CheckCircle, color: 'text-green-600', bgColor: 'bg-green-100' },
+      'DEMANDE_LIAISON_REJETEE': { icon: XCircle, color: 'text-red-600', bgColor: 'bg-red-100' },
+      'DEMANDE_CERTIFICAT_NOUVELLE': { icon: FileText, color: 'text-blue-600', bgColor: 'bg-blue-100' },
+      'DEMANDE_CERTIFICAT_APPROUVEE': { icon: CheckCircle, color: 'text-green-600', bgColor: 'bg-green-100' },
+      'DEMANDE_CERTIFICAT_REJETEE': { icon: XCircle, color: 'text-red-600', bgColor: 'bg-red-100' },
+      'CERTIFICAT_REVOQUE': { icon: Ban, color: 'text-red-600', bgColor: 'bg-red-100' },
+      'NOUVELLE_SESSION': { icon: AlertTriangle, color: 'text-orange-600', bgColor: 'bg-orange-100' },
+      'SECURITE_ALERTE': { icon: AlertTriangle, color: 'text-red-600', bgColor: 'bg-red-100' },
+      'SYSTEME_MISE_A_JOUR': { icon: Star, color: 'text-purple-600', bgColor: 'bg-purple-100' },
+      'ABONNEMENT_EXPIRE': { icon: Clock, color: 'text-orange-600', bgColor: 'bg-orange-100' },
+      'ABONNEMENT_RENOUVELE': { icon: CheckCircle, color: 'text-green-600', bgColor: 'bg-green-100' }
+    };
+    
+    return typeMap[type] || { icon: Bell, color: 'text-gray-600', bgColor: 'bg-gray-100' };
+  };
+
+  // Fonction pour calculer le temps écoulé
+  const getTimeAgo = (dateString: string) => {
+    const date = new Date(dateString);
+    const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
+    
+    if (seconds < 60) return `Il y a ${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `Il y a ${minutes}min`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `Il y a ${hours}h`;
+    const days = Math.floor(hours / 24);
+    if (days < 30) return `Il y a ${days}j`;
+    const months = Math.floor(days / 30);
+    if (months < 12) return `Il y a ${months} mois`;
+    return `Il y a ${Math.floor(months / 12)} an${Math.floor(months / 12) > 1 ? 's' : ''}`;
+  };
+
+  // Charger les notifications
+  const loadNotifications = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError('');
+      
+      const response = await api.getNotifications({ limit: 50 });
+      
+      if (response.success) {
+        // Mapper les notifications avec icônes et styles
+        const mappedNotifications: NotificationDisplay[] = response.data.map((notif: NotificationData) => {
+          const style = getNotificationStyle(notif.type);
+          return {
+            ...notif,
+            ...style,
+            timeAgo: getTimeAgo(notif.createdAt)
+          };
+        });
+        
+        setNotifications(mappedNotifications);
+      } else {
+        throw new Error(response.message || 'Erreur lors du chargement des notifications');
+      }
+    } catch (err) {
+      setError('Erreur lors du chargement des notifications');
+      console.error('Erreur chargement notifications:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadNotifications();
+  }, [loadNotifications]);
+
+  const unreadCount = notifications.filter(n => !n.lu).length;
+  const importantCount = notifications.filter(n => n.important && !n.lu).length;
 
   const filteredNotifications = notifications.filter(notification => {
     switch (activeTab) {
       case 'unread':
-        return !notification.read;
+        return !notification.lu;
       case 'important':
         return notification.important;
       default:
@@ -114,44 +138,85 @@ export function NotificationsScreen() {
     }
   });
 
-  const markAsRead = (id: number) => {
-    setNotifications(notifications.map(n => 
-      n.id === id ? { ...n, read: true } : n
-    ));
+  const markAsRead = async (id: number) => {
+    try {
+      await api.markNotificationAsRead(id);
+      // Mettre à jour localement
+      setNotifications(notifications.map(n => 
+        n.id === id ? { ...n, lu: true, readAt: new Date().toISOString() } : n
+      ));
+    } catch (err) {
+      console.error('Erreur marquage notification:', err);
+    }
   };
 
-  const markAsUnread = (id: number) => {
-    setNotifications(notifications.map(n => 
-      n.id === id ? { ...n, read: false } : n
-    ));
+  const markAsUnread = async (id: number) => {
+    try {
+      // Pour marquer comme non lu, on pourrait créer une route spécifique
+      // Pour l'instant, on met à jour localement
+      setNotifications(notifications.map(n => 
+        n.id === id ? { ...n, lu: false, readAt: undefined } : n
+      ));
+    } catch (err) {
+      console.error('Erreur marquage notification:', err);
+    }
   };
 
-  const deleteNotification = (id: number) => {
-    setNotifications(notifications.filter(n => n.id !== id));
+  const deleteNotification = async (id: number) => {
+    try {
+      await api.deleteNotification(id);
+      setNotifications(notifications.filter(n => n.id !== id));
+    } catch (err) {
+      console.error('Erreur suppression notification:', err);
+    }
   };
 
-  const markAllAsRead = () => {
-    setNotifications(notifications.map(n => ({ ...n, read: true })));
+  const markAllAsRead = async () => {
+    try {
+      await api.markAllNotificationsAsRead();
+      setNotifications(notifications.map(n => ({ 
+        ...n, 
+        lu: true, 
+        readAt: new Date().toISOString() 
+      })));
+    } catch (err) {
+      console.error('Erreur marquage notifications:', err);
+    }
   };
 
   const getTypeLabel = (type: string) => {
-    switch (type) {
-      case 'certificate':
-        return 'Certificat';
-      case 'verification':
-        return 'Vérification';
-      case 'request':
-        return 'Demande';
-      case 'establishment':
-        return 'Établissement';
-      case 'security':
-        return 'Sécurité';
-      case 'system':
-        return 'Système';
-      default:
-        return 'Notification';
-    }
+    const labelMap: Record<string, string> = {
+      'NOUVEAU_CERTIFICAT': 'Certificat',
+      'VERIFICATION_CERTIFICAT': 'Vérification',
+      'DEMANDE_LIAISON_APPRENANT': 'Demande liaison',
+      'DEMANDE_LIAISON_APPROUVEE': 'Liaison approuvée',
+      'DEMANDE_LIAISON_REJETEE': 'Liaison rejetée',
+      'DEMANDE_CERTIFICAT_NOUVELLE': 'Demande certificat',
+      'DEMANDE_CERTIFICAT_APPROUVEE': 'Certificat approuvé',
+      'DEMANDE_CERTIFICAT_REJETEE': 'Certificat rejeté',
+      'CERTIFICAT_REVOQUE': 'Révocation',
+      'NOUVELLE_SESSION': 'Nouvelle session',
+      'SECURITE_ALERTE': 'Sécurité',
+      'SYSTEME_MISE_A_JOUR': 'Système',
+      'ABONNEMENT_EXPIRE': 'Abonnement',
+      'ABONNEMENT_RENOUVELE': 'Abonnement'
+    };
+    
+    return labelMap[type] || 'Notification';
   };
+
+  if (loading) {
+    return (
+      <div className="p-6 max-w-4xl mx-auto">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
+            <p className="text-muted-foreground">Chargement des notifications...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
@@ -164,15 +229,25 @@ export function NotificationsScreen() {
           </p>
         </div>
         <div className="flex items-center space-x-3">
+          <Button variant="outline" onClick={loadNotifications}>
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Actualiser
+          </Button>
           <Button variant="outline" onClick={markAllAsRead} disabled={unreadCount === 0}>
             Tout marquer comme lu
           </Button>
-          <Button variant="outline">
-            <Filter className="mr-2 h-4 w-4" />
-            Filtres
-          </Button>
         </div>
       </div>
+
+      {/* Erreur */}
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+          <div className="flex items-center">
+            <AlertTriangle className="h-5 w-5 mr-2" />
+            {error}
+          </div>
+        </div>
+      )}
 
       {/* Statistics */}
       <div className="grid gap-6 md:grid-cols-3">
@@ -256,7 +331,7 @@ export function NotificationsScreen() {
                     <div
                       key={notification.id}
                       className={`group relative p-4 border rounded-lg transition-all hover:shadow-md ${
-                        !notification.read ? 'bg-accent/30 border-primary/20' : 'bg-card'
+                        !notification.lu ? 'bg-accent/30 border-primary/20' : 'bg-card'
                       }`}
                     >
                       <div className="flex items-start space-x-4">
@@ -268,9 +343,9 @@ export function NotificationsScreen() {
                         {/* Content */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between mb-2">
-                            <div className="flex items-center space-x-2">
-                              <h4 className={`font-semibold ${!notification.read ? 'text-foreground' : 'text-muted-foreground'}`}>
-                                {notification.title}
+                            <div className="flex items-center space-x-2 flex-wrap">
+                              <h4 className={`font-semibold ${!notification.lu ? 'text-foreground' : 'text-muted-foreground'}`}>
+                                {notification.titre}
                               </h4>
                               {notification.important && (
                                 <Badge variant="destructive" className="text-xs">
@@ -281,27 +356,30 @@ export function NotificationsScreen() {
                                 {getTypeLabel(notification.type)}
                               </Badge>
                             </div>
-                            {!notification.read && (
+                            {!notification.lu && (
                               <div className="w-2 h-2 bg-primary rounded-full flex-shrink-0" />
                             )}
                           </div>
                           
                           <p className="text-sm text-muted-foreground mb-2">
-                            {notification.description}
+                            {notification.message}
                           </p>
                           
                           <p className="text-xs text-muted-foreground">
-                            {notification.time}
+                            {notification.timeAgo}
                           </p>
                         </div>
 
                         {/* Actions */}
                         <div className="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          {!notification.read ? (
+                          {!notification.lu ? (
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => markAsRead(notification.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                markAsRead(notification.id);
+                              }}
                               title="Marquer comme lu"
                             >
                               <CheckCircle className="h-4 w-4" />
@@ -310,7 +388,10 @@ export function NotificationsScreen() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => markAsUnread(notification.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                markAsUnread(notification.id);
+                              }}
                               title="Marquer comme non lu"
                             >
                               <Mail className="h-4 w-4" />
@@ -319,7 +400,10 @@ export function NotificationsScreen() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => deleteNotification(notification.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteNotification(notification.id);
+                            }}
                             title="Supprimer"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -332,43 +416,6 @@ export function NotificationsScreen() {
               )}
             </TabsContent>
           </Tabs>
-        </CardContent>
-      </Card>
-
-      {/* Toast Notification Preview */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Aperçu des notifications toast</CardTitle>
-          <CardDescription>
-            Voici comment apparaissent les notifications rapides
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            <div className="flex items-center space-x-3 p-4 bg-green-50 border border-green-200 rounded-lg">
-              <CheckCircle className="h-5 w-5 text-green-600" />
-              <div>
-                <p className="text-sm font-medium text-green-800">
-                  🎉 Nouveau certificat disponible !
-                </p>
-                <p className="text-xs text-green-600">
-                  React Advanced - Tech Academy
-                </p>
-              </div>
-            </div>
-            
-            <div className="flex items-center space-x-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <Eye className="h-5 w-5 text-blue-600" />
-              <div>
-                <p className="text-sm font-medium text-blue-800">
-                  Nouvelle vérification de certificat
-                </p>
-                <p className="text-xs text-blue-600">
-                  Quelqu'un a vérifié votre UX Design cert
-                </p>
-              </div>
-            </div>
-          </div>
         </CardContent>
       </Card>
     </div>

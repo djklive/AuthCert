@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { useState } from "react";
 import { PageDAccueil } from "./screens/PageDAccueil/PageDAccueil";
 import AuthPage from "./screens/Auth/AuthPage";
+import ResetPasswordPage from "./screens/Auth/ResetPasswordPage";
 import { VerifierCertificat } from "./screens/VerifierCertificat";
 import { Tarif } from "./screens/Tarif/Tarif";
 import DashboardWrapper from "./dashboard/DashboardWrapper";
@@ -37,6 +38,7 @@ export default function App() {
           <Route path="/" element={<PageDAccueil />} />
           <Route path="/auth" element={<AuthPage defaultTab="login" />} />
           <Route path="/auth/signup" element={<AuthPage defaultTab="signup" />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/verifier-certificat" element={<VerifierCertificat />} />
           <Route path="/tarif" element={<Tarif />} />
           <Route 

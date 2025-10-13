@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { type Screen, type UserType, type NavigateFunction } from '../types';
 import { useUser } from '../hooks/useUser';
+import { api } from '../../services/api';
 
 interface NavigationItem {
   screen: Screen;
@@ -56,6 +57,7 @@ export function Navigation({
   const navigate = useNavigate();
   const { user } = useUser();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
@@ -65,10 +67,30 @@ export function Navigation({
     return iconMap[iconName as keyof typeof iconMap] || Home;
   };
 
+  // Charger le nombre de notifications non lues
+  useEffect(() => {
+    const loadUnreadCount = async () => {
+      try {
+        const response = await api.getUnreadNotificationsCount();
+        if (response.success) {
+          setUnreadNotificationsCount(response.data.count);
+        }
+      } catch (err) {
+        console.error('Erreur chargement notifications:', err);
+      }
+    };
+
+    loadUnreadCount();
+    
+    // Actualiser toutes les 30 secondes
+    const interval = setInterval(loadUnreadCount, 30000);
+    
+    return () => clearInterval(interval);
+  }, []);
+
   const getNotificationCount = (screen: Screen) => {
-    if (screen === 'notifications') return 3;
-    if (screen === 'requests' && userType === 'student') return 2;
-    if (screen === 'students' && userType === 'establishment') return 7;
+    if (screen === 'notifications') return unreadNotificationsCount;
+    // TODO: Ajouter des compteurs réels pour requests et students si nécessaire
     return 0;
   };
 

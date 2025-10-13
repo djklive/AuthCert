@@ -24,7 +24,17 @@ export const VerifierCertificat = () => {
     txHash?: string;
     contractAddress?: string;
   }>(null);
-  const [onchain, setOnchain] = useState<null | { onchain: boolean; issuer?: string; student?: string; issuedAt?: number; txHash?: string; contractAddress?: string }>(null);
+  const [onchain, setOnchain] = useState<null | { 
+    onchain: boolean; 
+    revoked?: boolean;
+    revokedAt?: string;
+    revocationReason?: string;
+    issuer?: string; 
+    student?: string; 
+    issuedAt?: number; 
+    txHash?: string; 
+    contractAddress?: string 
+  }>(null);
 
   useEffect(() => {
     if (uuid) {
@@ -58,6 +68,23 @@ export const VerifierCertificat = () => {
       const data = await res.json();
       setResult(data.data);
 
+      // Enregistrer la vérification
+      try {
+        await fetch(`${API_BASE}/certificats/${encodeURIComponent(uuid.trim())}/verify`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            verificationType: 'public'
+          })
+        });
+        console.log('📊 Vérification enregistrée');
+      } catch (verifyError) {
+        console.warn('⚠️ Erreur enregistrement vérification:', verifyError);
+        // Ne pas bloquer l'affichage si l'enregistrement échoue
+      }
+
       // Vérification on-chain publique (best-effort)
       try {
         const v = await fetch(`${API_BASE}/certificats/public/${encodeURIComponent(uuid.trim())}/verify`);
@@ -66,6 +93,9 @@ export const VerifierCertificat = () => {
           if (vd?.data) {
             setOnchain({
               onchain: vd.data.onchain === true,
+              revoked: vd.data.revoked || false,
+              revokedAt: vd.data.revokedAt,
+              revocationReason: vd.data.revocationReason,
               issuer: vd.data.record?.issuer,
               student: vd.data.record?.student,
               issuedAt: vd.data.record?.issuedAt,
@@ -216,10 +246,24 @@ export const VerifierCertificat = () => {
                       <div className="flex items-center gap-2 text-sm text-gray-600">
                         <Shield className="w-4 h-4 text-rose-500" />
                         <span>
-                          {onchain?.onchain ? 'Preuve inscrite sur la blockchain' : 'Preuve blockchain non trouvée'}
+                          {onchain?.revoked ? 'Certificat révoqué' : 
+                           onchain?.onchain ? 'Preuve inscrite sur la blockchain' : 'Preuve blockchain non trouvée'}
                         </span>
                       </div>
-                      {onchain?.onchain && (
+                      
+                      {onchain?.revoked && (
+                        <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                          <div className="text-sm text-red-700">
+                            <p><strong>⚠️ Certificat révoqué</strong></p>
+                            <p>Raison: {onchain.revocationReason || 'Non spécifiée'}</p>
+                            {onchain.revokedAt && (
+                              <p>Date de révocation: {new Date(onchain.revokedAt).toLocaleString()}</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {onchain?.onchain && !onchain?.revoked && (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                           <div>
                             <p className="text-gray-500">Issuer</p>

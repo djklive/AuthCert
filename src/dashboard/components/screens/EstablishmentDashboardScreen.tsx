@@ -1,10 +1,8 @@
 import { useUser } from '../../hooks/useUser';
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { WalletCard } from '../WalletCard';
-//import { Badge } from '../ui/badge';
-//import { Progress } from '../ui/progress';
 import { 
   Users, 
   Award, 
@@ -16,17 +14,50 @@ import {
   FileText,
   CheckCircle,
   XCircle,
-  Download
+  Download,
+  RefreshCw,
+  AlertTriangle
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { api } from '../../../services/api';
 
 interface EstablishmentDashboardScreenProps {
   hasData?: boolean;
   onNavigate: (screen: string) => void;
 }
 
+interface DashboardData {
+  stats: {
+    certificatesIssued: number;
+    totalVerifications: number;
+    activeStudents: number;
+    pendingRequests: number;
+  };
+  pendingRequests: Array<{
+    id: number;
+    name: string;
+    email: string;
+    date: string;
+    status: string;
+  }>;
+  recentActivity: Array<{
+    type: string;
+    titre: string;
+    description: string;
+    timeAgo: string;
+    statut: string;
+  }>;
+  chartData: Array<{
+    name: string;
+    verifications: number;
+  }>;
+}
+
 export function EstablishmentDashboardScreen({ hasData = true, onNavigate }: EstablishmentDashboardScreenProps) {
   const [selectedPeriod, setSelectedPeriod] = useState('30d');
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   const { user } = useUser();
 
@@ -42,36 +73,81 @@ export function EstablishmentDashboardScreen({ hasData = true, onNavigate }: Est
     return 'Utilisateur';
   };
 
-  // Mock data
-  const stats = {
-    certificatesIssued: hasData ? 247 : 0,
-    totalVerifications: hasData ? 1523 : 0,
-    activeStudents: hasData ? 89 : 0,
-    pendingRequests: hasData ? 7 : 0
+  // Charger les données du dashboard
+  const loadDashboardData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError('');
+      
+      if (!user?.id) {
+        throw new Error('Utilisateur non connecté');
+      }
+
+      const establishmentId = typeof user.id === 'string' ? parseInt(user.id) : user.id;
+      const response = await api.getEstablishmentDashboard(establishmentId);
+      
+      if (response.success) {
+        setDashboardData(response.data);
+      } else {
+        throw new Error(response.message || 'Erreur lors du chargement du dashboard');
+      }
+    } catch (err) {
+      setError('Erreur lors du chargement des données');
+      console.error('Erreur chargement dashboard:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    loadDashboardData();
+  }, [loadDashboardData]);
+
+  // Utiliser les données réelles ou des valeurs par défaut
+  const stats = dashboardData?.stats || {
+    certificatesIssued: 0,
+    totalVerifications: 0,
+    activeStudents: 0,
+    pendingRequests: 0
   };
 
-  const chartData = hasData ? [
-    { name: 'Jan', verifications: 65 },
-    { name: 'Fév', verifications: 89 },
-    { name: 'Mar', verifications: 123 },
-    { name: 'Avr', verifications: 134 },
-    { name: 'Mai', verifications: 167 },
-    { name: 'Jun', verifications: 189 },
-  ] : [];
+  const chartData = dashboardData?.chartData || [];
+  const pendingRequests = dashboardData?.pendingRequests || [];
+  const recentActivity = dashboardData?.recentActivity || [];
 
-  const pendingRequests = hasData ? [
-    { id: 1, name: 'Marie Dubois', course: 'Master Marketing Digital', date: '2024-01-15', status: 'pending' },
-    { id: 2, name: 'Jean Martin', course: 'Formation Leadership', date: '2024-01-14', status: 'pending' },
-    { id: 3, name: 'Sophie Laurent', course: 'Certification Agile', date: '2024-01-13', status: 'pending' }
-  ] : [];
+  // État de chargement
+  if (loading) {
+    return (
+      <div className="p-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
+            <p className="text-muted-foreground">Chargement du dashboard...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-  const recentActivity = hasData ? [
-    { id: 1, type: 'certificate', title: 'Certificat émis pour Alice Thompson', subtitle: 'Master en Marketing Digital', time: '2h', status: 'issued' },
-    { id: 2, type: 'verification', title: 'Vérification blockchain confirmée', subtitle: 'Certificat #2547', time: '4h', status: 'verified' },
-    { id: 3, type: 'student', title: 'Nouvel étudiant lié', subtitle: 'Thomas Wilson', time: '1j', status: 'linked' }
-  ] : [];
+  // État d'erreur
+  if (error) {
+    return (
+      <div className="p-6">
+        <Card className="border-destructive">
+          <CardContent className="p-6 text-center">
+            <AlertTriangle className="h-8 w-8 mx-auto mb-4 text-destructive" />
+            <p className="text-destructive mb-4">{error}</p>
+            <Button onClick={loadDashboardData} variant="outline">
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Réessayer
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
-  if (!hasData) {
+  if (!hasData && (!dashboardData || stats.certificatesIssued === 0)) {
     return (
       <div className="p-4 lg:p-6 space-y-6 lg:space-y-8">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -326,27 +402,45 @@ export function EstablishmentDashboardScreen({ hasData = true, onNavigate }: Est
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 lg:space-y-4">
-            {pendingRequests.slice(0, 3).map((request) => (
-              <div key={request.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border border-border rounded-xl gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-primary/20 to-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
-                    <span className="text-xs sm:text-sm font-medium">{request.name.split(' ').map(n => n[0]).join('')}</span>
+            {pendingRequests.length > 0 ? (
+              pendingRequests.slice(0, 3).map((request) => (
+                <div key={request.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border border-border rounded-xl gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-primary/20 to-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
+                      <span className="text-xs sm:text-sm font-medium">{request.name.split(' ').map((n: string) => n[0]).join('')}</span>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm lg:text-base truncate">{request.name}</p>
+                      <p className="text-xs lg:text-sm text-muted-foreground truncate">{request.email}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(request.date).toLocaleDateString('fr-FR')}
+                      </p>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <p className="font-medium text-sm lg:text-base truncate">{request.name}</p>
-                    <p className="text-xs lg:text-sm text-muted-foreground truncate">{request.course}</p>
+                  <div className="flex items-center justify-center gap-2">
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="rounded-lg w-1/2 sm:w-auto"
+                      onClick={() => onNavigate('students')}
+                    >
+                      <XCircle className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      className="rounded-lg w-1/2 sm:w-auto"
+                      onClick={() => onNavigate('students')}
+                    >
+                      <CheckCircle className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
-                <div className="flex items-center justify-center gap-2">
-                  <Button size="sm" variant="outline" className="rounded-lg w-1/2 sm:w-auto">
-                    <XCircle className="h-4 w-4" />
-                  </Button>
-                  <Button size="sm" className="rounded-lg w-1/2 sm:w-auto">
-                    <CheckCircle className="h-4 w-4" />
-                  </Button>
-                </div>
+              ))
+            ) : (
+              <div className="text-center py-6 text-sm text-muted-foreground">
+                Aucune demande en attente
               </div>
-            ))}
+            )}
           </CardContent>
         </Card>
 
@@ -365,26 +459,32 @@ export function EstablishmentDashboardScreen({ hasData = true, onNavigate }: Est
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 lg:space-y-4">
-            {recentActivity.map((activity) => (
-              <div key={activity.id} className="flex items-center gap-3 p-3 border border-border rounded-xl">
-                <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                  activity.type === 'certificate' ? 'bg-primary/10 text-primary' :
-                  activity.type === 'verification' ? 'bg-blue-100 text-blue-600' :
-                  'bg-green-100 text-green-600'
-                }`}>
-                  {activity.type === 'certificate' && <Award className="h-4 w-4 sm:h-5 sm:w-5" />}
-                  {activity.type === 'verification' && <Eye className="h-4 w-4 sm:h-5 sm:w-5" />}
-                  {activity.type === 'student' && <Users className="h-4 w-4 sm:h-5 sm:w-5" />}
+            {recentActivity.length > 0 ? (
+              recentActivity.map((activity, index) => (
+                <div key={index} className="flex items-center gap-3 p-3 border border-border rounded-xl">
+                  <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    activity.type === 'certificate' ? 'bg-primary/10 text-primary' :
+                    activity.type === 'verification' ? 'bg-blue-100 text-blue-600' :
+                    'bg-green-100 text-green-600'
+                  }`}>
+                    {activity.type === 'certificate' && <Award className="h-4 w-4 sm:h-5 sm:w-5" />}
+                    {activity.type === 'verification' && <Eye className="h-4 w-4 sm:h-5 sm:w-5" />}
+                    {activity.type === 'student' && <Users className="h-4 w-4 sm:h-5 sm:w-5" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm lg:text-base truncate">{activity.titre}</p>
+                    <p className="text-xs lg:text-sm text-muted-foreground truncate">{activity.description}</p>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <p className="text-xs lg:text-sm text-muted-foreground">{activity.timeAgo}</p>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm lg:text-base truncate">{activity.title}</p>
-                  <p className="text-xs lg:text-sm text-muted-foreground truncate">{activity.subtitle}</p>
-                </div>
-                <div className="text-right flex-shrink-0">
-                  <p className="text-xs lg:text-sm text-muted-foreground">{activity.time}</p>
-                </div>
+              ))
+            ) : (
+              <div className="text-center py-6 text-sm text-muted-foreground">
+                Aucune activité récente
               </div>
-            ))}
+            )}
           </CardContent>
         </Card>
       </div>

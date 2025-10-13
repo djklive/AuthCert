@@ -176,6 +176,33 @@ function authHeaders(): Record<string, string> {
     return res.json();
   },
 
+  // Re-révoquer un certificat (en cas d'échec blockchain)
+  async retryRevokeCertificate(certificatId: number, reason?: string) {
+    const res = await fetch(`${API_BASE_URL}/certificats/${certificatId}/retry-revoke`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(),
+      } as HeadersInit,
+      body: JSON.stringify({ reason })
+    });
+    if (!res.ok) throw new Error('Erreur re-révocation certificat');
+    return res.json();
+  },
+
+  // Re-publier un certificat (en cas d'échec blockchain)
+  async retryEmitCertificate(certificatId: number) {
+    const res = await fetch(`${API_BASE_URL}/certificats/${certificatId}/retry-emit`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(),
+      } as HeadersInit,
+    });
+    if (!res.ok) throw new Error('Erreur re-publication certificat');
+    return res.json();
+  },
+
   // ===============================================
   //                GESTION PROFIL UTILISATEUR
   // ===============================================
@@ -426,6 +453,85 @@ function authHeaders(): Record<string, string> {
       const errorData = await res.json();
       throw new Error(errorData.message || 'Erreur requête DELETE');
     }
+    return res.json();
+  },
+
+  // ========================================
+  // MÉTHODES POUR LES NOTIFICATIONS
+  // ========================================
+
+  // Récupérer les notifications
+  async getNotifications(params?: { limit?: number; offset?: number; unreadOnly?: boolean }) {
+    const queryParams = new URLSearchParams();
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.offset) queryParams.append('offset', params.offset.toString());
+    if (params?.unreadOnly) queryParams.append('unreadOnly', 'true');
+    
+    const res = await fetch(`${API_BASE_URL}/notifications?${queryParams.toString()}`, {
+      headers: authHeaders()
+    });
+    if (!res.ok) throw new Error('Erreur récupération notifications');
+    return res.json();
+  },
+
+  // Compter les notifications non lues
+  async getUnreadNotificationsCount() {
+    const res = await fetch(`${API_BASE_URL}/notifications/unread-count`, {
+      headers: authHeaders()
+    });
+    if (!res.ok) throw new Error('Erreur comptage notifications');
+    return res.json();
+  },
+
+  // Marquer une notification comme lue
+  async markNotificationAsRead(notificationId: number) {
+    const res = await fetch(`${API_BASE_URL}/notifications/${notificationId}/read`, {
+      method: 'PATCH',
+      headers: authHeaders()
+    });
+    if (!res.ok) throw new Error('Erreur marquage notification');
+    return res.json();
+  },
+
+  // Marquer toutes les notifications comme lues
+  async markAllNotificationsAsRead() {
+    const res = await fetch(`${API_BASE_URL}/notifications/read-all`, {
+      method: 'PATCH',
+      headers: authHeaders()
+    });
+    if (!res.ok) throw new Error('Erreur marquage notifications');
+    return res.json();
+  },
+
+  // Supprimer une notification
+  async deleteNotification(notificationId: number) {
+    const res = await fetch(`${API_BASE_URL}/notifications/${notificationId}`, {
+      method: 'DELETE',
+      headers: authHeaders()
+    });
+    if (!res.ok) throw new Error('Erreur suppression notification');
+    return res.json();
+  },
+
+  // ========================================
+  // MÉTHODES POUR LE DASHBOARD
+  // ========================================
+
+  // Récupérer les statistiques du dashboard d'un établissement
+  async getEstablishmentDashboard(establishmentId: number) {
+    const res = await fetch(`${API_BASE_URL}/etablissement/${establishmentId}/dashboard`, {
+      headers: authHeaders()
+    });
+    if (!res.ok) throw new Error('Erreur récupération dashboard');
+    return res.json();
+  },
+
+  // Récupérer les statistiques du dashboard d'un apprenant
+  async getStudentDashboard(studentId: number) {
+    const res = await fetch(`${API_BASE_URL}/apprenant/${studentId}/dashboard`, {
+      headers: authHeaders()
+    });
+    if (!res.ok) throw new Error('Erreur récupération dashboard');
     return res.json();
   },
 };

@@ -18,6 +18,7 @@ import { useAuth } from "../../hooks/useAuth";
 import authService from "../../services/authService";
 import { Button } from "../../components/ui/button";
 import { API_BASE } from "../../services/api";
+import { ForgotPasswordModal } from "../../components/ForgotPasswordModal";
 
 //const API_BASE_URL = 'https://authcert-production.up.railway.app/api';
 //const API_BASE_URL = 'http://localhost:5000/api';
@@ -40,6 +41,7 @@ export default function AuthPage({ defaultTab = "login" }: AuthPageProps) {
   const [signupTab, setSignupTab] = useState<"apprenant" | "etablissement">("apprenant");
   const [loading, setLoading] = useState(false);
   const [alert, setAlert] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
+  const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
 
   // Détecter le message de succès depuis l'URL
   useEffect(() => {
@@ -287,9 +289,13 @@ export default function AuthPage({ defaultTab = "login" }: AuthPageProps) {
                         Se souvenir de moi
                       </Label>
                     </div>
-                    <a href="#" className="text-sm text-[#F43F5E] hover:underline">
+                    <button 
+                      type="button"
+                      onClick={() => setIsForgotPasswordOpen(true)}
+                      className="text-sm text-[#F43F5E] hover:underline"
+                    >
                       Mot de passe oublié ?
-                    </a>
+                    </button>
                   </div>
                   <PrimaryButton type="submit" loading={loading} className="mt-6">
                     Se connecter
@@ -345,6 +351,12 @@ export default function AuthPage({ defaultTab = "login" }: AuthPageProps) {
           </div>
         </AnimatedSection>
       </div>
+      
+      {/* Modal Mot de passe oublié */}
+      <ForgotPasswordModal 
+        isOpen={isForgotPasswordOpen} 
+        onClose={() => setIsForgotPasswordOpen(false)} 
+      />
     </div>
   );
 }

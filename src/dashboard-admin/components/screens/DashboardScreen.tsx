@@ -193,7 +193,7 @@ export function DashboardScreen({ onNavigate, user }: DashboardScreenProps) {
         </div>
 
         {/* Widget Revenus */}
-        <div className="bg-white rounded-xl p-4 lg:p-6 border border-gray-200">
+        {/*<div className="bg-white rounded-xl p-4 lg:p-6 border border-gray-200">
           <h2 className="text-base lg:text-lg font-semibold text-gray-900 mb-3 lg:mb-4">Revenus (MRR)</h2>
           <div className="text-center">
             <div className="text-2xl lg:text-3xl font-bold text-gray-900 mb-2">€24,500</div>
@@ -219,7 +219,7 @@ export function DashboardScreen({ onNavigate, user }: DashboardScreenProps) {
               Voir le rapport complet
             </button>
           </div>
-        </div>
+        </div>*/}
       </div>
 
       {/* Flux d'Activité Récente */}

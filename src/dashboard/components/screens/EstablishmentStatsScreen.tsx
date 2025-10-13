@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -15,7 +15,8 @@ import {
   Activity,
   MapPin,
   Trophy,
-  Zap
+  Zap,
+  RefreshCw
 } from 'lucide-react';
 import { 
   AreaChart,
@@ -30,58 +31,185 @@ import {
   PieChart as RechartsPieChart,
   Cell
 } from 'recharts';
+import { api } from '../../../services/api';
+import { useUser } from '../../hooks/useUser';
 
 interface EstablishmentStatsScreenProps {
   onNavigate: (screen: string) => void;
 }
 
+interface StatsData {
+  totalCertificates: number;
+  totalStudents: number;
+  totalVerifications: number;
+  certificatesByStatus: Record<string, number>;
+  certificatesByFormation: Array<{
+    formationName: string;
+    count: number;
+  }>;
+  monthlyStats: Array<{
+    month: string;
+    certificates: number;
+    verifications: number;
+  }>;
+  topVerifiedCertificates: Array<{
+    id: number;
+    titre: string;
+    verificationCount: number;
+  }>;
+}
+
 export function EstablishmentStatsScreen({ onNavigate }: EstablishmentStatsScreenProps) {
   const [selectedPeriod, setSelectedPeriod] = useState('30d');
   const [selectedMetric, setSelectedMetric] = useState('verifications');
+  const [statsData, setStatsData] = useState<StatsData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const { user } = useUser();
 
-  // Mock data
-  const timeSeriesData = [
-    { name: 'Jan', certificates: 45, verifications: 124, students: 89 },
-    { name: 'Fév', certificates: 52, verifications: 156, students: 92 },
-    { name: 'Mar', certificates: 61, verifications: 189, students: 98 },
-    { name: 'Avr', certificates: 58, verifications: 201, students: 105 },
-    { name: 'Mai', certificates: 67, verifications: 234, students: 112 },
-    { name: 'Jun', certificates: 73, verifications: 267, students: 118 },
-  ];
+  const loadStats = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError('');
+      
+      if (!user?.id) {
+        throw new Error('Utilisateur non connecté');
+      }
 
-  const topCertificates = [
-    { name: 'Master Marketing Digital', verifications: 234, growth: 12 },
-    { name: 'Formation Leadership', verifications: 189, growth: 8 },
-    { name: 'Certification Agile', verifications: 156, growth: 15 },
-    { name: 'Master Commerce International', verifications: 134, growth: -2 },
-    { name: 'Formation Data Science', verifications: 98, growth: 25 }
-  ];
+      // Charger les statistiques de l'établissement
+      const response = await api.get(`/etablissement/${user.id}/stats?period=${selectedPeriod}`);
+      
+      if (response.success) {
+        setStatsData(response.data);
+      } else {
+        throw new Error(response.message || 'Erreur lors du chargement des statistiques');
+      }
+    } catch (err) {
+      setError('Erreur lors du chargement des statistiques');
+      console.error('Erreur chargement stats:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.id, selectedPeriod]);
 
-  const geographicData = [
-    { name: 'France', value: 45, color: '#f43f5e' },
-    { name: 'Canada', value: 20, color: '#ec4899' },
-    { name: 'Suisse', value: 15, color: '#8b5cf6' },
-    { name: 'Belgique', value: 12, color: '#06b6d4' },
-    { name: 'Autres', value: 8, color: '#10b981' }
-  ];
+  useEffect(() => {
+    if (user?.id) {
+      loadStats();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPeriod, user?.id]);
 
-  const monthlyData = [
-    { name: 'Jan', value: 2450 },
-    { name: 'Fév', value: 3200 },
-    { name: 'Mar', value: 2800 },
-    { name: 'Avr', value: 3900 },
-    { name: 'Mai', value: 4200 },
-    { name: 'Jun', value: 3800 },
-  ];
+  const handleExportStats = () => {
+    if (!statsData) return;
+    
+    const csvData = [
+      ['Métrique', 'Valeur'],
+      ['Total Certificats', statsData.totalCertificates],
+      ['Total Étudiants', statsData.totalStudents],
+      ['Total Vérifications', statsData.totalVerifications],
+      ['', ''],
+      ['Certificats par Statut', ''],
+      ...Object.entries(statsData.certificatesByStatus).map(([status, count]) => [status, count]),
+      ['', ''],
+      ['Certificats par Formation', ''],
+      ...statsData.certificatesByFormation.map(({ formationName, count }) => [formationName, count])
+    ];
 
-  const stats = {
-    totalCertificates: 347,
-    totalVerifications: 1823,
-    activeStudents: 118,
-    verificationRate: 92.5,
-    avgVerificationTime: 2.3,
-    topCountry: 'France'
+    const csvContent = csvData.map(row => row.join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `statistiques-etablissement-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
   };
+
+  if (loading) {
+    return (
+      <div className="p-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
+            <p className="text-muted-foreground">Chargement des statistiques...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <Card className="border-destructive">
+          <CardContent className="p-6 text-center">
+            <p className="text-destructive mb-4">{error}</p>
+            <Button onClick={loadStats} variant="outline">
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Réessayer
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!statsData) {
+    return (
+      <div className="p-6">
+        <Card>
+          <CardContent className="p-6 text-center">
+            <p className="text-muted-foreground">Aucune donnée disponible</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Calculer les statistiques dérivées à partir de statsData
+  const stats = statsData ? {
+    totalCertificates: statsData.totalCertificates,
+    totalVerifications: statsData.totalVerifications,
+    activeStudents: statsData.totalStudents,
+    verificationRate: statsData.totalCertificates > 0 
+      ? ((statsData.totalVerifications / statsData.totalCertificates) * 100).toFixed(1) 
+      : 0,
+    avgVerificationTime: 2.3, // TODO: Calculer depuis le backend si nécessaire
+    topCountry: 'Cameroun' // TODO: Implémenter la géolocalisation si nécessaire
+  } : {
+    totalCertificates: 0,
+    totalVerifications: 0,
+    activeStudents: 0,
+    verificationRate: 0,
+    avgVerificationTime: 0,
+    topCountry: 'N/A'
+  };
+
+  // Utiliser les données réelles de l'API
+  const timeSeriesData = statsData?.monthlyStats || [];
+  
+  const topCertificates = statsData?.topVerifiedCertificates.map((cert, index, arr) => ({
+    name: cert.titre,
+    verifications: cert.verificationCount,
+    growth: index > 0 
+      ? Math.round(((cert.verificationCount - arr[index - 1].verificationCount) / arr[index - 1].verificationCount) * 100)
+      : 0
+  })) || [];
+
+  // Données géographiques (mock pour l'instant - nécessite une implémentation de géolocalisation)
+  const geographicData = [
+    { name: 'Cameroun', value: 65, color: '#f43f5e' },
+    { name: 'France', value: 15, color: '#ec4899' },
+    { name: 'Gabon', value: 10, color: '#8b5cf6' },
+    { name: 'RDC', value: 7, color: '#06b6d4' },
+    { name: 'Autres', value: 3, color: '#10b981' }
+  ];
+
+  // Données mensuelles pour le graphique en barres
+  const monthlyData = statsData?.monthlyStats.map(stat => ({
+    name: stat.month,
+    value: stat.verifications
+  })) || [];
 
   const periods = [
     { value: '7d', label: '7 derniers jours' },
@@ -112,7 +240,7 @@ export function EstablishmentStatsScreen({ onNavigate }: EstablishmentStatsScree
               ))}
             </SelectContent>
           </Select>
-          <Button className="rounded-xl">
+          <Button className="rounded-xl" onClick={handleExportStats}>
             <Download className="h-4 w-4 mr-2" />
             Exporter le rapport PDF
           </Button>

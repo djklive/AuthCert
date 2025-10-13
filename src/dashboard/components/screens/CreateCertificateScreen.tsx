@@ -79,6 +79,7 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
   });
   const [newSkill, setNewSkill] = useState('');
   const [isPublishing, setIsPublishing] = useState(false);
+  const [isCreatingDraft, setIsCreatingDraft] = useState(false); // ✅ Protection contre les double-clics
   const [draftId, setDraftId] = useState<number | null>(null);
   const [error, setError] = useState<string>('');
   const { user } = useUser();
@@ -169,12 +170,21 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
       return;
     }
     if (currentStep === 2) {
+      // ✅ Protection contre les double-clics
+      if (isCreatingDraft) {
+        console.log('⚠️ Création de brouillon déjà en cours, ignoré');
+        return;
+      }
+      
       // Créer un brouillon côté backend
       if (!selectedStudent || !certificateData.title || !certificateData.issueDate || !certificateData.formationId) {
         setError('Veuillez sélectionner un étudiant, une formation, un titre et une date.');
         return;
       }
+      
+      setIsCreatingDraft(true);
       try {
+        console.log('🔄 Création du brouillon de certificat...');
         const res = await api.createCertificateDraft({
           apprenantId: selectedStudent.id,
           titre: certificateData.title,
@@ -185,8 +195,12 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
         const draft = res.data;
         setDraftId(draft.id);
         setCurrentStep(3);
-      } catch {
+        console.log('✅ Brouillon créé avec succès:', draft.id);
+      } catch (error) {
+        console.error('❌ Erreur création brouillon:', error);
         setError('Erreur lors de la création du brouillon');
+      } finally {
+        setIsCreatingDraft(false);
       }
       return;
     }
@@ -569,15 +583,15 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
                     <CardContent className="space-y-3">
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Réseau :</span>
-                        <span className="font-medium">Ethereum Mainnet</span>
+                        <span className="font-medium">Polygon Mainnet</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Coût estimé :</span>
-                        <span className="font-medium">~0.005 ETH</span>
+                        <span className="font-medium">~0.005 MATIC</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Temps :</span>
-                        <span className="font-medium">2-5 minutes</span>
+                        <span className="font-medium">2-3 minutes</span>
                       </div>
                       <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
                         <div className="flex items-center gap-2 text-sm text-green-700">
@@ -654,10 +668,14 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
               {currentStep < 3 ? (
                 <Button 
                   onClick={handleNext}
-                  disabled={(currentStep === 1 && !selectedStudent) || (currentStep === 2 && (!certificateData.title || !certificateData.issueDate))}
+                  disabled={
+                    (currentStep === 1 && !selectedStudent) || 
+                    (currentStep === 2 && (!certificateData.title || !certificateData.issueDate || !certificateData.formationId)) ||
+                    isCreatingDraft // ✅ Désactiver le bouton pendant la création
+                  }
                   className="rounded-xl"
                 >
-                  Continuer
+                  {isCreatingDraft ? 'Création...' : 'Continuer'}
                   <ArrowRight className="h-4 w-4 ml-2" />
                 </Button>
               ) : (

@@ -29,6 +29,9 @@ model Apprenant {
   
   // Relations avec les sessions
   sessions         Session[] @relation("ApprenantSessions")
+  
+  // Relations avec les notifications
+  notifications    Notification[] @relation("ApprenantNotifications")
 
   @@map("apprenants")
 }
@@ -69,6 +72,9 @@ model Etablissement {
   
   // Relations avec les sessions
   sessions                          Session[] @relation("EtablissementSessions")
+  
+  // Relations avec les notifications
+  notifications                     Notification[] @relation("EtablissementNotifications")
 
   @@map("etablissements")
 }
@@ -85,6 +91,9 @@ model Admin {
   
   // Relations avec les sessions
   sessions         Session[] @relation("AdminSessions")
+  
+  // Relations avec les notifications
+  notifications    Notification[] @relation("AdminNotifications")
 
   @@map("admins")
 }
@@ -147,10 +156,22 @@ model Certificat {
   contractAddress  String?
   issuedAt         DateTime?
   createdAt        DateTime          @default(now())
+  
+  // Nouveaux champs pour le tracking des publications
+  emissionTxHash String?            // Hash de la transaction d'émission
+  emissionAttempts Int             @default(0)  // Nombre de tentatives d'émission
+  lastEmissionAttempt DateTime?    // Dernière tentative d'émission
+  
+  // Nouveaux champs pour le tracking des révocations
+  revocationTxHash String?           // Hash de la transaction de révocation
+  revocationAttempts Int            @default(0)  // Nombre de tentatives de révocation
+  lastRevocationAttempt DateTime?   // Dernière tentative de révocation
+  revocationReason String?          // Raison de la révocation
 
   etablissement    Etablissement     @relation(fields: [etablissementId], references: [id_etablissement])
   apprenant        Apprenant         @relation(fields: [apprenantId], references: [id_apprenant])
   formation        Formation?        @relation(fields: [formationId], references: [id]) // Nouvelle relation
+  verificationStats VerificationStat[] // Statistiques de vérification
 
   @@map("certificats")
 }
@@ -232,8 +253,12 @@ enum TypeDocumentEtablissement {
 enum StatutCertificat {
   BROUILLON
   A_EMETTRE
+  EN_COURS_EMISSION    // Nouveau statut pour les publications en cours
   EMIS
+  EMISSION_ECHEC       // Nouveau statut pour les publications qui ont échoué
+  EN_COURS_REVOCATION  // Nouveau statut pour les révocations en cours
   REVOQUE
+  REVOQUE_ECHEC        // Nouveau statut pour les révocations qui ont échoué
 }
 
 // Coffre-fort pour stocker les clés privées chiffrées
@@ -356,4 +381,91 @@ enum StatutFormation {
   ACTIF
   INACTIF
   ARCHIVE
+}
+
+// ===============================================
+//                STATISTIQUES DE VÉRIFICATION
+// ===============================================
+
+model VerificationStat {
+  id                Int      @id @default(autoincrement())
+  certificatId      Int
+  verifiedAt        DateTime @default(now())
+  ipAddress         String?   // Adresse IP du vérificateur
+  userAgent         String?   // Navigateur utilisé
+  verificationType  String   @default("public") // "public" ou "qr"
+  
+  // Relations
+  certificat        Certificat @relation(fields: [certificatId], references: [id], onDelete: Cascade)
+  
+  @@map("verification_stats")
+}
+
+// ===============================================
+//                NOTIFICATIONS
+// ===============================================
+
+model Notification {
+  id          Int      @id @default(autoincrement())
+  userId      Int      // ID de l'utilisateur destinataire
+  userType    String   // 'apprenant' | 'etablissement' | 'admin'
+  type        TypeNotification
+  titre       String
+  message     String
+  lu          Boolean  @default(false)
+  important   Boolean  @default(false)
+  lienAction  String?  // URL ou route vers laquelle rediriger
+  metadonnees Json?    // Données additionnelles (certificatId, demandeId, etc.)
+  createdAt   DateTime @default(now())
+  readAt      DateTime? // Date de lecture
+  
+  // Relations optionnelles pour l'intégrité référentielle
+  apprenantId     Int?
+  etablissementId Int?
+  adminId         Int?
+  
+  apprenant     Apprenant?     @relation("ApprenantNotifications", fields: [apprenantId], references: [id_apprenant], onDelete: Cascade)
+  etablissement Etablissement? @relation("EtablissementNotifications", fields: [etablissementId], references: [id_etablissement], onDelete: Cascade)
+  admin         Admin?         @relation("AdminNotifications", fields: [adminId], references: [id_admin], onDelete: Cascade)
+  
+  @@index([userId, userType, lu])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+enum TypeNotification {
+  NOUVEAU_CERTIFICAT      // Un nouveau certificat a été émis
+  VERIFICATION_CERTIFICAT // Quelqu'un a vérifié un certificat
+  DEMANDE_LIAISON_APPRENANT // Nouvelle demande de liaison d'un étudiant
+  DEMANDE_LIAISON_APPROUVEE // Demande de liaison approuvée
+  DEMANDE_LIAISON_REJETEE   // Demande de liaison rejetée
+  DEMANDE_CERTIFICAT_NOUVELLE // Nouvelle demande de certificat
+  DEMANDE_CERTIFICAT_APPROUVEE // Demande de certificat approuvée
+  DEMANDE_CERTIFICAT_REJETEE   // Demande de certificat rejetée
+  CERTIFICAT_REVOQUE      // Un certificat a été révoqué
+  NOUVELLE_SESSION        // Nouvelle connexion détectée
+  SECURITE_ALERTE         // Alerte de sécurité
+  SYSTEME_MISE_A_JOUR     // Mise à jour système
+  ABONNEMENT_EXPIRE       // Abonnement expiré
+  ABONNEMENT_RENOUVELE    // Abonnement renouvelé
+}
+
+// ===============================================
+//          RÉCUPÉRATION DE MOT DE PASSE
+// ===============================================
+
+model PasswordReset {
+  id          Int      @id @default(autoincrement())
+  email       String
+  userType    String   // 'apprenant' | 'etablissement' | 'admin'
+  token       String   @unique
+  expiresAt   DateTime
+  used        Boolean  @default(false)
+  usedAt      DateTime?
+  createdAt   DateTime @default(now())
+  ipAddress   String?  // Pour traçabilité
+  
+  @@index([email, userType, used])
+  @@index([token, expiresAt])
+  @@map("password_resets")
 }

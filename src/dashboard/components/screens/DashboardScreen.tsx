@@ -1,4 +1,5 @@
 import { useUser } from '../../hooks/useUser';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
@@ -15,100 +16,56 @@ import {
   Download,
   Share2,
   MoreHorizontal,
-  Bell
+  Bell,
+  RefreshCw,
+  AlertTriangle
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
+import { api } from '../../../services/api';
 
 interface DashboardScreenProps {
   hasData?: boolean;
   onNavigate: (screen: string) => void;
 }
 
-// Mock data
-const mockCertificates = [
-  {
-    id: 1,
-    title: "Certification React Advanced",
-    institution: "Tech Academy",
-    date: "15 Jan 2024",
-    status: "verified",
-    views: 24,
-    color: "bg-primary"
-  },
-  {
-    id: 2,
-    title: "UX/UI Design Professional",
-    institution: "Design Institute",
-    date: "08 Déc 2023",
-    status: "verified",
-    views: 15,
-    color: "bg-chart-2"
-  },
-  {
-    id: 3,
-    title: "Project Management PMP",
-    institution: "Business School",
-    date: "22 Nov 2023",
-    status: "pending",
-    views: 3,
-    color: "bg-chart-4"
-  }
-];
-
-const mockStats = [
-  {
-    title: "Certificats",
-    value: "12",
-    description: "+2 ce mois",
-    icon: Award,
-    color: "text-primary",
-    bgColor: "bg-primary/10"
-  },
-  {
-    title: "Vérifications",
-    value: "156",
-    description: "+23% vs mois dernier",
-    icon: Eye,
-    color: "text-chart-2",
-    bgColor: "bg-chart-2/10"
-  },
-  {
-    title: "QR Scans",
-    value: "89",
-    description: "+12 cette semaine",
-    icon: QrCode,
-    color: "text-chart-4",
-    bgColor: "bg-chart-4/10"
-  },
-  {
-    title: "Établissements",
-    value: "5",
-    description: "3 validés",
-    icon: Building2,
-    color: "text-chart-5",
-    bgColor: "bg-chart-5/10"
-  }
-];
-
-const mockNotifications = [
-  {
-    id: 1,
-    title: "Nouveau certificat disponible",
-    description: "React Advanced - Tech Academy",
-    time: "Il y a 2h",
-    type: "success"
-  },
-  {
-    id: 2,
-    title: "Demande de vérification",
-    description: "3 nouvelles vérifications",
-    time: "Il y a 5h",
-    type: "info"
-  }
-];
+interface DashboardData {
+  stats: {
+    totalCertificates: number;
+    certificatesIssued: number;
+    totalVerifications: number;
+    recentVerifications: number;
+    linkedEstablishments: number;
+    pendingRequests: number;
+  };
+  recentCertificates: Array<{
+    id: number;
+    titre: string;
+    etablissement: string;
+    dateObtention: string;
+    statut: string;
+    verifications: number;
+  }>;
+  recentNotifications: Array<{
+    id: number;
+    titre: string;
+    message: string;
+    lu: boolean;
+    important: boolean;
+    type: string;
+    timeAgo: string;
+  }>;
+  activityData: Array<{
+    month: string;
+    certificates: number;
+    verifications: number;
+  }>;
+}
 
 export function DashboardScreen({ hasData = true, onNavigate }: DashboardScreenProps) {
   const { user } = useUser();
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   
   // Générer le nom d'affichage
   const getDisplayName = () => {
@@ -121,6 +78,81 @@ export function DashboardScreen({ hasData = true, onNavigate }: DashboardScreenP
     }
     return 'Utilisateur';
   };
+
+  // Charger les données du dashboard
+  const loadDashboardData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError('');
+      
+      if (!user?.id) {
+        throw new Error('Utilisateur non connecté');
+      }
+
+      const studentId = typeof user.id === 'string' ? parseInt(user.id) : user.id;
+      const response = await api.getStudentDashboard(studentId);
+      
+      if (response.success) {
+        setDashboardData(response.data);
+      } else {
+        throw new Error(response.message || 'Erreur lors du chargement du dashboard');
+      }
+    } catch (err) {
+      setError('Erreur lors du chargement des données');
+      console.error('Erreur chargement dashboard:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    loadDashboardData();
+  }, [loadDashboardData]);
+
+  // Utiliser les données réelles ou des valeurs par défaut
+  const stats = dashboardData?.stats || {
+    totalCertificates: 0,
+    certificatesIssued: 0,
+    totalVerifications: 0,
+    recentVerifications: 0,
+    linkedEstablishments: 0,
+    pendingRequests: 0
+  };
+
+  const recentCertificates = dashboardData?.recentCertificates || [];
+  const recentNotifications = dashboardData?.recentNotifications || [];
+
+  // État de chargement
+  if (loading) {
+    return (
+      <div className="p-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
+            <p className="text-muted-foreground">Chargement du dashboard...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // État d'erreur
+  if (error) {
+    return (
+      <div className="p-6">
+        <Card className="border-destructive">
+          <CardContent className="p-6 text-center">
+            <AlertTriangle className="h-8 w-8 mx-auto mb-4 text-destructive" />
+            <p className="text-destructive mb-4">{error}</p>
+            <Button onClick={loadDashboardData} variant="outline">
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Réessayer
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   //const [selectedPeriod, setSelectedPeriod] = useState("30d");
 
@@ -193,27 +225,54 @@ export function DashboardScreen({ hasData = true, onNavigate }: DashboardScreenP
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 lg:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-        {mockStats.map((stat, index) => {
-          const Icon = stat.icon;
-          return (
-            <Card key={index} className="relative overflow-hidden">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-xs lg:text-sm font-medium">{stat.title}</CardTitle>
-                <div className={`w-8 h-8 lg:w-10 lg:h-10 ${stat.bgColor} rounded-lg flex items-center justify-center`}>
-                  <Icon className={`h-4 w-4 lg:h-5 lg:w-5 ${stat.color}`} />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-xl lg:text-2xl font-bold">{stat.value}</div>
-                <p className="text-xs text-muted-foreground flex items-center mt-1">
-                  <TrendingUp className="mr-1 h-3 w-3" />
-                  {stat.description}
-                </p>
-              </CardContent>
-            </Card>
-          );
-        })}
+      <div className="grid gap-4 lg:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+        <Card className="relative overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs lg:text-sm font-medium">Certificats</CardTitle>
+            <div className="w-8 h-8 lg:w-10 lg:h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+              <Award className="h-4 w-4 lg:h-5 lg:w-5 text-primary" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-xl lg:text-2xl font-bold">{stats.totalCertificates}</div>
+            <p className="text-xs text-muted-foreground flex items-center mt-1">
+              <TrendingUp className="mr-1 h-3 w-3" />
+              {stats.certificatesIssued} émis
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="relative overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs lg:text-sm font-medium">Vérifications</CardTitle>
+            <div className="w-8 h-8 lg:w-10 lg:h-10 bg-chart-2/10 rounded-lg flex items-center justify-center">
+              <Eye className="h-4 w-4 lg:h-5 lg:w-5 text-chart-2" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-xl lg:text-2xl font-bold">{stats.totalVerifications}</div>
+            <p className="text-xs text-muted-foreground flex items-center mt-1">
+              <TrendingUp className="mr-1 h-3 w-3" />
+              +{stats.recentVerifications} ce mois
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="relative overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs lg:text-sm font-medium">Établissements</CardTitle>
+            <div className="w-8 h-8 lg:w-10 lg:h-10 bg-chart-5/10 rounded-lg flex items-center justify-center">
+              <Building2 className="h-4 w-4 lg:h-5 lg:w-5 text-chart-5" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-xl lg:text-2xl font-bold">{stats.linkedEstablishments}</div>
+            <p className="text-xs text-muted-foreground flex items-center mt-1">
+              <TrendingUp className="mr-1 h-3 w-3" />
+              {stats.pendingRequests} demandes en attente
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid gap-6 lg:gap-8 grid-cols-1 lg:grid-cols-3">
@@ -232,58 +291,64 @@ export function DashboardScreen({ hasData = true, onNavigate }: DashboardScreenP
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {mockCertificates.map((cert, index) => (
-                <div key={cert.id}>
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-                    <div className={`w-10 h-10 sm:w-12 sm:h-12 ${cert.color}/10 rounded-xl flex items-center justify-center flex-shrink-0`}>
-                      <Award className={`h-5 w-5 sm:h-6 sm:w-6 ${cert.color.replace('bg-', 'text-')}`} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-semibold truncate text-sm sm:text-base">{cert.title}</h4>
-                      <div className="flex items-center space-x-2 text-xs sm:text-sm text-muted-foreground">
-                        <span>{cert.institution}</span>
-                        <span>•</span>
-                        <span>{cert.date}</span>
+              {recentCertificates.length > 0 ? (
+                recentCertificates.map((cert, index) => (
+                  <div key={cert.id}>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0">
+                        <Award className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-semibold truncate text-sm sm:text-base">{cert.titre}</h4>
+                        <div className="flex items-center space-x-2 text-xs sm:text-sm text-muted-foreground">
+                          <span>{cert.etablissement}</span>
+                          <span>•</span>
+                          <span>{new Date(cert.dateObtention).toLocaleDateString('fr-FR')}</span>
+                        </div>
+                      </div>
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2">
+                        <Badge variant={cert.statut === 'EMIS' ? 'default' : 'secondary'} className="w-full sm:w-auto text-center">
+                          {cert.statut === 'EMIS' ? 'Vérifié' : cert.statut === 'REVOQUE' ? 'Révoqué' : 'En attente'}
+                        </Badge>
+                        <div className="flex items-center justify-center sm:justify-start text-xs sm:text-sm text-muted-foreground">
+                          <Eye className="mr-1 h-3 w-3" />
+                          {cert.verifications}
+                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className="w-full sm:w-auto">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => onNavigate('certificates')}>
+                              <Eye className="mr-2 h-4 w-4" />
+                              Voir détails
+                            </DropdownMenuItem>
+                            <DropdownMenuItem>
+                              <Download className="mr-2 h-4 w-4" />
+                              Télécharger PDF
+                            </DropdownMenuItem>
+                            <DropdownMenuItem>
+                              <QrCode className="mr-2 h-4 w-4" />
+                              QR Code
+                            </DropdownMenuItem>
+                            <DropdownMenuItem>
+                              <Share2 className="mr-2 h-4 w-4" />
+                              Partager
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </div>
-                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2">
-                      <Badge variant={cert.status === 'verified' ? 'default' : 'secondary'} className="w-full sm:w-auto text-center">
-                        {cert.status === 'verified' ? 'Vérifié' : 'En attente'}
-                      </Badge>
-                      <div className="flex items-center justify-center sm:justify-start text-xs sm:text-sm text-muted-foreground">
-                        <Eye className="mr-1 h-3 w-3" />
-                        {cert.views}
-                      </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm" className="w-full sm:w-auto">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem>
-                            <Eye className="mr-2 h-4 w-4" />
-                            Voir détails
-                          </DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <Download className="mr-2 h-4 w-4" />
-                            Télécharger PDF
-                          </DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <QrCode className="mr-2 h-4 w-4" />
-                            QR Code
-                          </DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <Share2 className="mr-2 h-4 w-4" />
-                            Partager
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
+                    {index < recentCertificates.length - 1 && <Separator className="mt-4" />}
                   </div>
-                  {index < mockCertificates.length - 1 && <Separator className="mt-4" />}
+                ))
+              ) : (
+                <div className="text-center py-8 text-sm text-muted-foreground">
+                  Aucun certificat récent
                 </div>
-              ))}
+              )}
             </CardContent>
           </Card>
         </div>
@@ -334,21 +399,27 @@ export function DashboardScreen({ hasData = true, onNavigate }: DashboardScreenP
               </div>
             </CardHeader>
             <CardContent className="space-y-3 lg:space-y-4">
-              {mockNotifications.map((notification, index) => (
-                <div key={notification.id} className="space-y-2">
-                  <div className="flex items-start space-x-3">
-                    <div className={`mt-1 w-2 h-2 rounded-full ${
-                      notification.type === 'success' ? 'bg-primary' : 'bg-chart-2'
-                    }`} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs lg:text-sm font-medium">{notification.title}</p>
-                      <p className="text-xs lg:text-sm text-muted-foreground">{notification.description}</p>
-                      <p className="text-xs text-muted-foreground mt-1">{notification.time}</p>
+              {recentNotifications.length > 0 ? (
+                recentNotifications.map((notification, index) => (
+                  <div key={notification.id} className="space-y-2">
+                    <div className="flex items-start space-x-3">
+                      <div className={`mt-1 w-2 h-2 rounded-full ${
+                        !notification.lu ? 'bg-primary' : 'bg-muted-foreground/30'
+                      }`} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs lg:text-sm font-medium">{notification.titre}</p>
+                        <p className="text-xs lg:text-sm text-muted-foreground">{notification.message}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{notification.timeAgo}</p>
+                      </div>
                     </div>
+                    {index < recentNotifications.length - 1 && <Separator />}
                   </div>
-                  {index < mockNotifications.length - 1 && <Separator />}
+                ))
+              ) : (
+                <div className="text-center py-6 text-sm text-muted-foreground">
+                  Aucune notification récente
                 </div>
-              ))}
+              )}
             </CardContent>
           </Card>
         </div>

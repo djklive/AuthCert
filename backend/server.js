@@ -22,6 +22,7 @@ const crypto = require('crypto');
 const QRCode = require('qrcode');
 const { v4: uuidv4 } = require('uuid');
 const { ethers } = require('ethers');
+const { sendPasswordResetEmail } = require('./services/emailService');
 
 const app = express();
 const prisma = new PrismaClient();
@@ -653,6 +654,18 @@ app.post('/api/register/apprenant', async (req, res) => {
           }
         });
         demandesLiaison.push(liaison);
+
+        // Créer une notification pour l'établissement
+        await createNotification({
+          userId: etablissement.id_etablissement,
+          userType: 'etablissement',
+          type: 'DEMANDE_LIAISON_APPRENANT',
+          titre: 'Nouvelle demande de liaison',
+          message: `${prenom} ${nom} souhaite se lier à votre établissement`,
+          important: true,
+          lienAction: '/dashboard?userType=establishment',
+          metadonnees: { liaisonId: liaison.id, apprenantId: apprenant.id_apprenant }
+        });
       }
     }
 
@@ -1471,6 +1484,283 @@ app.post('/api/auth/login', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la connexion',
+      error: error.message
+    });
+  }
+});
+
+// ===============================================
+//     RÉCUPÉRATION DE MOT DE PASSE
+// ===============================================
+
+// Route pour demander la réinitialisation du mot de passe
+app.post('/api/auth/forgot-password', async (req, res) => {
+  try {
+    const { email, userType } = req.body;
+
+    if (!email || !userType) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email et type d\'utilisateur requis'
+      });
+    }
+
+    // Valider le type d'utilisateur
+    const validUserTypes = ['student', 'establishment', 'admin'];
+    if (!validUserTypes.includes(userType)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Type d\'utilisateur invalide'
+      });
+    }
+
+    // Mapper le type d'utilisateur au type de base de données
+    const userTypeMap = {
+      'student': 'apprenant',
+      'establishment': 'etablissement',
+      'admin': 'admin'
+    };
+    const dbUserType = userTypeMap[userType];
+
+    // Vérifier si l'utilisateur existe
+    let userExists = false;
+    if (dbUserType === 'apprenant') {
+      const apprenant = await prisma.apprenant.findFirst({ where: { email } });
+      userExists = !!apprenant;
+    } else if (dbUserType === 'etablissement') {
+      const etablissement = await prisma.etablissement.findFirst({ where: { emailEtablissement: email } });
+      userExists = !!etablissement;
+    } else if (dbUserType === 'admin') {
+      const admin = await prisma.admin.findFirst({ where: { email } });
+      userExists = !!admin;
+    }
+
+    // Toujours retourner un succès pour ne pas révéler si l'email existe (sécurité)
+    if (!userExists) {
+      console.log(`⚠️ Tentative de réinitialisation pour email inexistant: ${email}`);
+      return res.json({
+        success: true,
+        message: 'Si cet email existe, un lien de réinitialisation a été envoyé'
+      });
+    }
+
+    // Générer un token sécurisé (32 bytes = 64 caractères hex)
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 3600000); // 1 heure
+
+    // Invalider tous les anciens tokens non utilisés pour cet email
+    await prisma.passwordReset.updateMany({
+      where: {
+        email,
+        userType: dbUserType,
+        used: false
+      },
+      data: {
+        used: true,
+        usedAt: new Date()
+      }
+    });
+
+    // Créer un nouveau token de réinitialisation
+    await prisma.passwordReset.create({
+      data: {
+        email,
+        userType: dbUserType,
+        token,
+        expiresAt,
+        ipAddress: req.ip || req.connection.remoteAddress || null
+      }
+    });
+
+    // Générer le lien de réinitialisation
+    const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password?token=${token}`;
+    
+    console.log('📧 Lien de réinitialisation:', resetLink);
+    console.log(`✅ Token de réinitialisation créé pour ${email} (expire dans 1h)`);
+
+    // Envoyer l'email de réinitialisation
+    if (process.env.NODE_ENV === 'production') {
+      try {
+        const emailResult = await sendPasswordResetEmail(email, resetLink);
+        if (emailResult.success) {
+          console.log('✅ Email de réinitialisation envoyé avec succès');
+        } else {
+          console.error('⚠️ Erreur envoi email, mais token créé en base:', emailResult.error);
+        }
+      } catch (emailError) {
+        console.error('⚠️ Exception envoi email:', emailError);
+        // On continue même si l'email échoue (le token est créé)
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Si cet email existe, un lien de réinitialisation a été envoyé',
+      // En développement, retourner le lien pour faciliter les tests
+      ...(process.env.NODE_ENV === 'development' && { resetLink })
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur demande réinitialisation:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la demande de réinitialisation',
+      error: error.message
+    });
+  }
+});
+
+// Route pour réinitialiser le mot de passe avec le token
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+
+    if (!token || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Token et nouveau mot de passe requis'
+      });
+    }
+
+    // Valider la longueur du mot de passe
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Le mot de passe doit contenir au moins 6 caractères'
+      });
+    }
+
+    // Récupérer le token de réinitialisation
+    const resetToken = await prisma.passwordReset.findUnique({
+      where: { token }
+    });
+
+    if (!resetToken) {
+      return res.status(400).json({
+        success: false,
+        message: 'Token invalide ou expiré'
+      });
+    }
+
+    // Vérifier si le token est déjà utilisé
+    if (resetToken.used) {
+      return res.status(400).json({
+        success: false,
+        message: 'Ce lien a déjà été utilisé'
+      });
+    }
+
+    // Vérifier si le token est expiré
+    if (new Date() > resetToken.expiresAt) {
+      return res.status(400).json({
+        success: false,
+        message: 'Ce lien a expiré. Demandez un nouveau lien de réinitialisation'
+      });
+    }
+
+    // Hasher le nouveau mot de passe
+    const hashedPassword = bcrypt.hashSync(newPassword, 10);
+
+    // Mettre à jour le mot de passe selon le type d'utilisateur
+    if (resetToken.userType === 'apprenant') {
+      await prisma.apprenant.updateMany({
+        where: { email: resetToken.email },
+        data: { motDePasse: hashedPassword }
+      });
+    } else if (resetToken.userType === 'etablissement') {
+      await prisma.etablissement.updateMany({
+        where: { emailEtablissement: resetToken.email },
+        data: { motDePasseEtablissement: hashedPassword }
+      });
+    } else if (resetToken.userType === 'admin') {
+      await prisma.admin.updateMany({
+        where: { email: resetToken.email },
+        data: { motDePasse: hashedPassword }
+      });
+    }
+
+    // Marquer le token comme utilisé
+    await prisma.passwordReset.update({
+      where: { id: resetToken.id },
+      data: {
+        used: true,
+        usedAt: new Date()
+      }
+    });
+
+    // Invalider toutes les sessions actives pour cet utilisateur (sécurité)
+    await prisma.session.deleteMany({
+      where: {
+        userId: resetToken.userType === 'apprenant' 
+          ? (await prisma.apprenant.findFirst({ where: { email: resetToken.email } }))?.id_apprenant
+          : resetToken.userType === 'etablissement'
+          ? (await prisma.etablissement.findFirst({ where: { emailEtablissement: resetToken.email } }))?.id_etablissement
+          : (await prisma.admin.findFirst({ where: { email: resetToken.email } }))?.id_admin,
+        userType: resetToken.userType
+      }
+    });
+
+    console.log(`✅ Mot de passe réinitialisé pour ${resetToken.email}`);
+
+    res.json({
+      success: true,
+      message: 'Mot de passe réinitialisé avec succès. Vous pouvez maintenant vous connecter.'
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur réinitialisation mot de passe:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la réinitialisation du mot de passe',
+      error: error.message
+    });
+  }
+});
+
+// Route pour vérifier la validité d'un token
+app.get('/api/auth/verify-reset-token/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    const resetToken = await prisma.passwordReset.findUnique({
+      where: { token }
+    });
+
+    if (!resetToken) {
+      return res.status(400).json({
+        success: false,
+        message: 'Token invalide'
+      });
+    }
+
+    if (resetToken.used) {
+      return res.status(400).json({
+        success: false,
+        message: 'Ce lien a déjà été utilisé'
+      });
+    }
+
+    if (new Date() > resetToken.expiresAt) {
+      return res.status(400).json({
+        success: false,
+        message: 'Ce lien a expiré'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Token valide',
+      data: {
+        email: resetToken.email,
+        userType: resetToken.userType
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur vérification token:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la vérification du token',
       error: error.message
     });
   }
@@ -2829,6 +3119,1027 @@ app.delete('/api/admin/etablissement/:id', authenticateToken, requireRole('admin
 });
 
 // ========================================
+// ROUTES POUR STATISTIQUES DE VÉRIFICATION
+// ========================================
+
+// Enregistrer une vérification de certificat
+app.post('/api/certificats/:uuid/verify', async (req, res) => {
+  try {
+    const { uuid } = req.params;
+    const { verificationType = 'public' } = req.body;
+    
+    // Trouver le certificat par UUID
+    const certificat = await prisma.certificat.findUnique({
+      where: { uuid }
+    });
+    
+    if (!certificat) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Certificat introuvable' 
+      });
+    }
+    
+    // Enregistrer la vérification
+    const verification = await prisma.verificationStat.create({
+      data: {
+        certificatId: certificat.id,
+        ipAddress: req.ip || req.connection.remoteAddress,
+        userAgent: req.get('User-Agent'),
+        verificationType
+      }
+    });
+    
+    console.log(`📊 Vérification enregistrée pour le certificat ${uuid} (ID: ${verification.id})`);
+    
+    // Créer une notification pour l'établissement (limiter à une notification toutes les 24h pour éviter le spam)
+    const derniere24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const notificationRecente = await prisma.notification.findFirst({
+      where: {
+        userId: certificat.etablissementId,
+        userType: 'etablissement',
+        type: 'VERIFICATION_CERTIFICAT',
+        createdAt: { gte: derniere24h }
+      }
+    });
+
+    if (!notificationRecente) {
+      const countToday = await prisma.verificationStat.count({
+        where: {
+          certificat: {
+            etablissementId: certificat.etablissementId
+          },
+          verifiedAt: { gte: derniere24h }
+        }
+      });
+
+      await createNotification({
+        userId: certificat.etablissementId,
+        userType: 'etablissement',
+        type: 'VERIFICATION_CERTIFICAT',
+        titre: 'Nouvelles vérifications',
+        message: `${countToday} vérification${countToday > 1 ? 's' : ''} de vos certificats aujourd'hui`,
+        important: false,
+        lienAction: '/dashboard?userType=establishment',
+        metadonnees: { count: countToday }
+      });
+    }
+    
+    res.json({ 
+      success: true, 
+      message: 'Vérification enregistrée',
+      data: { verificationId: verification.id }
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur enregistrement vérification:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Erreur lors de l\'enregistrement de la vérification',
+      error: error.message 
+    });
+  }
+});
+
+// Obtenir les statistiques de vérification d'un certificat
+app.get('/api/certificats/:id/verification-stats', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const userRole = req.user.role;
+    
+    // Vérifier que l'utilisateur peut accéder à ces statistiques
+    const certificat = await prisma.certificat.findUnique({
+      where: { id: parseInt(id) },
+      include: {
+        etablissement: true,
+        apprenant: true
+      }
+    });
+    
+    if (!certificat) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Certificat introuvable' 
+      });
+    }
+    
+    // Vérifier les permissions
+    if (userRole === 'establishment' && certificat.etablissementId !== userId) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Accès non autorisé' 
+      });
+    }
+    
+    if (userRole === 'student' && certificat.apprenantId !== userId) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Accès non autorisé' 
+      });
+    }
+    
+    // Récupérer les statistiques
+    const stats = await prisma.verificationStat.findMany({
+      where: { certificatId: parseInt(id) },
+      orderBy: { verifiedAt: 'desc' },
+      take: 50 // Limiter à 50 dernières vérifications
+    });
+    
+    const totalVerifications = await prisma.verificationStat.count({
+      where: { certificatId: parseInt(id) }
+    });
+    
+    res.json({ 
+      success: true, 
+      data: {
+        totalVerifications,
+        recentVerifications: stats,
+        certificat: {
+          id: certificat.id,
+          uuid: certificat.uuid,
+          titre: certificat.titre
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur récupération statistiques:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Erreur lors de la récupération des statistiques',
+      error: error.message 
+    });
+  }
+});
+
+// Obtenir les statistiques d'un établissement
+app.get('/api/etablissement/:id/stats', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { period = '30d' } = req.query;
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    // Vérifier les permissions
+    if (userRole === 'establishment' && parseInt(id) !== userId) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Accès non autorisé' 
+      });
+    }
+
+    // Calculer la date de début selon la période
+    const now = new Date();
+    let startDate = new Date();
+    
+    switch (period) {
+      case '7d':
+        startDate.setDate(now.getDate() - 7);
+        break;
+      case '30d':
+        startDate.setDate(now.getDate() - 30);
+        break;
+      case '90d':
+        startDate.setDate(now.getDate() - 90);
+        break;
+      case '1y':
+        startDate.setFullYear(now.getFullYear() - 1);
+        break;
+      default:
+        startDate.setDate(now.getDate() - 30);
+    }
+
+    // Statistiques générales
+    const totalCertificates = await prisma.certificat.count({
+      where: { 
+        etablissementId: parseInt(id),
+        createdAt: { gte: startDate }
+      }
+    });
+
+    const totalStudents = await prisma.liaisonApprenantEtablissement.count({
+      where: { 
+        etablissementId: parseInt(id),
+        statutLiaison: 'APPROUVE',
+        dateApprobation: { gte: startDate }
+      }
+    });
+
+    const totalVerifications = await prisma.verificationStat.count({
+      where: {
+        certificat: {
+          etablissementId: parseInt(id)
+        },
+        verifiedAt: { gte: startDate }
+      }
+    });
+
+    // Certificats par statut
+    const certificatesByStatus = await prisma.certificat.groupBy({
+      by: ['statut'],
+      where: { 
+        etablissementId: parseInt(id),
+        createdAt: { gte: startDate }
+      },
+      _count: { statut: true }
+    });
+
+    const statusMap = {};
+    certificatesByStatus.forEach(item => {
+      statusMap[item.statut] = item._count.statut;
+    });
+
+    // Certificats par formation
+    const certificatesByFormation = await prisma.certificat.groupBy({
+      by: ['formationId'],
+      where: { 
+        etablissementId: parseInt(id),
+        createdAt: { gte: startDate },
+        formationId: { not: null }
+      },
+      _count: { formationId: true },
+      _max: { createdAt: true }
+    });
+
+    const formationStats = await Promise.all(
+      certificatesByFormation.map(async (item) => {
+        const formation = await prisma.formation.findUnique({
+          where: { id: item.formationId }
+        });
+        return {
+          formationName: formation?.nomFormation || 'Formation inconnue',
+          count: item._count.formationId
+        };
+      })
+    );
+
+    // Statistiques mensuelles (6 derniers mois)
+    const monthlyStats = [];
+    for (let i = 5; i >= 0; i--) {
+      const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+      
+      const monthCertificates = await prisma.certificat.count({
+        where: {
+          etablissementId: parseInt(id),
+          createdAt: { gte: monthStart, lte: monthEnd }
+        }
+      });
+
+      const monthVerifications = await prisma.verificationStat.count({
+        where: {
+          certificat: {
+            etablissementId: parseInt(id)
+          },
+          verifiedAt: { gte: monthStart, lte: monthEnd }
+        }
+      });
+
+      monthlyStats.push({
+        month: monthStart.toLocaleDateString('fr-FR', { month: 'short' }),
+        certificates: monthCertificates,
+        verifications: monthVerifications
+      });
+    }
+
+    // Top certificats les plus vérifiés
+    const topVerifiedCertificates = await prisma.certificat.findMany({
+      where: { 
+        etablissementId: parseInt(id),
+        createdAt: { gte: startDate }
+      },
+      include: {
+        _count: {
+          select: {
+            verificationStats: true
+          }
+        }
+      },
+      orderBy: {
+        verificationStats: {
+          _count: 'desc'
+        }
+      },
+      take: 5
+    });
+
+    const topVerified = topVerifiedCertificates.map(cert => ({
+      id: cert.id,
+      titre: cert.titre,
+      verificationCount: cert._count.verificationStats
+    }));
+
+    res.json({ 
+      success: true, 
+      data: {
+        totalCertificates,
+        totalStudents,
+        totalVerifications,
+        certificatesByStatus: statusMap,
+        certificatesByFormation: formationStats,
+        monthlyStats,
+        topVerifiedCertificates: topVerified
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur récupération statistiques établissement:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Erreur lors de la récupération des statistiques',
+      error: error.message 
+    });
+  }
+});
+
+// ========================================
+// ROUTES POUR NOTIFICATIONS
+// ========================================
+
+// Récupérer les notifications de l'utilisateur connecté
+app.get('/api/notifications', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userRole = req.user.role;
+    const { limit = 50, offset = 0, unreadOnly = false } = req.query;
+    
+    // Mapper le rôle vers le userType
+    const userTypeMap = {
+      'student': 'apprenant',
+      'establishment': 'etablissement',
+      'admin': 'admin'
+    };
+    const userType = userTypeMap[userRole];
+    
+    const where = {
+      userId,
+      userType,
+      ...(unreadOnly === 'true' ? { lu: false } : {})
+    };
+    
+    const notifications = await prisma.notification.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: parseInt(limit),
+      skip: parseInt(offset)
+    });
+    
+    const totalCount = await prisma.notification.count({ where });
+    const unreadCount = await prisma.notification.count({ 
+      where: { userId, userType, lu: false } 
+    });
+    
+    res.json({ 
+      success: true, 
+      data: notifications,
+      meta: {
+        total: totalCount,
+        unread: unreadCount,
+        limit: parseInt(limit),
+        offset: parseInt(offset)
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur récupération notifications:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Erreur lors de la récupération des notifications',
+      error: error.message 
+    });
+  }
+});
+
+// Marquer une notification comme lue
+app.patch('/api/notifications/:id/read', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const userRole = req.user.role;
+    
+    const userTypeMap = {
+      'student': 'apprenant',
+      'establishment': 'etablissement',
+      'admin': 'admin'
+    };
+    const userType = userTypeMap[userRole];
+    
+    // Vérifier que la notification appartient à l'utilisateur
+    const notification = await prisma.notification.findFirst({
+      where: { 
+        id: parseInt(id),
+        userId,
+        userType
+      }
+    });
+    
+    if (!notification) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Notification introuvable' 
+      });
+    }
+    
+    // Marquer comme lue
+    const updated = await prisma.notification.update({
+      where: { id: parseInt(id) },
+      data: { 
+        lu: true,
+        readAt: new Date()
+      }
+    });
+    
+    res.json({ 
+      success: true, 
+      data: updated 
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur marquage notification:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Erreur lors du marquage de la notification',
+      error: error.message 
+    });
+  }
+});
+
+// Marquer toutes les notifications comme lues
+app.patch('/api/notifications/read-all', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userRole = req.user.role;
+    
+    const userTypeMap = {
+      'student': 'apprenant',
+      'establishment': 'etablissement',
+      'admin': 'admin'
+    };
+    const userType = userTypeMap[userRole];
+    
+    const result = await prisma.notification.updateMany({
+      where: { 
+        userId,
+        userType,
+        lu: false
+      },
+      data: { 
+        lu: true,
+        readAt: new Date()
+      }
+    });
+    
+    res.json({ 
+      success: true, 
+      message: `${result.count} notifications marquées comme lues`,
+      data: { count: result.count }
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur marquage notifications:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Erreur lors du marquage des notifications',
+      error: error.message 
+    });
+  }
+});
+
+// Supprimer une notification
+app.delete('/api/notifications/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const userRole = req.user.role;
+    
+    const userTypeMap = {
+      'student': 'apprenant',
+      'establishment': 'etablissement',
+      'admin': 'admin'
+    };
+    const userType = userTypeMap[userRole];
+    
+    // Vérifier que la notification appartient à l'utilisateur
+    const notification = await prisma.notification.findFirst({
+      where: { 
+        id: parseInt(id),
+        userId,
+        userType
+      }
+    });
+    
+    if (!notification) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Notification introuvable' 
+      });
+    }
+    
+    await prisma.notification.delete({
+      where: { id: parseInt(id) }
+    });
+    
+    res.json({ 
+      success: true, 
+      message: 'Notification supprimée' 
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur suppression notification:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Erreur lors de la suppression de la notification',
+      error: error.message 
+    });
+  }
+});
+
+// Compter les notifications non lues
+app.get('/api/notifications/unread-count', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userRole = req.user.role;
+    
+    const userTypeMap = {
+      'student': 'apprenant',
+      'establishment': 'etablissement',
+      'admin': 'admin'
+    };
+    const userType = userTypeMap[userRole];
+    
+    const count = await prisma.notification.count({
+      where: { 
+        userId,
+        userType,
+        lu: false
+      }
+    });
+    
+    res.json({ 
+      success: true, 
+      data: { count }
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur comptage notifications:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Erreur lors du comptage des notifications',
+      error: error.message 
+    });
+  }
+});
+
+// ========================================
+// ROUTES POUR DASHBOARDS
+// ========================================
+
+// Récupérer les statistiques du dashboard pour un apprenant
+app.get('/api/apprenant/:id/dashboard', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    // Vérifier les permissions
+    if (userRole === 'student' && parseInt(id) !== userId) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Accès non autorisé' 
+      });
+    }
+
+    const apprenantId = parseInt(id);
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    // Statistiques générales
+    const totalCertificats = await prisma.certificat.count({
+      where: { 
+        apprenantId,
+        statut: { in: ['EMIS', 'REVOQUE'] } // Seulement les certificats émis ou révoqués
+      }
+    });
+
+    const certificatsEmis = await prisma.certificat.count({
+      where: { 
+        apprenantId,
+        statut: 'EMIS'
+      }
+    });
+
+    const totalVerifications = await prisma.verificationStat.count({
+      where: {
+        certificat: {
+          apprenantId
+        }
+      }
+    });
+
+    const verificationsRecentes = await prisma.verificationStat.count({
+      where: {
+        certificat: {
+          apprenantId
+        },
+        verifiedAt: { gte: startOfMonth }
+      }
+    });
+
+    const etablissementsLies = await prisma.liaisonApprenantEtablissement.count({
+      where: { 
+        apprenantId,
+        statutLiaison: 'APPROUVE'
+      }
+    });
+
+    const demandesEnAttente = await prisma.demandeCertificat.count({
+      where: { 
+        apprenantId,
+        statutDemande: 'EN_ATTENTE'
+      }
+    });
+
+    // Derniers certificats (3 derniers)
+    const recentCertificates = await prisma.certificat.findMany({
+      where: { 
+        apprenantId,
+        statut: { in: ['EMIS', 'REVOQUE'] }
+      },
+      include: {
+        etablissement: {
+          select: {
+            nomEtablissement: true
+          }
+        },
+        _count: {
+          select: {
+            verificationStats: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 3
+    });
+
+    const certificatesList = recentCertificates.map(cert => ({
+      id: cert.id,
+      titre: cert.titre,
+      etablissement: cert.etablissement.nomEtablissement,
+      dateObtention: cert.dateObtention,
+      statut: cert.statut,
+      verifications: cert._count.verificationStats
+    }));
+
+    // Dernières notifications (5 dernières)
+    const recentNotifications = await prisma.notification.findMany({
+      where: { 
+        userId: apprenantId,
+        userType: 'apprenant'
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 5
+    });
+
+    const notificationsList = recentNotifications.map(notif => ({
+      id: notif.id,
+      titre: notif.titre,
+      message: notif.message,
+      lu: notif.lu,
+      important: notif.important,
+      type: notif.type,
+      timeAgo: getTimeAgo(notif.createdAt)
+    }));
+
+    // Statistiques d'activité (pour graphique)
+    const activityData = [];
+    for (let i = 5; i >= 0; i--) {
+      const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+      
+      const certificatsCount = await prisma.certificat.count({
+        where: {
+          apprenantId,
+          statut: 'EMIS',
+          createdAt: { gte: monthStart, lte: monthEnd }
+        }
+      });
+
+      const verificationsCount = await prisma.verificationStat.count({
+        where: {
+          certificat: {
+            apprenantId
+          },
+          verifiedAt: { gte: monthStart, lte: monthEnd }
+        }
+      });
+
+      activityData.push({
+        month: monthStart.toLocaleDateString('fr-FR', { month: 'short' }),
+        certificates: certificatsCount,
+        verifications: verificationsCount
+      });
+    }
+
+    res.json({ 
+      success: true, 
+      data: {
+        stats: {
+          totalCertificates: totalCertificats,
+          certificatesIssued: certificatsEmis,
+          totalVerifications,
+          recentVerifications: verificationsRecentes,
+          linkedEstablishments: etablissementsLies,
+          pendingRequests: demandesEnAttente
+        },
+        recentCertificates: certificatesList,
+        recentNotifications: notificationsList,
+        activityData
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur récupération dashboard apprenant:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Erreur lors de la récupération des données du dashboard',
+      error: error.message 
+    });
+  }
+});
+
+// Récupérer les statistiques du dashboard pour un établissement
+app.get('/api/etablissement/:id/dashboard', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    // Vérifier les permissions
+    if (userRole === 'establishment' && parseInt(id) !== userId) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Accès non autorisé' 
+      });
+    }
+
+    const etablissementId = parseInt(id);
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    // Statistiques générales pour le mois en cours
+    const certificatsEmis = await prisma.certificat.count({
+      where: { 
+        etablissementId,
+        statut: 'EMIS',
+        createdAt: { gte: startOfMonth }
+      }
+    });
+
+    const totalVerifications = await prisma.verificationStat.count({
+      where: {
+        certificat: {
+          etablissementId
+        },
+        verifiedAt: { gte: startOfMonth }
+      }
+    });
+
+    const etudiantsActifs = await prisma.liaisonApprenantEtablissement.count({
+      where: { 
+        etablissementId,
+        statutLiaison: 'APPROUVE'
+      }
+    });
+
+    const demandesEnAttente = await prisma.liaisonApprenantEtablissement.count({
+      where: { 
+        etablissementId,
+        statutLiaison: 'EN_ATTENTE'
+      }
+    });
+
+    // Demandes en attente avec détails (3 dernières)
+    const pendingRequests = await prisma.liaisonApprenantEtablissement.findMany({
+      where: { 
+        etablissementId,
+        statutLiaison: 'EN_ATTENTE'
+      },
+      include: {
+        apprenant: {
+          select: {
+            id_apprenant: true,
+            nom: true,
+            prenom: true,
+            email: true
+          }
+        }
+      },
+      orderBy: { dateDemande: 'desc' },
+      take: 3
+    });
+
+    // Activité récente (dernières 5 actions)
+    const recentActivity = [];
+
+    // 1. Derniers certificats émis
+    const recentCertificates = await prisma.certificat.findMany({
+      where: { 
+        etablissementId,
+        statut: 'EMIS'
+      },
+      include: {
+        apprenant: {
+          select: {
+            nom: true,
+            prenom: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 2
+    });
+
+    recentCertificates.forEach(cert => {
+      recentActivity.push({
+        type: 'certificate',
+        titre: 'Certificat émis',
+        description: `${cert.titre} pour ${cert.apprenant.prenom} ${cert.apprenant.nom}`,
+        date: cert.createdAt,
+        statut: 'issued'
+      });
+    });
+
+    // 2. Dernières vérifications
+    const recentVerifications = await prisma.verificationStat.findMany({
+      where: {
+        certificat: {
+          etablissementId
+        }
+      },
+      include: {
+        certificat: {
+          select: {
+            titre: true,
+            uuid: true
+          }
+        }
+      },
+      orderBy: { verifiedAt: 'desc' },
+      take: 2
+    });
+
+    recentVerifications.forEach(verif => {
+      recentActivity.push({
+        type: 'verification',
+        titre: 'Vérification blockchain',
+        description: `Certificat ${verif.certificat.titre}`,
+        date: verif.verifiedAt,
+        statut: 'verified'
+      });
+    });
+
+    // 3. Dernières liaisons approuvées
+    const recentLiaisons = await prisma.liaisonApprenantEtablissement.findMany({
+      where: { 
+        etablissementId,
+        statutLiaison: 'APPROUVE'
+      },
+      include: {
+        apprenant: {
+          select: {
+            nom: true,
+            prenom: true
+          }
+        }
+      },
+      orderBy: { dateApprobation: 'desc' },
+      take: 1
+    });
+
+    recentLiaisons.forEach(liaison => {
+      recentActivity.push({
+        type: 'student',
+        titre: 'Nouvel étudiant lié',
+        description: `${liaison.apprenant.prenom} ${liaison.apprenant.nom}`,
+        date: liaison.dateApprobation,
+        statut: 'linked'
+      });
+    });
+
+    // Trier par date et limiter à 5
+    const sortedActivity = recentActivity
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 5)
+      .map(activity => ({
+        ...activity,
+        timeAgo: getTimeAgo(new Date(activity.date))
+      }));
+
+    // Données pour le graphique (6 derniers mois)
+    const chartData = [];
+    for (let i = 5; i >= 0; i--) {
+      const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+      
+      const verificationsCount = await prisma.verificationStat.count({
+        where: {
+          certificat: {
+            etablissementId
+          },
+          verifiedAt: { gte: monthStart, lte: monthEnd }
+        }
+      });
+
+      chartData.push({
+        name: monthStart.toLocaleDateString('fr-FR', { month: 'short' }),
+        verifications: verificationsCount
+      });
+    }
+
+    res.json({ 
+      success: true, 
+      data: {
+        stats: {
+          certificatesIssued: certificatsEmis,
+          totalVerifications,
+          activeStudents: etudiantsActifs,
+          pendingRequests: demandesEnAttente
+        },
+        pendingRequests: pendingRequests.map(pr => ({
+          id: pr.id,
+          name: `${pr.apprenant.prenom} ${pr.apprenant.nom}`,
+          email: pr.apprenant.email,
+          date: pr.dateDemande,
+          status: pr.statutLiaison
+        })),
+        recentActivity: sortedActivity,
+        chartData
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur récupération dashboard établissement:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Erreur lors de la récupération des données du dashboard',
+      error: error.message 
+    });
+  }
+});
+
+// Fonction helper pour calculer le temps écoulé
+function getTimeAgo(date) {
+  const seconds = Math.floor((new Date() - date) / 1000);
+  
+  if (seconds < 60) return `Il y a ${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `Il y a ${minutes}min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `Il y a ${hours}h`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `Il y a ${days}j`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `Il y a ${months} mois`;
+  return `Il y a ${Math.floor(months / 12)} an${Math.floor(months / 12) > 1 ? 's' : ''}`;
+}
+
+// Fonction helper pour créer une notification
+async function createNotification({ userId, userType, type, titre, message, important = false, lienAction = null, metadonnees = null }) {
+  try {
+    // Mapper userType vers les IDs appropriés
+    const data = {
+      userId,
+      userType,
+      type,
+      titre,
+      message,
+      important,
+      lienAction,
+      metadonnees: metadonnees || null  // ✅ Prisma Json type accepte directement un objet
+    };
+    
+    // Ajouter l'ID approprié selon le userType
+    if (userType === 'apprenant') {
+      data.apprenantId = userId;
+    } else if (userType === 'etablissement') {
+      data.etablissementId = userId;
+    } else if (userType === 'admin') {
+      data.adminId = userId;
+    }
+    
+    const notification = await prisma.notification.create({ data });
+    console.log(`📬 Notification créée pour ${userType} ${userId}: ${titre}`);
+    return notification;
+  } catch (error) {
+    console.error('❌ Erreur création notification:', error);
+    console.error('📋 Détails de la notification échouée:', { userId, userType, type, titre });
+    // Ne pas faire échouer l'opération principale si la notification échoue
+    return null;
+  }
+}
+
+// ========================================
 // ROUTES POUR FORMATIONS
 // ========================================
 
@@ -3063,6 +4374,25 @@ app.post('/api/certificats', authenticateToken, requireRole('establishment'), as
       return res.status(400).json({ success: false, message: 'Champs requis manquants' });
     }
 
+    // ✅ Protection contre les doublons : vérifier s'il existe déjà un brouillon identique récent
+    const existingDraft = await prisma.certificat.findFirst({
+      where: {
+        etablissementId,
+        apprenantId: parseInt(apprenantId),
+        titre,
+        dateObtention: new Date(dateObtention),
+        statut: 'BROUILLON',
+        createdAt: {
+          gte: new Date(Date.now() - 5 * 60 * 1000) // Dans les 5 dernières minutes
+        }
+      }
+    });
+
+    if (existingDraft) {
+      console.log('⚠️ Brouillon identique trouvé récemment, retour du brouillon existant');
+      return res.status(200).json({ success: true, data: existingDraft });
+    }
+
     // Vérifier que l'apprenant est lié (approuvé) à l'établissement
     const liaison = await prisma.liaisonApprenantEtablissement.findFirst({
       where: { apprenantId: parseInt(apprenantId), etablissementId, statutLiaison: 'APPROUVE' }
@@ -3098,6 +4428,7 @@ app.post('/api/certificats', authenticateToken, requireRole('establishment'), as
       }
     });
 
+    console.log('✅ Nouveau brouillon créé:', certificat.id);
     res.status(201).json({ success: true, data: certificat });
   } catch (error) {
     console.error('❌ Erreur création brouillon certificat:', error);
@@ -3146,7 +4477,7 @@ app.post('/api/certificats/:id/pdf', authenticateToken, requireRole('establishme
   }
 });
 
-// Émettre un certificat on-chain (MVP sur un contrat central unique)
+// Émettre un certificat on-chain (version robuste avec gestion d'échecs)
 app.post('/api/certificats/:id/emit', authenticateToken, requireRole('establishment'), async (req, res) => {
   try {
     const { id } = req.params;
@@ -3160,28 +4491,65 @@ app.post('/api/certificats/:id/emit', authenticateToken, requireRole('establishm
       return res.status(400).json({ success: false, message: 'PDF non généré' });
     }
 
+    // Vérifier que le certificat peut être émis
+    if (certificat.statut !== 'BROUILLON' && certificat.statut !== 'EMISSION_ECHEC') {
+      return res.status(400).json({ success: false, message: 'Seuls les certificats brouillons ou avec émission échouée peuvent être émis' });
+    }
+
+    // Limiter le nombre de tentatives
+    if (certificat.emissionAttempts >= 3) {
+      return res.status(400).json({ success: false, message: 'Nombre maximum de tentatives d\'émission atteint' });
+    }
+
+    // Marquer comme "en cours d'émission" immédiatement
+    await prisma.certificat.update({
+      where: { id: parseInt(id) },
+      data: { 
+        statut: 'EN_COURS_EMISSION',
+        emissionAttempts: { increment: 1 },
+        lastEmissionAttempt: new Date()
+      }
+    });
+
     const rpcUrl = process.env.CHAIN_RPC_URL;
     const contractAddress = process.env.CERT_CONTRACT_ADDRESS;
     if (!rpcUrl || !contractAddress) {
+      // Marquer comme échec si config manquante
+      await prisma.certificat.update({
+        where: { id: parseInt(id) },
+        data: { statut: 'EMISSION_ECHEC' }
+      });
       return res.status(500).json({ success: false, message: 'Config blockchain manquante' });
     }
 
     const provider = new ethers.JsonRpcProvider(rpcUrl);
+    
     // Charger la clé chiffrée de l'établissement
-    const vault = await prisma.walletVault.findFirst({ where: { ownerType: 'etablissement', ownerId: etablissementId } });
+    const vault = await prisma.walletVault.findFirst({ 
+      where: { ownerType: 'etablissement', ownerId: etablissementId } 
+    });
     if (!vault) {
+      await prisma.certificat.update({
+        where: { id: parseInt(id) },
+        data: { statut: 'EMISSION_ECHEC' }
+      });
       return res.status(500).json({ success: false, message: 'Clé établissement manquante (vault)' });
     }
+
     let signer;
     try {
       const pk = decryptPrivateKey({ iv: vault.iv, authTag: vault.authTag, cipherText: vault.cipherText });
       signer = new ethers.Wallet(pk, provider);
     } catch (e) {
       console.error('❌ Erreur déchiffrement clé établissement:', e);
+      await prisma.certificat.update({
+        where: { id: parseInt(id) },
+        data: { statut: 'EMISSION_ECHEC' }
+      });
       return res.status(500).json({ success: false, message: 'Erreur déchiffrement clé établissement' });
     }
 
-    // New minimal ABI
+    // ABI minimal
     const abi = [
       'function issue(bytes32 pdfHash, address student) external',
       'function isIssued(bytes32 pdfHash) external view returns (bool)',
@@ -3189,7 +4557,7 @@ app.post('/api/certificats/:id/emit', authenticateToken, requireRole('establishm
     ];
     const contract = new ethers.Contract(contractAddress, abi, signer);
 
-    // recipient: student's wallet if exists
+    // Préparer le destinataire (wallet étudiant)
     let recipient = ethers.ZeroAddress;
     try {
       const apprenant = await prisma.apprenant.findUnique({ where: { id_apprenant: certificat.apprenantId } });
@@ -3221,46 +4589,122 @@ app.post('/api/certificats/:id/emit', authenticateToken, requireRole('establishm
           recipient = newWallet.address;
         }
       }
-    } catch {}
+    } catch (e) {
+      console.error('❌ Erreur préparation wallet étudiant:', e);
+    }
 
-    // Convert stored hex hash string to bytes32
+    // Convertir le hash PDF en bytes32
     const hashHexRaw = certificat.pdfHash.startsWith('0x') ? certificat.pdfHash : '0x' + certificat.pdfHash;
-    // Ensure 32 bytes (sha256 hex is 64 chars + 0x)
     if (hashHexRaw.length !== 66) {
+      await prisma.certificat.update({
+        where: { id: parseInt(id) },
+        data: { statut: 'EMISSION_ECHEC' }
+      });
       return res.status(400).json({ success: false, message: 'Hash PDF invalide' });
     }
-    const hashBytes32 = hashHexRaw;
 
-    // Idempotence: ne pas ré émettre si déjà présent on-chain
+    // Vérifier l'idempotence (déjà émis on-chain)
     try {
-      const already = await contract.isIssued(hashBytes32);
+      const already = await contract.isIssued(hashHexRaw);
       if (already) {
         const updated = await prisma.certificat.update({
           where: { id: certificat.id },
-          data: { statut: 'EMIS', contractAddress }
+          data: { 
+            statut: 'EMIS', 
+            contractAddress,
+            emissionTxHash: 'ALREADY_ISSUED',
+            issuedAt: new Date()
+          }
         });
-        return res.json({ success: true, data: updated, message: 'Certificat déjà émis on-chain' });
+        return res.json({ 
+          success: true, 
+          data: updated, 
+          message: 'Certificat déjà émis on-chain',
+          onChainEmitted: true
+        });
       }
-    } catch {}
+    } catch (e) {
+      console.error('❌ Erreur vérification idempotence:', e);
+    }
 
-    const tx = await contract.issue(hashBytes32, recipient);
-    const receipt = await tx.wait();
+    // Émission on-chain avec timeout
+    let txHash = null;
+    let onChainSuccess = false;
+    
+    try {
+      console.log(`🚀 Émission on-chain du certificat ${id}...`);
+      
+      const tx = await Promise.race([
+        contract.issue(hashHexRaw, recipient),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout de la transaction')), 30000)
+        )
+      ]);
+      
+      const receipt = await tx.wait();
+      txHash = receipt?.hash || tx.hash;
+      onChainSuccess = true;
+      console.log(`✅ Émission on-chain réussie: ${txHash}`);
+      
+    } catch (onChainError) {
+      console.error('❌ Erreur émission on-chain:', onChainError);
+      onChainSuccess = false;
+    }
 
+    // Mise à jour du statut final selon le succès de l'émission on-chain
+    const finalStatut = onChainSuccess ? 'EMIS' : 'EMISSION_ECHEC';
+    
     const updated = await prisma.certificat.update({
       where: { id: certificat.id },
       data: {
-        statut: 'EMIS',
-        txHash: receipt?.hash || tx.hash,
+        statut: finalStatut,
+        txHash: txHash,
+        emissionTxHash: txHash,
         contractAddress: contractAddress,
-        issuedAt: new Date()
+        issuedAt: onChainSuccess ? new Date() : null
       }
     });
 
-    res.json({ success: true, data: updated });
+    // Créer une notification pour l'étudiant si l'émission a réussi
+    if (onChainSuccess) {
+      await createNotification({
+        userId: certificat.apprenantId,
+        userType: 'apprenant',
+        type: 'NOUVEAU_CERTIFICAT',
+        titre: 'Nouveau certificat disponible',
+        message: `Votre certificat "${certificat.titre}" a été émis et est maintenant disponible`,
+        important: true,
+        lienAction: '/dashboard?userType=student',
+        metadonnees: { certificatId: certificat.id, uuid: certificat.uuid }
+      });
+    }
+
+    res.json({
+      success: true,
+      message: onChainSuccess ? 'Certificat émis avec succès' : 'Émission échouée (blockchain)',
+      data: updated,
+      onChainEmitted: onChainSuccess,
+      canRetry: !onChainSuccess && certificat.emissionAttempts < 3
+    });
+
   } catch (error) {
     console.error('❌ Erreur émission on-chain:', error);
-    console.error('❌ Erreur émission on-chain:', error.message);
-    res.status(500).json({ success: false, message: 'Erreur émission on-chain', error: error.message });
+    
+    // Marquer comme échec en cas d'erreur générale
+    try {
+      await prisma.certificat.update({
+        where: { id: parseInt(req.params.id) },
+        data: { statut: 'EMISSION_ECHEC' }
+      });
+    } catch (updateError) {
+      console.error('❌ Erreur mise à jour statut:', updateError);
+    }
+    
+    res.status(500).json({ 
+      success: false, 
+      message: 'Erreur émission on-chain', 
+      error: error.message 
+    });
   }
 });
 
@@ -3324,6 +4768,189 @@ app.get('/api/certificats/:id/verify-onchain', authenticateToken, async (req, re
   }
 });
 
+// Route pour re-publier un certificat (en cas d'échec blockchain)
+app.post('/api/certificats/:id/retry-emit', authenticateToken, requireRole('establishment'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const etablissementId = req.user.id;
+
+    const certificat = await prisma.certificat.findUnique({ where: { id: parseInt(id) } });
+    if (!certificat || certificat.etablissementId !== etablissementId) {
+      return res.status(404).json({ success: false, message: 'Certificat introuvable' });
+    }
+
+    // Vérifier que le certificat peut être re-publié (BROUILLON ou EMISSION_ECHEC)
+    if (certificat.statut !== 'EMISSION_ECHEC' && certificat.statut !== 'BROUILLON') {
+      return res.status(400).json({ success: false, message: 'Seuls les certificats brouillons ou avec émission échouée peuvent être re-publiés' });
+    }
+
+    // Limiter le nombre de tentatives
+    if (certificat.emissionAttempts >= 3) {
+      return res.status(400).json({ success: false, message: 'Nombre maximum de tentatives d\'émission atteint' });
+    }
+
+    // Marquer comme "en cours d'émission" à nouveau
+    await prisma.certificat.update({
+      where: { id: parseInt(id) },
+      data: { 
+        statut: 'EN_COURS_EMISSION',
+        emissionAttempts: { increment: 1 },
+        lastEmissionAttempt: new Date()
+      }
+    });
+
+    // Utiliser la même logique que l'émission normale
+    const rpcUrl = process.env.CHAIN_RPC_URL;
+    const contractAddress = process.env.CERT_CONTRACT_ADDRESS;
+    if (!rpcUrl || !contractAddress) {
+      await prisma.certificat.update({
+        where: { id: parseInt(id) },
+        data: { statut: 'EMISSION_ECHEC' }
+      });
+      return res.status(500).json({ success: false, message: 'Config blockchain manquante' });
+    }
+
+    const provider = new ethers.JsonRpcProvider(rpcUrl);
+    const vault = await prisma.walletVault.findFirst({ 
+      where: { ownerType: 'etablissement', ownerId: etablissementId } 
+    });
+    if (!vault) {
+      await prisma.certificat.update({
+        where: { id: parseInt(id) },
+        data: { statut: 'EMISSION_ECHEC' }
+      });
+      return res.status(500).json({ success: false, message: 'Clé établissement manquante' });
+    }
+
+    let signer;
+    try {
+      const pk = decryptPrivateKey({ iv: vault.iv, authTag: vault.authTag, cipherText: vault.cipherText });
+      signer = new ethers.Wallet(pk, provider);
+    } catch (e) {
+      await prisma.certificat.update({
+        where: { id: parseInt(id) },
+        data: { statut: 'EMISSION_ECHEC' }
+      });
+      return res.status(500).json({ success: false, message: 'Erreur déchiffrement clé établissement' });
+    }
+
+    const abi = [
+      'function issue(bytes32 pdfHash, address student) external',
+      'function isIssued(bytes32 pdfHash) external view returns (bool)'
+    ];
+    const contract = new ethers.Contract(contractAddress, abi, signer);
+
+    // Préparer le destinataire
+    let recipient = ethers.ZeroAddress;
+    try {
+      const apprenant = await prisma.apprenant.findUnique({ where: { id_apprenant: certificat.apprenantId } });
+      if (apprenant?.walletAddress) {
+        recipient = apprenant.walletAddress;
+      }
+    } catch (e) {
+      console.error('❌ Erreur préparation wallet étudiant:', e);
+    }
+
+    // Convertir le hash PDF
+    const hashHexRaw = certificat.pdfHash.startsWith('0x') ? certificat.pdfHash : '0x' + certificat.pdfHash;
+    if (hashHexRaw.length !== 66) {
+      await prisma.certificat.update({
+        where: { id: parseInt(id) },
+        data: { statut: 'EMISSION_ECHEC' }
+      });
+      return res.status(400).json({ success: false, message: 'Hash PDF invalide' });
+    }
+
+    // Vérifier l'idempotence
+    try {
+      const already = await contract.isIssued(hashHexRaw);
+      if (already) {
+        const updated = await prisma.certificat.update({
+          where: { id: certificat.id },
+          data: { 
+            statut: 'EMIS', 
+            contractAddress,
+            emissionTxHash: 'ALREADY_ISSUED',
+            issuedAt: new Date()
+          }
+        });
+        return res.json({ 
+          success: true, 
+          data: updated, 
+          message: 'Certificat déjà émis on-chain',
+          onChainEmitted: true
+        });
+      }
+    } catch (e) {
+      console.error('❌ Erreur vérification idempotence:', e);
+    }
+
+    // Re-émission on-chain avec timeout
+    let txHash = null;
+    let onChainSuccess = false;
+    
+    try {
+      console.log(`🔄 Re-émission on-chain du certificat ${id}...`);
+      
+      const tx = await Promise.race([
+        contract.issue(hashHexRaw, recipient),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout de la transaction')), 30000)
+        )
+      ]);
+      
+      const receipt = await tx.wait();
+      txHash = receipt?.hash || tx.hash;
+      onChainSuccess = true;
+      console.log(`✅ Re-émission on-chain réussie: ${txHash}`);
+      
+    } catch (onChainError) {
+      console.error('❌ Erreur re-émission on-chain:', onChainError);
+      onChainSuccess = false;
+    }
+
+    // Mise à jour du statut final
+    const finalStatut = onChainSuccess ? 'EMIS' : 'EMISSION_ECHEC';
+    
+    const updated = await prisma.certificat.update({
+      where: { id: certificat.id },
+      data: {
+        statut: finalStatut,
+        txHash: txHash,
+        emissionTxHash: txHash,
+        contractAddress: contractAddress,
+        issuedAt: onChainSuccess ? new Date() : null
+      }
+    });
+
+    res.json({
+      success: true,
+      message: onChainSuccess ? 'Certificat re-publié avec succès' : 'Re-publication échouée',
+      data: updated,
+      onChainEmitted: onChainSuccess,
+      canRetry: !onChainSuccess && certificat.emissionAttempts < 3
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur re-publication certificat:', error);
+    
+    try {
+      await prisma.certificat.update({
+        where: { id: parseInt(req.params.id) },
+        data: { statut: 'EMISSION_ECHEC' }
+      });
+    } catch (updateError) {
+      console.error('❌ Erreur mise à jour statut:', updateError);
+    }
+    
+    res.status(500).json({ 
+      success: false, 
+      message: 'Erreur lors de la re-publication', 
+      error: error.message 
+    });
+  }
+});
+
 // Route pour révoquer un certificat (établissement/admin uniquement)
 app.post('/api/certificats/:id/revoke', authenticateToken, async (req, res) => {
   try {
@@ -3354,14 +4981,94 @@ app.post('/api/certificats/:id/revoke', authenticateToken, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Seuls les certificats émis peuvent être révoqués' });
     }
 
-    // TODO: Implémenter la révocation on-chain si nécessaire
-    // Pour l'instant, on met juste à jour le statut en base
-
+    // Marquer comme "en cours de révocation" immédiatement
     await prisma.certificat.update({
       where: { id: parseInt(id) },
       data: { 
-        statut: 'REVOQUE',
-        // Ajouter un champ pour la raison si nécessaire
+        statut: 'EN_COURS_REVOCATION',
+        revocationReason: reason || 'Certificat révoqué par l\'établissement',
+        revocationAttempts: { increment: 1 },
+        lastRevocationAttempt: new Date()
+      }
+    });
+
+    // Révocation on-chain
+    let txHash = null;
+    let onChainSuccess = false;
+    
+    if (certificat.pdfHash && certificat.contractAddress) {
+      try {
+        console.log(`🔗 Révocation on-chain du certificat ${id}...`);
+        
+        // Configuration blockchain
+        const rpcUrl = process.env.CHAIN_RPC_URL;
+        const contractAddress = process.env.CERT_CONTRACT_ADDRESS;
+        if (!rpcUrl || !contractAddress) {
+          throw new Error('Config blockchain manquante');
+        }
+        
+        const provider = new ethers.JsonRpcProvider(rpcUrl);
+        
+        // Récupérer la clé privée de l'établissement
+        const walletVault = await prisma.walletVault.findFirst({
+          where: { 
+            ownerType: 'etablissement',
+            ownerId: certificat.etablissementId
+          }
+        });
+
+        if (walletVault) {
+          const privateKey = decryptPrivateKey(walletVault);
+          const wallet = new ethers.Wallet(privateKey, provider);
+          
+          // Connexion au contrat
+          const contract = new ethers.Contract(
+            certificat.contractAddress,
+            ['function revoke(bytes32 pdfHash, string calldata reason) external'],
+            wallet
+          );
+
+          // Convertir le hash PDF en bytes32 (ajouter 0x si nécessaire et vérifier la longueur)
+          const hashHexRaw = certificat.pdfHash.startsWith('0x') ? certificat.pdfHash : '0x' + certificat.pdfHash;
+          console.log(`🔍 Hash PDF original: ${certificat.pdfHash}`);
+          console.log(`🔍 Hash PDF formaté: ${hashHexRaw} (longueur: ${hashHexRaw.length})`);
+          
+          if (hashHexRaw.length !== 66) {
+            throw new Error(`Hash PDF invalide: ${hashHexRaw} (longueur: ${hashHexRaw.length})`);
+          }
+
+          // Appel de la fonction revoke avec timeout
+          const tx = await Promise.race([
+            contract.revoke(
+              hashHexRaw,
+              reason || 'Certificat révoqué par l\'établissement'
+            ),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Timeout de la transaction')), 30000)
+            )
+          ]);
+          
+          await tx.wait();
+          txHash = tx.hash;
+          onChainSuccess = true;
+          console.log(`✅ Révocation on-chain réussie: ${txHash}`);
+        } else {
+          console.warn(`⚠️ Wallet de l'établissement non trouvé pour la révocation on-chain`);
+        }
+      } catch (onChainError) {
+        console.error('❌ Erreur révocation on-chain:', onChainError);
+        onChainSuccess = false;
+      }
+    }
+
+    // Mise à jour du statut final selon le succès de la révocation on-chain
+    const finalStatut = onChainSuccess ? 'REVOQUE' : 'REVOQUE_ECHEC';
+    
+    await prisma.certificat.update({
+      where: { id: parseInt(id) },
+      data: { 
+        statut: finalStatut,
+        revocationTxHash: txHash
       }
     });
 
@@ -3369,19 +5076,164 @@ app.post('/api/certificats/:id/revoke', authenticateToken, async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Certificat révoqué avec succès',
+      message: onChainSuccess ? 'Certificat révoqué avec succès' : 'Certificat révoqué localement (révocation blockchain échouée)',
       data: {
         certificatId: parseInt(id),
-        statut: 'REVOQUE',
+        statut: finalStatut,
         revokedAt: new Date().toISOString(),
         revokedBy: req.user.role,
-        reason: reason || null
+        reason: reason || null,
+        txHash: txHash,
+        onChainRevoked: onChainSuccess,
+        canRetry: !onChainSuccess
       }
     });
 
   } catch (error) {
     console.error('❌ Erreur révocation certificat:', error);
     res.status(500).json({ success: false, message: 'Erreur lors de la révocation', error: error.message });
+  }
+});
+
+// Route pour re-révoquer un certificat (en cas d'échec blockchain)
+app.post('/api/certificats/:id/retry-revoke', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    // Vérifier les permissions
+    if (req.user.role !== 'establishment' && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Accès refusé' });
+    }
+
+    const certificat = await prisma.certificat.findUnique({
+      where: { id: parseInt(id) },
+      include: { etablissement: true, apprenant: true }
+    });
+
+    if (!certificat) {
+      return res.status(404).json({ success: false, message: 'Certificat non trouvé' });
+    }
+
+    // Vérifier que l'établissement est propriétaire du certificat (sauf admin)
+    if (req.user.role === 'establishment' && certificat.etablissementId !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'Vous ne pouvez révoquer que vos propres certificats' });
+    }
+
+    // Vérifier que le certificat peut être re-révoqué
+    if (certificat.statut !== 'REVOQUE_ECHEC') {
+      return res.status(400).json({ success: false, message: 'Seuls les certificats avec révocation échouée peuvent être re-révoqués' });
+    }
+
+    // Limiter le nombre de tentatives
+    if (certificat.revocationAttempts >= 6) {
+      return res.status(400).json({ success: false, message: 'Nombre maximum de tentatives de révocation atteint' });
+    }
+
+    // Marquer comme "en cours de révocation" à nouveau
+    await prisma.certificat.update({
+      where: { id: parseInt(id) },
+      data: { 
+        statut: 'EN_COURS_REVOCATION',
+        revocationReason: reason || certificat.revocationReason,
+        revocationAttempts: { increment: 1 },
+        lastRevocationAttempt: new Date()
+      }
+    });
+
+    // Révocation on-chain (même logique que la révocation normale)
+    let txHash = null;
+    let onChainSuccess = false;
+    
+    if (certificat.pdfHash && certificat.contractAddress) {
+      try {
+        console.log(`🔄 Re-révocation on-chain du certificat ${id}...`);
+        
+        // Configuration blockchain
+        const rpcUrl = process.env.CHAIN_RPC_URL;
+        const contractAddress = process.env.CERT_CONTRACT_ADDRESS;
+        if (!rpcUrl || !contractAddress) {
+          throw new Error('Config blockchain manquante');
+        }
+        
+        const provider = new ethers.JsonRpcProvider(rpcUrl);
+        
+        const walletVault = await prisma.walletVault.findFirst({
+          where: { 
+            ownerType: 'etablissement',
+            ownerId: certificat.etablissementId
+          }
+        });
+
+        if (walletVault) {
+          const privateKey = decryptPrivateKey(walletVault);
+          const wallet = new ethers.Wallet(privateKey, provider);
+          
+          const contract = new ethers.Contract(
+            certificat.contractAddress,
+            ['function revoke(bytes32 pdfHash, string calldata reason) external'],
+            wallet
+          );
+
+          // Convertir le hash PDF en bytes32 (ajouter 0x si nécessaire et vérifier la longueur)
+          const hashHexRaw = certificat.pdfHash.startsWith('0x') ? certificat.pdfHash : '0x' + certificat.pdfHash;
+          console.log(`🔍 Hash PDF original: ${certificat.pdfHash}`);
+          console.log(`🔍 Hash PDF formaté: ${hashHexRaw} (longueur: ${hashHexRaw.length})`);
+          
+          if (hashHexRaw.length !== 66) {
+            throw new Error(`Hash PDF invalide: ${hashHexRaw} (longueur: ${hashHexRaw.length})`);
+          }
+
+          const tx = await Promise.race([
+            contract.revoke(
+              hashHexRaw,
+              reason || certificat.revocationReason || 'Certificat révoqué par l\'établissement'
+            ),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Timeout de la transaction')), 30000)
+            )
+          ]);
+          
+          await tx.wait();
+          txHash = tx.hash;
+          onChainSuccess = true;
+          console.log(`✅ Re-révocation on-chain réussie: ${txHash}`);
+        }
+      } catch (onChainError) {
+        console.error('❌ Erreur re-révocation on-chain:', onChainError);
+        onChainSuccess = false;
+      }
+    }
+
+    // Mise à jour du statut final
+    const finalStatut = onChainSuccess ? 'REVOQUE' : 'REVOQUE_ECHEC';
+    
+    await prisma.certificat.update({
+      where: { id: parseInt(id) },
+      data: { 
+        statut: finalStatut,
+        revocationTxHash: txHash
+      }
+    });
+
+    res.json({
+      success: true,
+      message: onChainSuccess ? 'Certificat re-révoqué avec succès' : 'Re-révocation échouée',
+      data: {
+        certificatId: parseInt(id),
+        statut: finalStatut,
+        revokedAt: new Date().toISOString(),
+        revokedBy: req.user.role,
+        reason: reason || certificat.revocationReason,
+        txHash: txHash,
+        onChainRevoked: onChainSuccess,
+        canRetry: !onChainSuccess && certificat.revocationAttempts < 3
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur re-révocation certificat:', error);
+    res.status(500).json({ success: false, message: 'Erreur lors de la re-révocation', error: error.message });
   }
 });
 
@@ -3405,6 +5257,26 @@ app.get('/api/certificats', authenticateToken, async (req, res) => {
             nomFormation: true,
             typeFormation: true
           }
+        },
+        etablissement: {
+          select: {
+            id_etablissement: true,
+            nomEtablissement: true,
+            typeEtablissement: true
+          }
+        },
+        apprenant: {
+          select: {
+            id_apprenant: true,
+            nom: true,
+            prenom: true,
+            email: true
+          }
+        },
+        _count: {
+          select: {
+            verificationStats: true
+          }
         }
       }
     });
@@ -3421,6 +5293,20 @@ app.get('/api/certificats/public/:uuid', async (req, res) => {
     const { uuid } = req.params;
     const certificat = await prisma.certificat.findUnique({ where: { uuid } });
     if (!certificat) return res.status(404).json({ success: false, message: 'Inconnu' });
+    
+    // Si le certificat est révoqué en base, retourner cette info
+    if (certificat.statut === 'REVOQUE') {
+      return res.json({ 
+        success: true, 
+        data: {
+          ...certificat,
+          revoked: true,
+          revokedAt: certificat.createdAt, // Utiliser createdAt comme date de révocation temporaire
+          revocationReason: 'Certificat révoqué par l\'établissement'
+        }
+      });
+    }
+    
     res.json({ success: true, data: certificat });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Erreur serveur', error: error.message });
@@ -3447,7 +5333,9 @@ app.get('/api/certificats/public/:uuid/verify', async (req, res) => {
     const provider = new ethers.JsonRpcProvider(rpcUrl);
     const abi = [
       'function isIssued(bytes32 pdfHash) external view returns (bool)',
-      'function getRecord(bytes32 pdfHash) external view returns (address issuer, address student, uint256 issuedAt)'
+      'function isRevoked(bytes32 pdfHash) external view returns (bool)',
+      'function getRecord(bytes32 pdfHash) external view returns (address issuer, address student, uint256 issuedAt)',
+      'function getRevocationInfo(bytes32 pdfHash) external view returns (bool revoked, uint256 revokedAt, string memory reason)'
     ];
     const contract = new ethers.Contract(contractAddress, abi, provider);
 
@@ -3461,13 +5349,30 @@ app.get('/api/certificats/public/:uuid/verify', async (req, res) => {
       return res.json({ success: true, data: { onchain: false } });
     }
 
+    // Vérifier si le certificat est révoqué
+    const revoked = await contract.isRevoked(hashHexRaw);
+    if (revoked) {
+      const revocationInfo = await contract.getRevocationInfo(hashHexRaw);
+      return res.json({ 
+        success: true, 
+        data: { 
+          onchain: true, 
+          revoked: true,
+          revokedAt: revocationInfo.revokedAt.toString(),
+          revocationReason: revocationInfo.reason,
+          contractAddress, 
+          txHash: certificat.txHash || null 
+        } 
+      });
+    }
+
     let record = null;
     try {
       const r = await contract.getRecord(hashHexRaw);
       record = { issuer: r.issuer, student: r.student, issuedAt: Number(r.issuedAt) * 1000 };
     } catch {}
 
-    return res.json({ success: true, data: { onchain: true, record, contractAddress, txHash: certificat.txHash || null } });
+    return res.json({ success: true, data: { onchain: true, revoked: false, record, contractAddress, txHash: certificat.txHash || null } });
   } catch (error) {
     console.error('❌ Erreur vérification on-chain publique:', error);
     res.status(500).json({ success: false, message: 'Erreur vérification on-chain', error: error.message });
@@ -3614,6 +5519,18 @@ app.post('/api/liaison/demande', authenticateToken, async (req, res) => {
 
     console.log(`✅ Demande de liaison créée: ${liaison.id}`);
 
+    // Créer une notification pour l'établissement
+    await createNotification({
+      userId: parseInt(etablissementId),
+      userType: 'etablissement',
+      type: 'DEMANDE_LIAISON_APPRENANT',
+      titre: 'Nouvelle demande de liaison',
+      message: `${liaison.apprenant.prenom} ${liaison.apprenant.nom} souhaite se lier à votre établissement`,
+      important: true,
+      lienAction: '/dashboard?userType=establishment',
+      metadonnees: { liaisonId: liaison.id, apprenantId: userId }
+    });
+
     res.status(201).json({
       success: true,
       message: 'Demande de liaison envoyée avec succès',
@@ -3753,6 +5670,22 @@ app.patch('/api/liaison/:id/statut', authenticateToken, requireRole('establishme
     });
 
     console.log(`✅ Liaison ${id} mise à jour vers ${statut}`);
+
+    // Créer une notification pour l'étudiant
+    await createNotification({
+      userId: liaison.apprenantId,
+      userType: 'apprenant',
+      type: statut === 'APPROUVE' ? 'DEMANDE_LIAISON_APPROUVEE' : 'DEMANDE_LIAISON_REJETEE',
+      titre: statut === 'APPROUVE' 
+        ? 'Demande de liaison approuvée' 
+        : 'Demande de liaison rejetée',
+      message: statut === 'APPROUVE'
+        ? `Votre demande de liaison avec ${liaison.etablissement.nomEtablissement} a été approuvée`
+        : `Votre demande de liaison avec ${liaison.etablissement.nomEtablissement} a été rejetée`,
+      important: true,
+      lienAction: '/dashboard?userType=student',
+      metadonnees: { liaisonId: liaison.id, etablissementId: liaison.etablissementId }
+    });
 
     res.json({
       success: true,
@@ -4118,6 +6051,18 @@ app.post('/api/demandes-certificat', authenticateToken, requireRole('student'), 
       }
     }
 
+    // Créer une notification pour l'établissement
+    await createNotification({
+      userId: etablissementIdInt,
+      userType: 'etablissement',
+      type: 'DEMANDE_CERTIFICAT_NOUVELLE',
+      titre: 'Nouvelle demande de certificat',
+      message: `${demande.apprenant.prenom} ${demande.apprenant.nom} a demandé un certificat: "${titre}"`,
+      important: true,
+      lienAction: '/dashboard?userType=establishment',
+      metadonnees: { demandeId: demande.id, apprenantId }
+    });
+
     res.status(201).json({
       success: true,
       message: 'Demande de certificat créée avec succès',
@@ -4274,6 +6219,22 @@ app.patch('/api/demandes-certificat/:id/statut', authenticateToken, async (req, 
         },
         documents: true
       }
+    });
+
+    // Créer une notification pour l'étudiant
+    await createNotification({
+      userId: demande.apprenantId,
+      userType: 'apprenant',
+      type: statutDemande === 'APPROUVE' ? 'DEMANDE_CERTIFICAT_APPROUVEE' : 'DEMANDE_CERTIFICAT_REJETEE',
+      titre: statutDemande === 'APPROUVE' 
+        ? 'Demande de certificat approuvée' 
+        : 'Demande de certificat rejetée',
+      message: statutDemande === 'APPROUVE'
+        ? `Votre demande de certificat "${demande.titre}" a été approuvée par ${demande.etablissement.nomEtablissement}`
+        : `Votre demande de certificat "${demande.titre}" a été rejetée par ${demande.etablissement.nomEtablissement}`,
+      important: true,
+      lienAction: '/dashboard?userType=student',
+      metadonnees: { demandeId: demande.id, etablissementId: demande.etablissementId }
     });
 
     res.json({

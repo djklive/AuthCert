@@ -25,9 +25,9 @@ export const MainContentSection = () => {
         </div>
 
         <div className="flex flex-col sm:flex-row gap-4 items-center justify-center">
-          <Button className="w-[222px] h-14 bg-rose-500 hover:bg-rose-600 rounded-[10px] font-PJ-bold-18px font-[number:var(--PJ-bold-18px-font-weight)] text-[length:var(--PJ-bold-18px-font-size)] leading-[var(--PJ-bold-18px-line-height)] tracking-[var(--PJ-bold-18px-letter-spacing)] [font-style:var(--PJ-bold-18px-font-style)] text-white">
+          {/*<Button className="w-[222px] h-14 bg-rose-500 hover:bg-rose-600 rounded-[10px] font-PJ-bold-18px font-[number:var(--PJ-bold-18px-font-weight)] text-[length:var(--PJ-bold-18px-font-size)] leading-[var(--PJ-bold-18px-line-height)] tracking-[var(--PJ-bold-18px-letter-spacing)] [font-style:var(--PJ-bold-18px-font-style)] text-white">
             Scanner un QR Code
-          </Button>
+          </Button>*/}
 
           <Link to="/verifier-certificat">
             <Button

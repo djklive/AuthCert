@@ -2,22 +2,22 @@ require('dotenv').config();
 const { sendPasswordResetEmail } = require('./services/emailService');
 
 /**
- * Script de test pour vérifier l'envoi d'emails via SendGrid
+ * Script de test pour vérifier l'envoi d'emails via Gmail (Nodemailer)
  * 
  * Usage:
- * 1. Configure SENDGRID_API_KEY dans .env
+ * 1. Configure GMAIL_USER et GMAIL_APP_PASSWORD dans .env
  * 2. Change TEST_EMAIL ci-dessous avec ton email
  * 3. Exécute : node test-sendgrid.js
  */
 
 async function testEmail() {
-  console.log('\n🧪 ===== TEST SENDGRID =====\n');
+  console.log('\n🧪 ===== TEST NODEMAILER (GMAIL) =====\n');
   
   // Vérifier la configuration
   console.log('📋 Configuration :');
-  console.log('  SENDGRID_API_KEY:', process.env.SENDGRID_API_KEY ? '✅ Configurée' : '❌ Manquante');
-  console.log('  SENDGRID_FROM_EMAIL:', process.env.SENDGRID_FROM_EMAIL || '❌ Manquante');
-  console.log('  SENDGRID_FROM_NAME:', process.env.SENDGRID_FROM_NAME || '❌ Manquante');
+  console.log('  GMAIL_USER:', process.env.GMAIL_USER || '❌ Manquante');
+  console.log('  GMAIL_APP_PASSWORD:', process.env.GMAIL_APP_PASSWORD ? '✅ Configurée (masquée)' : '❌ Manquante');
+  console.log('  GMAIL_FROM_NAME:', process.env.GMAIL_FROM_NAME || 'AuthCert (défaut)');
   console.log('  NODE_ENV:', process.env.NODE_ENV || 'development');
   console.log('');
   

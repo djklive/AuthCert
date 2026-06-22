@@ -12,7 +12,7 @@ const pricingPlans = [
     priceAnnual: "0 FCFA",
     priceMonthly: "0 FCFA",
     subtitle: "Par mois, facturé annuellement",
-    features: ["Accès complet"],
+    features: ["25 certificats", "25 apprenants liés", "25 formations"],
     buttonVariant: "outline",
     buttonText: "Essayez-le maintenant",
   },

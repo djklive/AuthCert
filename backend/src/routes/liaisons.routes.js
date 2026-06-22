@@ -23,6 +23,7 @@ const { generateCertificatePdf, getEstablishmentLogo } = require('../services/pd
 const { sendPasswordResetEmail } = require('../services/emailService');
 const { mapTypeEtablissement, getTimeAgo, createNotification } = require('../utils/helpers');
 const { encryptPrivateKey, decryptPrivateKey, sha256Hex } = require('../utils/cryptoUtils');
+const subscriptionService = require('../services/subscriptionService');
 
 const router = express.Router();
 
@@ -175,6 +176,21 @@ router.patch('/api/liaison/:id/statut', authenticateToken, requireRole('establis
         success: false,
         message: 'Cette demande a déjà été traitée'
       });
+    }
+
+    // Limite d'apprenants liés selon le plan (vérifiée uniquement à l'approbation)
+    if (statut === 'APPROUVE') {
+      const sub = await subscriptionService.getOrCreateTrial(userId);
+      const usage = await subscriptionService.getUsage(userId, sub.plan);
+      const r = usage.apprenants;
+      if (r && r.limite !== null && r.utilises >= r.limite) {
+        return res.status(403).json({
+          success: false,
+          code: 'QUOTA_EXCEEDED',
+          message: `Limite atteinte (${r.limite} apprenants liés pour le plan ${sub.plan}). Passez à un plan supérieur pour lier davantage d'apprenants.`,
+          data: r,
+        });
+      }
     }
 
     // Mettre à jour le statut

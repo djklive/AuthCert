@@ -60,4 +60,43 @@ async function checkEmissionQuota(req, res, next) {
   }
 }
 
-module.exports = { requireActiveSubscription, checkEmissionQuota };
+/**
+ * Vérifie une limite de ressource du plan (apprenants, formations).
+ * Bloque si le nombre courant a atteint la limite du plan.
+ * Lazy-create l'essai si nécessaire. `resource` ∈ usage (ex: 'apprenants', 'formations').
+ */
+function checkResourceQuota(resource, label) {
+  return async (req, res, next) => {
+    try {
+      const etablissementId = req.user.id;
+      const sub = req.subscription || (await subscriptionService.getOrCreateTrial(etablissementId));
+      const usage = await subscriptionService.getUsage(etablissementId, sub.plan);
+      const r = usage[resource];
+
+      if (r && r.limite !== null && r.utilises >= r.limite) {
+        return res.status(403).json({
+          success: false,
+          code: 'QUOTA_EXCEEDED',
+          message: `Limite atteinte (${r.limite} ${label || resource} pour le plan ${sub.plan}). Passez à un plan supérieur.`,
+          data: r,
+        });
+      }
+
+      next();
+    } catch (error) {
+      console.error(`❌ Erreur vérification quota ${resource}:`, error);
+      res.status(500).json({ success: false, message: 'Erreur vérification quota' });
+    }
+  };
+}
+
+const checkFormationQuota = checkResourceQuota('formations', 'formations');
+const checkLearnerQuota = checkResourceQuota('apprenants', 'apprenants liés');
+
+module.exports = {
+  requireActiveSubscription,
+  checkEmissionQuota,
+  checkResourceQuota,
+  checkFormationQuota,
+  checkLearnerQuota,
+};

@@ -22,9 +22,9 @@ const PLANS = {
     prices: { mensuel: 0, annuel: 0 },
     durationDays: TRIAL_DURATION_DAYS,
     limits: {
-      certificatsParMois: 50,   // plafond raisonnable anti-abus pendant l'essai
-      apprenants: null,         // illimité
-      formations: null,
+      certificatsParMois: 25,   // plan gratuit : plafonds anti-abus
+      apprenants: 25,           // nombre d'apprenants liables
+      formations: 25,           // nombre de formations
       storageGB: 100,
       statsAvancees: true,
       apiAccess: false,

@@ -1,65 +1,113 @@
-const NotchPay = require('notchpay');
+// =============================================================================
+// Intégration NotchPay via l'API REST officielle (https://api.notchpay.co).
+// On n'utilise pas le SDK npm (build orienté navigateur, API instable) :
+// on appelle directement les endpoints avec fetch (Node >= 18).
+//
+// Auth : la clé PUBLIQUE (pk....) va dans l'en-tête `Authorization`.
+// La clé SECRÈTE (sk....) n'est requise que pour certaines opérations
+// privilégiées (en-tête `X-Grant`) — pas pour initialize/verify.
+// =============================================================================
 
-// Configuration Notch Pay
-const notchpay = new NotchPay({
-  publicKey: process.env.NOTCH_PAY_PUBLIC_KEY,
-  secretKey: process.env.NOTCH_PAY_SECRET_KEY,
-});
+const NOTCHPAY_BASE = process.env.NOTCHPAY_BASE_URL || 'https://api.notchpay.co';
+
+const PUBLIC_KEY = process.env.NOTCH_PAY_PUBLIC_KEY || process.env.NOTCHPAY_PUBLIC_KEY || '';
+const SECRET_KEY = process.env.NOTCH_PAY_SECRET_KEY || process.env.NOTCHPAY_SECRET_KEY || '';
+
+function cleanUrl(url) {
+  return (url || '').trim().replace(/\/+$/, '');
+}
+
+function authHeaders(extra = {}) {
+  return {
+    Authorization: PUBLIC_KEY,
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+    ...extra,
+  };
+}
 
 /**
- * Créer une transaction de paiement Notch Pay
- * @param {Object} paymentData - Données du paiement
- * @returns {Promise<Object>} Résultat de la transaction
+ * Initialise une transaction de paiement NotchPay (hosted checkout).
+ * @returns {Promise<{success:boolean, transaction?:object, paymentUrl?:string, error?:string}>}
  */
 async function createPayment(paymentData) {
+  if (!PUBLIC_KEY) {
+    return { success: false, error: 'NOTCH_PAY_PUBLIC_KEY manquant dans la configuration serveur' };
+  }
+
   try {
-    const transaction = await notchpay.transaction.initialize({
+    const callbackUrl = `${cleanUrl(process.env.FRONTEND_URL)}/payment/callback`;
+
+    const body = {
       amount: paymentData.amount,
-      currency: paymentData.currency || 'XOF', // Franc CFA par défaut
+      currency: paymentData.currency || 'XAF',
       description: paymentData.description,
-      customer: {
-        name: paymentData.customerName,
-        email: paymentData.customerEmail,
-        phone: paymentData.customerPhone || '',
-      },
-      callback_url: `${process.env.FRONTEND_URL}/payment/callback`,
-      webhook_url: `${process.env.BACKEND_URL}/api/payments/webhook`,
-      reference: paymentData.reference, // ID unique pour tracking
+      reference: paymentData.reference,
+      callback: callbackUrl,
+      // Infos client (NotchPay accepte les champs au niveau racine)
+      email: paymentData.customerEmail,
+      name: paymentData.customerName,
+      phone: paymentData.customerPhone || undefined,
+    };
+
+    const response = await fetch(`${NOTCHPAY_BASE}/payments/initialize`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify(body),
     });
 
-    return {
-      success: true,
-      transaction: transaction.data,
-      paymentUrl: transaction.data.authorization_url,
-    };
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      const message = data.message || data.error || `HTTP ${response.status}`;
+      console.error('❌ Erreur initialisation NotchPay:', message, data);
+      return { success: false, error: message };
+    }
+
+    const transaction = data.transaction || data.data?.transaction || data.data || {};
+    const paymentUrl = data.authorization_url || data.data?.authorization_url || transaction.authorization_url;
+
+    if (!paymentUrl) {
+      console.error('❌ NotchPay: authorization_url absent de la réponse', data);
+      return { success: false, error: "URL de paiement absente de la réponse NotchPay" };
+    }
+
+    return { success: true, transaction, paymentUrl };
   } catch (error) {
-    console.error('❌ Erreur création paiement Notch Pay:', error);
-    return {
-      success: false,
-      error: error.message,
-    };
+    console.error('❌ Erreur création paiement NotchPay:', error);
+    return { success: false, error: error.message };
   }
 }
 
 /**
- * Vérifier le statut d'une transaction Notch Pay
- * @param {string} reference - Référence de la transaction
- * @returns {Promise<Object>} Statut de la transaction
+ * Vérifie le statut d'une transaction NotchPay.
+ * @param {string} reference - Référence NotchPay (ou marchande) de la transaction.
+ * @returns {Promise<{success:boolean, status?:string, transaction?:object, error?:string}>}
  */
 async function verifyPayment(reference) {
+  if (!PUBLIC_KEY) {
+    return { success: false, error: 'NOTCH_PAY_PUBLIC_KEY manquant dans la configuration serveur' };
+  }
+
   try {
-    const transaction = await notchpay.transaction.verify(reference);
-    return {
-      success: true,
-      status: transaction.data.status,
-      transaction: transaction.data,
-    };
+    const response = await fetch(`${NOTCHPAY_BASE}/payments/${encodeURIComponent(reference)}`, {
+      method: 'GET',
+      headers: authHeaders(),
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      const message = data.message || data.error || `HTTP ${response.status}`;
+      console.error('❌ Erreur vérification NotchPay:', message, data);
+      return { success: false, error: message };
+    }
+
+    const transaction = data.transaction || data.data?.transaction || data.data || {};
+    return { success: true, status: transaction.status, transaction };
   } catch (error) {
-    console.error('❌ Erreur vérification paiement:', error);
-    return {
-      success: false,
-      error: error.message,
-    };
+    console.error('❌ Erreur vérification paiement NotchPay:', error);
+    return { success: false, error: error.message };
   }
 }
 
@@ -70,10 +118,5 @@ async function verifyPayment(reference) {
 module.exports = {
   createPayment,
   verifyPayment,
+  SECRET_KEY,
 };
-
-
-
-
-
-

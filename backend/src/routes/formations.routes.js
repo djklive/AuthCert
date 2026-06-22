@@ -23,6 +23,7 @@ const { generateCertificatePdf, getEstablishmentLogo } = require('../services/pd
 const { sendPasswordResetEmail } = require('../services/emailService');
 const { mapTypeEtablissement, getTimeAgo, createNotification } = require('../utils/helpers');
 const { encryptPrivateKey, decryptPrivateKey, sha256Hex } = require('../utils/cryptoUtils');
+const { checkFormationQuota } = require('../middleware/subscription');
 
 const router = express.Router();
 
@@ -82,7 +83,7 @@ router.get('/api/etablissement/:id/formations', authenticateToken, async (req, r
 });
 
 // Créer une nouvelle formation
-router.post('/api/formations', authenticateToken, requireRole('establishment'), async (req, res) => {
+router.post('/api/formations', authenticateToken, requireRole('establishment'), checkFormationQuota, async (req, res) => {
   try {
     console.log('📥 Données reçues:', req.body);
     console.log('📥 Headers:', req.headers);

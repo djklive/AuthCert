@@ -23,6 +23,11 @@ async function startServer() {
       console.log(`🔗 DATABASE_URL: ${process.env.DATABASE_URL ? 'Défini' : 'Non défini'}`);
       console.log(`🔐 JWT_SECRET: ${process.env.JWT_SECRET ? 'Défini' : 'Non défini'}`);
       console.log(`🌐 FRONTEND_URL: ${process.env.FRONTEND_URL || 'Non défini'}`);
+
+      // Démarrer les tâches planifiées (expiration des abonnements)
+      if (typeof app.startBackgroundJobs === 'function') {
+        app.startBackgroundJobs();
+      }
     });
 
   } catch (error) {

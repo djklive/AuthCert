@@ -65,7 +65,61 @@ export interface RelayerWalletInfo {
   faucetUrl: string;
 }
 
+export interface AdminSubscription {
+  id: number;
+  plan: string;
+  statut: 'TRIAL' | 'ACTIF' | 'PAST_DUE' | 'EXPIRE' | 'ANNULE';
+  periode: 'MENSUEL' | 'ANNUEL';
+  dateDebut: string;
+  dateFin: string;
+  etablissement: {
+    id_etablissement: number;
+    nomEtablissement: string;
+    emailEtablissement: string;
+    statut: string;
+  };
+}
+
+export interface SubscriptionStats {
+  currency: string;
+  revenuTotal: number;
+  paiementsReussis: number;
+  paiementsEchoues: number;
+  parStatut: { statut: string; count: number }[];
+  parPlan: { plan: string; count: number }[];
+}
+
 export const api = {
+  // Liste de tous les abonnements
+  async getSubscriptions(): Promise<AdminSubscription[]> {
+    const response = await fetch(`${API_BASE_URL}/admin/subscriptions`, {
+      headers: authService.getAuthHeaders()
+    });
+    if (!response.ok) throw new Error('Erreur lors de la récupération des abonnements');
+    const data = await response.json();
+    return data.data;
+  },
+
+  // Statistiques des abonnements (revenus, répartition)
+  async getSubscriptionStats(): Promise<SubscriptionStats> {
+    const response = await fetch(`${API_BASE_URL}/admin/subscriptions/stats`, {
+      headers: authService.getAuthHeaders()
+    });
+    if (!response.ok) throw new Error('Erreur lors de la récupération des statistiques');
+    const data = await response.json();
+    return data.data;
+  },
+
+  // Override manuel d'un abonnement
+  async overrideSubscription(etablissementId: number, plan: string, periode: 'mensuel' | 'annuel'): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/admin/subscriptions/${etablissementId}/override`, {
+      method: 'POST',
+      headers: authService.getAuthHeaders(),
+      body: JSON.stringify({ plan, periode }),
+    });
+    if (!response.ok) throw new Error("Erreur lors de la modification de l'abonnement");
+  },
+
   // Récupérer les infos du wallet relayer (trésorerie de la plateforme)
   async getRelayerWallet(): Promise<RelayerWalletInfo> {
     const response = await fetch(`${API_BASE_URL}/admin/relayer-wallet`, {

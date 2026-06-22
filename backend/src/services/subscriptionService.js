@@ -159,6 +159,54 @@ async function activateOrExtend(etablissementId, planId, periode, reference) {
 }
 
 /**
+ * Job d'expiration : bascule en EXPIRE tous les abonnements dont la date de fin
+ * est dépassée (TRIAL ou payant), et notifie l'établissement une seule fois.
+ * Idempotent : ne re-traite pas un abonnement déjà EXPIRE/ANNULE.
+ * Retourne le nombre d'abonnements expirés lors de ce passage.
+ */
+async function expireOverdue() {
+  const now = new Date();
+  const overdue = await prisma.subscription.findMany({
+    where: {
+      dateFin: { lte: now },
+      statut: { notIn: ['EXPIRE', 'ANNULE'] },
+    },
+    select: { id: true, etablissementId: true, plan: true },
+  });
+
+  if (overdue.length === 0) return 0;
+
+  await prisma.subscription.updateMany({
+    where: { id: { in: overdue.map((s) => s.id) } },
+    data: { statut: 'EXPIRE' },
+  });
+
+  // Notifications best-effort (chargées dynamiquement pour éviter les cycles)
+  try {
+    const { createNotification } = require('../utils/helpers');
+    await Promise.all(
+      overdue.map((s) =>
+        createNotification({
+          userId: s.etablissementId,
+          userType: 'etablissement',
+          type: 'ABONNEMENT_EXPIRE',
+          titre: 'Abonnement expiré',
+          message:
+            "Votre abonnement a expiré. Renouvelez-le pour continuer à émettre des certificats.",
+          important: true,
+          lienAction: '/dashboard?userType=establishment',
+          metadonnees: { plan: s.plan },
+        }).catch(() => null)
+      )
+    );
+  } catch (e) {
+    console.error('⚠️ Notifications expiration échouées:', e.message);
+  }
+
+  return overdue.length;
+}
+
+/**
  * Vue complète pour le dashboard établissement : abonnement + plan + usage.
  */
 async function getSubscriptionSummary(etablissementId) {
@@ -190,5 +238,6 @@ module.exports = {
   getUsage,
   activateOrExtend,
   getSubscriptionSummary,
+  expireOverdue,
   addDays,
 };

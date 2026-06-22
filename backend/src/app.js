@@ -5,6 +5,7 @@ const cors = require('cors');
 const prisma = require('./config/prisma');
 const supabaseStorage = require('./services/storageService');
 const { cleanupExpiredSessions } = require('./middleware/auth');
+const subscriptionService = require('./services/subscriptionService');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -58,6 +59,26 @@ async function initializeServer() {
   }
 }
 
+// Tâches planifiées (expiration des abonnements). Appelé par app.js (dev) et start.js (prod).
+let schedulersStarted = false;
+function startBackgroundJobs() {
+  if (schedulersStarted) return;
+  schedulersStarted = true;
+
+  const runExpiration = async () => {
+    try {
+      const count = await subscriptionService.expireOverdue();
+      if (count > 0) console.log(`⏳ Abonnements expirés: ${count}`);
+    } catch (error) {
+      console.error('❌ Erreur job expiration abonnements:', error.message);
+    }
+  };
+
+  // Au démarrage puis toutes les 6 heures
+  runExpiration();
+  setInterval(runExpiration, 6 * 60 * 60 * 1000);
+}
+
 // Démarrage du serveur (seulement si appelé directement)
 if (require.main === module) {
   // Initialiser Supabase avant de démarrer le serveur
@@ -70,6 +91,9 @@ if (require.main === module) {
 
       // Nettoyer les sessions expirées au démarrage
       await initializeServer();
+
+      // Démarrer les tâches planifiées (expiration abonnements)
+      startBackgroundJobs();
 
       // Nettoyer les sessions expirées toutes les heures
       setInterval(async () => {
@@ -94,3 +118,4 @@ if (require.main === module) {
 
 // Export de l'app pour le fichier start.js
 module.exports = app;
+module.exports.startBackgroundJobs = startBackgroundJobs;

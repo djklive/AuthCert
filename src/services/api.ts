@@ -24,6 +24,48 @@ export interface Establishment {
     documents: Document[];
   }
 
+// Interfaces abonnement
+export interface PlanLimits {
+  certificatsParMois: number | null;
+  apprenants: number | null;
+  formations: number | null;
+  storageGB: number | null;
+  statsAvancees: boolean;
+  apiAccess: boolean;
+}
+
+export interface SubscriptionSummary {
+  subscription: {
+    plan: string;
+    planName: string;
+    statut: 'TRIAL' | 'ACTIF' | 'PAST_DUE' | 'EXPIRE' | 'ANNULE';
+    periode: 'MENSUEL' | 'ANNUEL';
+    dateDebut: string;
+    dateFin: string;
+    actif: boolean;
+    annulationDemandee: boolean;
+  };
+  limits: PlanLimits;
+  usage: {
+    certificats: { utilises: number; limite: number | null; restant: number | null; depasse: boolean };
+    apprenants: { utilises: number; limite: number | null };
+    formations: { utilises: number; limite: number | null };
+    fenetreJours: number;
+  };
+}
+
+export interface PaymentRecord {
+  id: number;
+  reference: string;
+  montant: number;
+  devise: string;
+  plan: string;
+  periode: 'MENSUEL' | 'ANNUEL';
+  statut: 'EN_ATTENTE' | 'REUSSI' | 'ECHOUE' | 'ANNULE';
+  paidAt?: string | null;
+  createdAt: string;
+}
+
 // Interfaces pour les demandes de certificat
 export interface DocumentDemandeCertificat {
   id: number;
@@ -532,6 +574,57 @@ function authHeaders(): Record<string, string> {
       headers: authHeaders()
     });
     if (!res.ok) throw new Error('Erreur récupération dashboard');
+    return res.json();
+  },
+
+  // ========================================
+  // MÉTHODES POUR L'ABONNEMENT (établissement)
+  // ========================================
+
+  // Liste des plans (source unique backend)
+  async getPlans() {
+    const res = await fetch(`${API_BASE_URL}/plans`);
+    if (!res.ok) throw new Error('Erreur récupération plans');
+    return res.json();
+  },
+
+  // Abonnement courant + usage
+  async getMySubscription(): Promise<{ success: boolean; data: SubscriptionSummary }> {
+    const res = await fetch(`${API_BASE_URL}/subscription/me`, {
+      headers: authHeaders()
+    });
+    if (!res.ok) throw new Error('Erreur récupération abonnement');
+    return res.json();
+  },
+
+  // Historique des paiements
+  async getSubscriptionPayments(): Promise<{ success: boolean; data: PaymentRecord[] }> {
+    const res = await fetch(`${API_BASE_URL}/subscription/payments`, {
+      headers: authHeaders()
+    });
+    if (!res.ok) throw new Error('Erreur récupération paiements');
+    return res.json();
+  },
+
+  // Souscrire / renouveler -> renvoie l'URL de paiement NotchPay
+  async subscribe(plan: string, periode: 'mensuel' | 'annuel') {
+    const res = await fetch(`${API_BASE_URL}/subscription/subscribe`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ plan, periode })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Erreur lors de la souscription');
+    }
+    return res.json();
+  },
+
+  // Vérifier/appliquer un paiement au retour de NotchPay
+  async verifySubscriptionPayment(reference: string) {
+    const res = await fetch(`${API_BASE_URL}/subscription/verify/${reference}`, {
+      headers: authHeaders()
+    });
     return res.json();
   },
 };

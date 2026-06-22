@@ -1,5 +1,6 @@
 import { CheckIcon } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "../../../../components/ui/button";
 import { Card, CardContent } from "../../../../components/ui/card";
 import { Switch } from "../../../../components/ui/switch";
@@ -44,9 +45,15 @@ const pricingPlans = [
 
 export const PricingSection = () => {
   const [isAnnual, setIsAnnual] = useState(true);
+  const navigate = useNavigate();
 
   const handleSwitchChange = (checked: boolean) => {
     setIsAnnual(checked);
+  };
+
+  // L'abonnement se fait depuis le dashboard établissement, après inscription/connexion.
+  const handleChoosePlan = () => {
+    navigate("/auth/signup");
   };
 
   return (
@@ -120,6 +127,7 @@ export const PricingSection = () => {
 
               <div className="px-4 sm:px-6 lg:px-8 mb-6 sm:mb-8">
                 <Button
+                  onClick={handleChoosePlan}
                   className={`w-full h-auto py-3 sm:py-4 ${
                     plan.highlighted 
                       ? "bg-rose-500 hover:bg-rose-600 text-white" 

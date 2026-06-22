@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { sendPasswordResetEmail } = require('./services/emailService');
+const { sendPasswordResetEmail } = require('./src/services/emailService');
 
 /**
  * Script de test pour vérifier l'envoi d'emails via Gmail (Nodemailer)

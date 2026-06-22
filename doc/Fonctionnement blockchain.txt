@@ -1,0 +1,151 @@
+✅ 1) Vue générale du fonctionnement
+✅ 2) Fonctionnalités détaillées pour chaque type d’utilisateur
+✅ 3) Parcours utilisateur (scénarios concrets)
+✅ 4) Illustration schématique du flux (explication simple)
+
+---
+
+## ✅ 1) Vue générale du fonctionnement
+
+La plateforme est une application web responsive (compatible mobile, tablette, PC) qui connecte trois types d’utilisateurs :
+
+* Les établissements / organismes de formation (comme Vision Pub)
+* Les étudiants (bénéficiaires des certificats)
+* Les employeurs ou vérificateurs (qui veulent vérifier l’authenticité)
+
+Elle repose sur trois briques techniques :
+
+* Un smart contract sur blockchain (Ethereum testnet ou Polygon)
+* Une base de données pour les infos non sensibles
+* Une interface web et PWA pour accéder aux services
+
+> Seuls les établissements validés peuvent publier des certificats, grâce à une authentification préalable et une liste blanche (whitelist).
+
+---
+
+## ✅ 2) Fonctionnalités détaillées
+
+### 🏫 A) Établissements / organismes de formation (Vision Pub)
+
+Rôle : Création, gestion et publication des certificats
+
+Fonctionnalités principales :
+
+* Créer un compte établissement
+  S’enregistrer et demander validation par l’administrateur (Vision Pub ou “super admin”).
+
+* Émettre un certificat numérique sécurisé
+  → Génération du hash (empreinte unique) du certificat PDF
+  → Enregistrement de ce hash sur la blockchain via le smart contract
+
+* Gérer les certificats
+  → Lister tous les certificats émis
+  → Révoquer un certificat en cas d’erreur ou fraude détectée
+
+* Consulter les statistiques
+  → Nombre de vérifications effectuées
+  → Rapports mensuels ou annuels sur l’usage des certificats
+
+* Tableau de bord
+  → Interface intuitive pour gérer toutes ces fonctionnalités depuis un navigateur
+
+---
+
+### 🎓 B) Étudiants / bénéficiaires des certificats
+
+Rôle : Consulter et partager leurs certificats
+
+Fonctionnalités principales :
+
+* Espace personnel sécurisé
+  → Se connecter et voir la liste de ses certificats
+
+* Télécharger les certificats
+  → Version PDF officielle ou version numérique avec QR code
+
+* Partager facilement
+  → Génération d’un QR code unique ou d’un lien à envoyer aux employeurs
+
+* Suivre l’historique des vérifications
+  → Voir combien de fois et quand leurs certificats ont été vérifiés
+
+* Recevoir des notifications
+  → Ex. quand un employeur vérifie un certificat
+
+---
+
+### 🏢 C) Employeurs / recruteurs / institutions
+
+Rôle : Vérifier l’authenticité des certificats reçus
+
+Fonctionnalités principales :
+
+* Scanner un QR code ou saisir un identifiant
+  → Vérification instantanée via la plateforme
+
+* Consulter les détails du certificat
+  → Nom, date d’émission, établissement émetteur
+
+* Télécharger un rapport de vérification
+  → Pour archiver la preuve qu’ils ont bien contrôlé
+
+* Vérification hors ligne (partielle)
+  → S’il y a un export des hashes publics, possibilité de vérifier même sans internet
+
+---
+
+## ✅ 3) Parcours utilisateur (scénarios concrets)
+
+### ✏ a) Établissement (Vision Pub)
+
+1️⃣ Crée son compte sur la plateforme
+2️⃣ L’admin valide l’établissement et l’ajoute à la whitelist
+3️⃣ Vision Pub émet un certificat (PDF) → le système génère le hash et l’enregistre sur la blockchain
+4️⃣ L’étudiant reçoit un mail ou voit son certificat ajouté à son espace
+
+---
+
+### 📱 b) Étudiant
+
+1️⃣ Se connecte à son espace
+2️⃣ Visualise son nouveau certificat
+3️⃣ Télécharge le PDF officiel ou copie le QR code
+4️⃣ Partage le QR code dans son CV ou par email
+
+---
+
+### 🔍 c) Employeur
+
+1️⃣ Scanne le QR code reçu
+2️⃣ Le système affiche les infos et vérifie le hash sur la blockchain
+3️⃣ Si tout est correct → certificat authentique
+4️⃣ Peut télécharger un petit rapport de vérification
+
+---
+
+
+## ✅ 4) Illustration schématique du flux (expliqué en texte)
+
+
+1. Établissement crée un certificat numérique (PDF)
+2. Génère le hash (empreinte numérique) du PDF
+3. Enregistre ce hash via smart contract sur la blockchain
+4. Étudiant reçoit le certificat et un QR code lié au hash
+5. Employeur scanne le QR → plateforme lit le hash sur la blockchain
+6. Si le hash correspond au certificat : authentique !
+
+
+---
+
+## 🛡 Et pour la sécurité :
+
+* Seuls les établissements validés peuvent publier → grâce à la whitelist et au smart contract
+* Les étudiants ne peuvent que consulter et partager → impossible pour eux d’ajouter eux-mêmes un faux certificat
+* La blockchain rend les données immuables et transparentes
+* Chaque action est tracée et horodatée
+
+---
+
+## ✅ En résumé (à réutiliser dans ton rapport) :
+
+> « Notre plateforme garantit que seuls les établissements validés peuvent émettre des certificats, stocke une empreinte infalsifiable sur la blockchain, et permet aux employeurs de vérifier instantanément via QR code, tout en offrant aux étudiants un espace personnel pour gérer et partager leurs certificats. »

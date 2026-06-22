@@ -2,7 +2,6 @@ import { useUser } from '../../hooks/useUser';
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
-import { WalletCard } from '../WalletCard';
 import { 
   Users, 
   Award, 
@@ -216,8 +215,19 @@ export function EstablishmentDashboardScreen({ hasData = true, onNavigate }: Est
           </Card>
         </div>
 
-        {/* Wallet Card */}
-        <WalletCard className="rounded-2xl" />
+        {/* Frais blockchain pris en charge par la plateforme */}
+        <Card className="rounded-2xl border-dashed">
+          <CardContent className="flex items-start gap-3 p-5">
+            <Award className="w-5 h-5 text-emerald-600 mt-0.5" />
+            <div>
+              <p className="font-medium text-gray-900">Frais blockchain pris en charge par la plateforme</p>
+              <p className="text-sm text-gray-500">
+                Vous n'avez aucun portefeuille à gérer ni à approvisionner. L'émission et la
+                révocation de vos certificats sur la blockchain sont payées automatiquement par AuthCert.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Getting Started Cards */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -443,9 +453,6 @@ export function EstablishmentDashboardScreen({ hasData = true, onNavigate }: Est
             )}
           </CardContent>
         </Card>
-
-        {/* Wallet Card */}
-        <WalletCard className="rounded-2xl" />
 
         {/* Recent Activity */}
         <Card className="rounded-2xl">

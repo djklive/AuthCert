@@ -76,6 +76,10 @@ model Etablissement {
   // Relations avec les notifications
   notifications                     Notification[] @relation("EtablissementNotifications")
 
+  // Abonnement et paiements
+  subscription                      Subscription? @relation("EtablissementSubscription")
+  paiements                         Payment[]     @relation("EtablissementPayments")
+
   @@map("etablissements")
 }
 
@@ -468,4 +472,73 @@ model PasswordReset {
   @@index([email, userType, used])
   @@index([token, expiresAt])
   @@map("password_resets")
+}
+
+// ===============================================
+//                ABONNEMENTS
+// ===============================================
+
+// Un abonnement par établissement (essai gratuit puis plan payant prépayé).
+model Subscription {
+  id                 Int      @id @default(autoincrement())
+  etablissementId    Int      @unique
+  plan               String   // 'TRIAL' | 'PRO' | 'EXCLUSIVE' (cf. config/plans.js)
+  statut             StatutAbonnement  @default(TRIAL)
+  periode            PeriodeAbonnement @default(MENSUEL)
+  dateDebut          DateTime @default(now())
+  dateFin            DateTime
+  annulationDemandee Boolean  @default(false)
+  derniereReference  String?  // dernière référence de paiement appliquée
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  etablissement      Etablissement @relation("EtablissementSubscription", fields: [etablissementId], references: [id_etablissement], onDelete: Cascade)
+  paiements          Payment[]
+
+  @@map("subscriptions")
+}
+
+// Trace de chaque tentative/transaction de paiement (NotchPay).
+model Payment {
+  id                Int      @id @default(autoincrement())
+  etablissementId   Int
+  subscriptionId    Int?
+  reference         String   @unique  // référence interne (idempotence)
+  notchpayReference String?            // référence renvoyée par NotchPay
+  montant           Int                // en FCFA
+  devise            String   @default("XAF")
+  plan              String
+  periode           PeriodeAbonnement
+  statut            StatutPaiement @default(EN_ATTENTE)
+  paymentUrl        String?
+  paidAt            DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  etablissement     Etablissement @relation("EtablissementPayments", fields: [etablissementId], references: [id_etablissement], onDelete: Cascade)
+  subscription      Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  @@index([etablissementId])
+  @@index([statut])
+  @@map("payments")
+}
+
+enum StatutAbonnement {
+  TRIAL
+  ACTIF
+  PAST_DUE
+  EXPIRE
+  ANNULE
+}
+
+enum PeriodeAbonnement {
+  MENSUEL
+  ANNUEL
+}
+
+enum StatutPaiement {
+  EN_ATTENTE
+  REUSSI
+  ECHOUE
+  ANNULE
 }

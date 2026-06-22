@@ -3,11 +3,10 @@
 // Fichier de démarrage spécifique pour Railway
 require('dotenv').config();
 
-const { PrismaClient } = require('@prisma/client');
-const app = require('./server');
+const app = require('./src/app');
+const prisma = require('./src/config/prisma');
 
 const PORT = process.env.PORT || 5000;
-const prisma = new PrismaClient();
 
 async function startServer() {
   try {

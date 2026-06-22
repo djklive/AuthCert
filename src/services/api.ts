@@ -1,6 +1,6 @@
-const API_BASE_URL = import.meta.env.BACKEND_URL || 'https://authcert-production.up.railway.app/api';
+//const API_BASE_URL = import.meta.env.BACKEND_URL || 'https://authcert-production.up.railway.app/api';
 //const API_BASE_URL = 'https://authcert-production.up.railway.app/api';
-//const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = 'http://localhost:5000/api';
 export const API_BASE = API_BASE_URL;
 
 export interface Document {
@@ -151,14 +151,14 @@ function authHeaders(): Record<string, string> {
     return res.json();
   },
 
-  // Récupérer l'adresse du wallet de l'établissement avec solde
-  async getEstablishmentWallet() {
-    const res = await fetch(`${API_BASE_URL}/etablissement/me/wallet`, {
+  // Récupérer les infos du wallet relayer (trésorerie plateforme) — réservé à l'admin
+  async getRelayerWallet() {
+    const res = await fetch(`${API_BASE_URL}/admin/relayer-wallet`, {
       headers: {
         ...authHeaders(),
       } as HeadersInit,
     });
-    if (!res.ok) throw new Error('Erreur récupération wallet');
+    if (!res.ok) throw new Error('Erreur récupération wallet relayer');
     return res.json();
   },
 

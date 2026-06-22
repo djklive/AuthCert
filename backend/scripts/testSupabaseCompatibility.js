@@ -1,4 +1,4 @@
-const supabaseStorage = require('../services/supabaseStorage');
+const supabaseStorage = require('../src/services/storageService');
 
 /**
  * Script de test pour vérifier la compatibilité Supabase

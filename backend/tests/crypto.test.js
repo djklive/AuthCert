@@ -1,6 +1,6 @@
 // Fichier: /tests/crypto.test.js
 
-const { encryptPrivateKey, decryptPrivateKey } = require('../utils/cryptoUtils');
+const { encryptPrivateKey, decryptPrivateKey } = require('../src/utils/cryptoUtils');
 const crypto = require('crypto');
 const dotenv = require('dotenv');
 dotenv.config();

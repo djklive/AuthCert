@@ -1,4 +1,4 @@
-//import React from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Building2, 
   Users, 
@@ -9,8 +9,13 @@ import {
   AlertTriangle,
   CheckCircle,
   Clock,
+  Wallet,
+  ExternalLink,
+  Droplet,
+  RefreshCw,
 } from 'lucide-react';
 import { type NavigateFunction, type User, type KPI, type ActivityLog } from '../../types';
+import { api, type RelayerWalletInfo } from '../../services/api';
 
 interface DashboardScreenProps {
   onNavigate: NavigateFunction;
@@ -18,6 +23,26 @@ interface DashboardScreenProps {
 }
 
 export function DashboardScreen({ onNavigate, user }: DashboardScreenProps) {
+  const [relayer, setRelayer] = useState<RelayerWalletInfo | null>(null);
+  const [relayerLoading, setRelayerLoading] = useState(false);
+  const [relayerError, setRelayerError] = useState<string | null>(null);
+
+  const loadRelayer = async () => {
+    setRelayerLoading(true);
+    setRelayerError(null);
+    try {
+      const info = await api.getRelayerWallet();
+      setRelayer(info);
+    } catch (err) {
+      setRelayerError(err instanceof Error ? err.message : 'Erreur de chargement');
+    } finally {
+      setRelayerLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadRelayer();
+  }, []);
   // Données simulées pour les KPIs
   const kpis: KPI[] = [
     {
@@ -164,6 +189,77 @@ export function DashboardScreen({ onNavigate, user }: DashboardScreenProps) {
             </div>
           );
         })}
+      </div>
+
+      {/* Wallet Relayer / Trésorerie */}
+      <div className="bg-white rounded-xl p-4 lg:p-6 border border-gray-200">
+        <div className="flex items-center justify-between mb-3 lg:mb-4">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-rose-50 rounded-lg">
+              <Wallet className="w-5 h-5 text-rose-600" />
+            </div>
+            <div>
+              <h2 className="text-base lg:text-lg font-semibold text-gray-900">Wallet Relayer / Trésorerie</h2>
+              <p className="text-xs lg:text-sm text-gray-500">
+                Portefeuille de la plateforme qui paie les frais blockchain (gas) pour tous les établissements.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={loadRelayer}
+            disabled={relayerLoading}
+            className="p-2 text-gray-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors disabled:opacity-50"
+            title="Rafraîchir"
+          >
+            <RefreshCw className={`w-4 h-4 ${relayerLoading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
+
+        {relayerError ? (
+          <div className="flex items-center gap-2 p-3 bg-red-50 rounded-lg text-sm text-red-700">
+            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            <span>{relayerError}</span>
+          </div>
+        ) : relayerLoading && !relayer ? (
+          <p className="text-sm text-gray-500">Chargement des informations du wallet…</p>
+        ) : relayer ? (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="sm:col-span-2 p-3 bg-gray-50 rounded-lg">
+              <p className="text-xs text-gray-500 mb-1">Adresse</p>
+              <p className="font-mono text-xs lg:text-sm text-gray-900 break-all">{relayer.address}</p>
+              <p className="text-xs text-gray-500 mt-2">{relayer.network}</p>
+            </div>
+            <div className="p-3 bg-gray-50 rounded-lg flex flex-col justify-center">
+              <p className="text-xs text-gray-500 mb-1">Solde</p>
+              <p className="text-xl lg:text-2xl font-bold text-gray-900">
+                {relayer.balance} <span className="text-sm font-medium text-gray-500">{relayer.currency}</span>
+              </p>
+              {relayer.balanceError && (
+                <p className="text-xs text-amber-600 mt-1">Solde indisponible</p>
+              )}
+            </div>
+            <div className="sm:col-span-3 flex flex-wrap gap-2">
+              <a
+                href={relayer.explorerUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                <ExternalLink className="w-4 h-4" />
+                Voir sur l'explorer
+              </a>
+              <a
+                href={relayer.faucetUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs lg:text-sm font-medium text-rose-600 border border-rose-200 rounded-lg hover:bg-rose-50 transition-colors"
+              >
+                <Droplet className="w-4 h-4" />
+                Approvisionner (faucet)
+              </a>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {/* Actions Prioritaires et Revenus */}

@@ -1,5 +1,5 @@
 // Fichier: /tests/hashingpdf.test.js
-const { sha256Hex } = require('../utils/cryptoUtils'); 
+const { sha256Hex } = require('../src/utils/cryptoUtils'); 
 const dotenv = require('dotenv');
 dotenv.config();
 

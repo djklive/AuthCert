@@ -59,13 +59,6 @@ export default function AuthPage({ defaultTab = "login" }: AuthPageProps) {
     }
   }, [location.search, navigate]);
 
-  // Mettre à jour automatiquement le rôle quand l'email admin est saisi
-  useEffect(() => {
-    if (loginData.email === "frckdjoko@gmail.com") {
-      // Ne pas changer le rôle dans le state, on le détectera lors de la connexion
-    }
-  }, [loginData.email]);
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -77,14 +70,10 @@ export default function AuthPage({ defaultTab = "login" }: AuthPageProps) {
     setLoading(true);
     
     try {
-      // Détecter automatiquement le rôle pour l'admin, sinon utiliser le sélecteur
-      let userRole: "student" | "establishment" | "admin";
-      
-      if (loginData.email === "frckdjoko@gmail.com" && loginData.password === "123456") {
-        userRole = "admin";
-      } else {
-        userRole = loginData.role as "student" | "establishment";
-      }
+      // Le rôle provient du sélecteur (apprenant/établissement). Le cas admin
+      // est auto-détecté par le backend via l'email ; le rôle effectif est
+      // ensuite lu depuis data.user.role.
+      const userRole = loginData.role as "student" | "establishment";
 
       // Appel à l'API de connexion
       const response = await fetch(`${API_BASE}/auth/login`, {
@@ -106,18 +95,16 @@ export default function AuthPage({ defaultTab = "login" }: AuthPageProps) {
         if (data.token) {
           authService.setAuth(data.token, data.user);
         }
-        
-        login(userRole);
+
+        // Le rôle effectif est celui renvoyé par le backend
+        const effectiveRole = (data.user?.role || userRole) as "student" | "establishment" | "admin";
+
+        login(effectiveRole);
         setAlert({ type: "success", message: "Connexion réussie ! Redirection en cours..." });
         
-        // Redirection vers le dashboard approprié
+        // Redirection vers le dashboard approprié selon le rôle renvoyé par le backend
         setTimeout(() => {
-          if (userRole === "admin") {
-            navigate(`/dashboard?userType=admin`);
-          } else {
-            // Utiliser la structure existante avec userType
-            navigate(`/dashboard?userType=${userRole}`);
-          }
+          navigate(`/dashboard?userType=${effectiveRole}`);
         }, 1000);
       } else {
         // Gestion des erreurs selon le statut
@@ -236,16 +223,9 @@ export default function AuthPage({ defaultTab = "login" }: AuthPageProps) {
                     <Select 
                       value={loginData.role} 
                       onValueChange={(value) => setLoginData({ ...loginData, role: value as "student" | "establishment" })}
-                      disabled={loginData.email === "frckdjoko@gmail.com"}
                     >
-                      <SelectTrigger className={`h-12 border-2 focus:border-[#F43F5E] ${
-                        loginData.email === "frckdjoko@gmail.com" ? "bg-gray-100 cursor-not-allowed" : ""
-                      }`}>
-                        <SelectValue placeholder={
-                          loginData.email === "frckdjoko@gmail.com" 
-                            ? "Mode administrateur activé" 
-                            : "Sélectionnez votre type de compte"
-                        } />
+                      <SelectTrigger className="h-12 border-2 focus:border-[#F43F5E]">
+                        <SelectValue placeholder="Sélectionnez votre type de compte" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="student">
@@ -262,19 +242,7 @@ export default function AuthPage({ defaultTab = "login" }: AuthPageProps) {
                         </SelectItem>
                       </SelectContent>
                     </Select>
-                    {loginData.email === "frckdjoko@gmail.com" && (
-                      <p className="text-xs text-gray-500">
-                        ⚠️ Connexion administrateur détectée automatiquement
-                      </p>
-                    )}
                   </div>
-                  
-                  {/* Info sur la connexion admin */}
-                  {/* <div className="text-center text-sm text-gray-600">
-                    <p>💡 <strong>Connexion administrateur :</strong></p>
-                    <p>Email: <code className="bg-gray-100 px-1 rounded">frckdjoko@gmail.com</code></p>
-                    <p>Mot de passe: <code className="bg-gray-100 px-1 rounded">123456</code></p>
-                  </div> */}
 
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">

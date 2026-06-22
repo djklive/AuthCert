@@ -1,8 +1,8 @@
 import authService from '../../services/authService';
 
-const API_BASE_URL = import.meta.env.BACKEND_URL || 'https://authcert-production.up.railway.app/api';
+//const API_BASE_URL = import.meta.env.BACKEND_URL || 'https://authcert-production.up.railway.app/api';
 //const API_BASE_URL = 'https://authcert-production.up.railway.app/api';
-//const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = 'http://localhost:5000/api';
 
 export interface Establishment {
   id_etablissement: number;
@@ -55,7 +55,29 @@ export interface User {
   etablissementNom?: string;
 }
 
+export interface RelayerWalletInfo {
+  address: string;
+  balance: string;
+  balanceError?: string | null;
+  network: string;
+  currency: string;
+  explorerUrl: string;
+  faucetUrl: string;
+}
+
 export const api = {
+  // Récupérer les infos du wallet relayer (trésorerie de la plateforme)
+  async getRelayerWallet(): Promise<RelayerWalletInfo> {
+    const response = await fetch(`${API_BASE_URL}/admin/relayer-wallet`, {
+      headers: authService.getAuthHeaders()
+    });
+    if (!response.ok) {
+      throw new Error('Erreur lors de la récupération du wallet relayer');
+    }
+    const data = await response.json();
+    return data.data;
+  },
+
   // Récupérer tous les établissements
   async getEstablishments(): Promise<Establishment[]> {
     try {

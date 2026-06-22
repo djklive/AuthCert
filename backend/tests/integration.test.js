@@ -1,5 +1,5 @@
 // Test d'intégration pour vérifier que tous les modules fonctionnent ensemble
-const { encryptPrivateKey, decryptPrivateKey, sha256Hex } = require('../utils/cryptoUtils');
+const { encryptPrivateKey, decryptPrivateKey, sha256Hex } = require('../src/utils/cryptoUtils');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 

@@ -2,6 +2,7 @@ import { CheckIcon } from "lucide-react";
 import { useState } from "react";
 import { Button } from "../../../../components/ui/1.button";
 import { Card, CardContent } from "../../../../components/ui/1.card";
+import { useNavigate } from "react-router-dom";
 
 const accountOptions = [
   {
@@ -20,7 +21,7 @@ const accountOptions = [
 
 export const SignUpSection = () => {
   const [selectedOption, setSelectedOption] = useState("establishment");
-
+  const navigate = useNavigate();
   return (
     <section className="w-full bg-[#f9fafb] py-12 lg:py-24 xl:py-[151px]">
       <div className="max-w-[1296px] mx-auto px-4 sm:px-6 lg:px-8">
@@ -80,6 +81,7 @@ export const SignUpSection = () => {
             <Button
               className="w-full h-12 lg:h-[60px] bg-rose-500 hover:bg-rose-600 text-white rounded-lg px-6 py-4"
               size="lg"
+              onClick={() => navigate("/auth/register")}
             >
               <span className="[font-family:'Inter',Helvetica] font-semibold text-sm lg:text-base leading-5 lg:leading-6">
                 Creer Votre Compte

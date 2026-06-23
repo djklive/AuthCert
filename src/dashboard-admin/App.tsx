@@ -39,7 +39,7 @@ export default function App({ onLogout }: AppProps) {
   const handleNavigate: (screen: Screen | string) => void = (screen) => {
     // Vérifier si c'est un Screen valide
     const validScreens: Screen[] = [
-      'dashboard', 'establishments', 'users', 'subscriptions', 'reports', 'settings'
+      'dashboard', 'establishments', 'users', 'subscriptions', 'reports', 'settings', 'notifications'
     ];
 
     if (typeof screen === 'string' && validScreens.includes(screen as Screen)) {

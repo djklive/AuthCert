@@ -223,6 +223,11 @@ router.patch('/api/user/password', authenticateToken, async (req, res) => {
         where: { id_etablissement: userId },
         select: { motDePasseEtablissement: true }
       });
+    } else if (userRole === 'admin') {
+      user = await prisma.admin.findUnique({
+        where: { id_admin: userId },
+        select: { motDePasse: true }
+      });
     }
 
     if (!user) {
@@ -233,7 +238,7 @@ router.patch('/api/user/password', authenticateToken, async (req, res) => {
     }
 
     // Vérifier le mot de passe actuel
-    const currentPasswordHash = userRole === 'student' ? user.motDePasse : user.motDePasseEtablissement;
+    const currentPasswordHash = userRole === 'establishment' ? user.motDePasseEtablissement : user.motDePasse;
     const isCurrentPasswordValid = await bcrypt.compare(currentPassword, currentPasswordHash);
 
     if (!isCurrentPasswordValid) {
@@ -256,6 +261,11 @@ router.patch('/api/user/password', authenticateToken, async (req, res) => {
       await prisma.etablissement.update({
         where: { id_etablissement: userId },
         data: { motDePasseEtablissement: hashedNewPassword }
+      });
+    } else if (userRole === 'admin') {
+      await prisma.admin.update({
+        where: { id_admin: userId },
+        data: { motDePasse: hashedNewPassword }
       });
     }
 
@@ -291,49 +301,29 @@ router.get('/api/user/sessions', authenticateToken, async (req, res) => {
         id: true,
         token: true,
         createdAt: true,
-        expiresAt: true
+        expiresAt: true,
+        lastActivity: true,
+        deviceName: true,
+        deviceType: true,
+        location: true
       },
       orderBy: {
-        createdAt: 'desc'
+        lastActivity: 'desc'
       }
     });
 
-    // Formater les sessions pour l'affichage avec plus d'informations
+    // Formater les sessions pour l'affichage avec les vraies métadonnées stockées
     const currentToken = req.headers.authorization?.replace('Bearer ', '');
-    
+
     const formattedSessions = sessions.map(session => {
-      // Détecter le type d'appareil basé sur le token (simulation)
       const isCurrent = session.token === currentToken;
-      const deviceType = isCurrent ? 'desktop' : (Math.random() > 0.5 ? 'mobile' : 'desktop');
-      
-      // Générer un nom d'appareil réaliste
-      const deviceNames = [
-        'Chrome sur Windows',
-        'Safari sur Mac',
-        'Chrome Mobile',
-        'Firefox Desktop',
-        'Edge sur Windows',
-        'Safari Mobile'
-      ];
-      const deviceName = deviceNames[Math.floor(Math.random() * deviceNames.length)];
-      
-      // Générer une localisation réaliste
-      const locations = [
-        'Paris, France',
-        'Lyon, France',
-        'Marseille, France',
-        'Toulouse, France',
-        'Nice, France',
-        'Nantes, France'
-      ];
-      const location = locations[Math.floor(Math.random() * locations.length)];
-      
+
       return {
         id: session.id,
-        device: deviceName,
-        location: location,
-        lastActive: new Date(session.createdAt).toLocaleString('fr-FR'),
-        type: deviceType,
+        device: session.deviceName || 'Appareil inconnu',
+        location: session.location || 'Localisation inconnue',
+        lastActive: new Date(session.lastActivity || session.createdAt).toLocaleString('fr-FR'),
+        type: session.deviceType === 'mobile' ? 'mobile' : 'desktop',
         current: isCurrent,
         expiresAt: session.expiresAt
       };

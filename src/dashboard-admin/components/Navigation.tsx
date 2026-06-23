@@ -1,5 +1,5 @@
 //import React from 'react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -10,10 +10,12 @@ import {
   Settings, 
   LogOut,
   Shield,
+  Bell,
   Menu,
   X
 } from 'lucide-react';
 import { type Screen, type NavigateFunction, type User } from '../types';
+import { api } from '../services/api';
 
 interface NavigationProps {
   currentScreen: Screen;
@@ -25,6 +27,35 @@ interface NavigationProps {
 export function Navigation({ currentScreen, onNavigate, onLogout, user }: NavigationProps) {
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [counts, setCounts] = useState({ pendingEstablishments: 0, failedPayments: 0, unreadNotifications: 0 });
+
+  useEffect(() => {
+    let active = true;
+    const loadCounts = async () => {
+      try {
+        const [stats, unread] = await Promise.all([
+          api.getAdminStats(),
+          api.getUnreadCount(),
+        ]);
+        if (active) {
+          setCounts({
+            pendingEstablishments: stats.priorityActions.pendingEstablishments,
+            failedPayments: stats.priorityActions.failedPayments,
+            unreadNotifications: unread,
+          });
+        }
+      } catch (err) {
+        console.error('Erreur chargement compteurs navigation:', err);
+      }
+    };
+    loadCounts();
+    // Rafraîchir périodiquement les compteurs
+    const interval = setInterval(loadCounts, 60000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [currentScreen]);
 
   const handleLogout = () => {
     onLogout();
@@ -46,7 +77,7 @@ export function Navigation({ currentScreen, onNavigate, onLogout, user }: Naviga
       id: 'establishments',
       label: 'Établissements',
       icon: Building2,
-      badge: { count: 3, type: 'warning' }
+      badge: counts.pendingEstablishments > 0 ? { count: counts.pendingEstablishments, type: 'warning' } : null
     },
     {
       id: 'users',
@@ -58,7 +89,13 @@ export function Navigation({ currentScreen, onNavigate, onLogout, user }: Naviga
       id: 'subscriptions',
       label: 'Abonnements',
       icon: CreditCard,
-      badge: { count: 1, type: 'error' }
+      badge: counts.failedPayments > 0 ? { count: counts.failedPayments, type: 'error' } : null
+    },
+    {
+      id: 'notifications',
+      label: 'Notifications',
+      icon: Bell,
+      badge: counts.unreadNotifications > 0 ? { count: counts.unreadNotifications, type: 'error' } : null
     },
     {
       id: 'reports',

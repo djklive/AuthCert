@@ -72,8 +72,40 @@ async function createNotification({ userId, userType, type, titre, message, impo
   }
 }
 
+// Fonction helper pour notifier tous les administrateurs actifs
+async function notifyAllAdmins({ type, titre, message, important = false, lienAction = null, metadonnees = null }) {
+  try {
+    const admins = await prisma.admin.findMany({
+      where: { statut: 'ACTIF' },
+      select: { id_admin: true }
+    });
+
+    await Promise.all(
+      admins.map((admin) =>
+        createNotification({
+          userId: admin.id_admin,
+          userType: 'admin',
+          type,
+          titre,
+          message,
+          important,
+          lienAction,
+          metadonnees
+        })
+      )
+    );
+
+    return admins.length;
+  } catch (error) {
+    console.error('❌ Erreur notification administrateurs:', error);
+    // Ne pas faire échouer l'opération principale
+    return 0;
+  }
+}
+
 module.exports = {
   mapTypeEtablissement,
   getTimeAgo,
-  createNotification
+  createNotification,
+  notifyAllAdmins
 };

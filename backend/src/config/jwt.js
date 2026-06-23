@@ -60,7 +60,7 @@ const authenticateToken = async (req, res, next) => {
     await prisma.session.update({
       where: { id: session.id },
       data: { 
-        createdAt: new Date() // Mise à jour de l'activité
+        lastActivity: new Date() // Mise à jour de l'activité (createdAt reste la date de création)
       }
     });
 
@@ -160,23 +160,38 @@ const createSession = async (userId, userType, token, req = null) => {
     
     // Générer un nom d'appareil basé sur le User-Agent
     let deviceName = 'Appareil inconnu';
-    if (userAgent.includes('Chrome')) {
-      deviceName = deviceType === 'mobile' ? 'Chrome Mobile' : 'Chrome Desktop';
+    if (userAgent.includes('Edge') || userAgent.includes('Edg/')) {
+      deviceName = 'Microsoft Edge';
     } else if (userAgent.includes('Firefox')) {
       deviceName = deviceType === 'mobile' ? 'Firefox Mobile' : 'Firefox Desktop';
+    } else if (userAgent.includes('Chrome')) {
+      deviceName = deviceType === 'mobile' ? 'Chrome Mobile' : 'Chrome Desktop';
     } else if (userAgent.includes('Safari')) {
       deviceName = deviceType === 'mobile' ? 'Safari Mobile' : 'Safari Desktop';
-    } else if (userAgent.includes('Edge')) {
-      deviceName = 'Microsoft Edge';
     }
-    
+
+    // Déterminer la localisation à partir de l'IP (réseau local pour les IP locales)
+    const isLocalIp = ipAddress === 'Unknown'
+      || ipAddress.includes('127.0.0.1')
+      || ipAddress.includes('::1')
+      || ipAddress.startsWith('192.168.')
+      || ipAddress.startsWith('10.')
+      || ipAddress.startsWith('::ffff:127.')
+      || ipAddress.startsWith('::ffff:192.168.');
+    const location = isLocalIp ? 'Réseau local' : await getLocationFromIP(ipAddress);
+
     const session = await prisma.session.create({
       data: {
         userId: userId,
         userType: userType,
         token: token,
         expiresAt: expiresAt,
-        createdAt: new Date()
+        createdAt: new Date(),
+        lastActivity: new Date(),
+        deviceName: deviceName,
+        deviceType: deviceType,
+        ipAddress: ipAddress,
+        location: location
       }
     });
     
@@ -187,6 +202,7 @@ const createSession = async (userId, userType, token, req = null) => {
       deviceName: deviceName,
       deviceType: deviceType,
       ipAddress: ipAddress,
+      location: location,
       expiresAt: expiresAt
     });
     
@@ -240,26 +256,54 @@ const terminateAllOtherSessions = async (userId, userType, currentToken) => {
   }
 };
 
-// Obtenir les informations de localisation basées sur l'IP (simulation)
-const getLocationFromIP = (ipAddress) => {
-  // En production, tu pourrais utiliser une API comme ipapi.co ou ipinfo.io
-  // Pour l'instant, on simule avec des données fictives
-  const locations = [
-    'Paris, France',
-    'Lyon, France', 
-    'Marseille, France',
-    'Toulouse, France',
-    'Nice, France',
-    'Nantes, France',
-    'Montpellier, France',
-    'Strasbourg, France',
-    'Bordeaux, France',
-    'Lille, France'
-  ];
-  
-  // Générer une localisation basée sur l'IP (simulation)
-  const hash = ipAddress.split('.').reduce((acc, part) => acc + parseInt(part), 0);
-  return locations[hash % locations.length];
+// Obtenir les informations de localisation réelles à partir de l'IP via ipapi.co.
+// Retourne une chaîne "Ville, Pays" ou un repli ('Localisation inconnue') si l'API
+// échoue, est limitée (429) ou si l'IP est réservée/locale.
+const getLocationFromIP = async (ipAddress) => {
+  const FALLBACK = 'Localisation inconnue';
+
+  if (!ipAddress || ipAddress === 'Unknown') {
+    return FALLBACK;
+  }
+
+  // Nettoyer l'IP : retirer le préfixe IPv6-mapped (ex: ::ffff:1.2.3.4)
+  const cleanIp = ipAddress.replace(/^::ffff:/, '').trim();
+
+  // Timeout pour ne jamais bloquer la connexion si ipapi.co est lent
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 3000);
+
+  try {
+    const response = await fetch(`https://ipapi.co/${encodeURIComponent(cleanIp)}/json/`, {
+      headers: { 'User-Agent': 'authcert-nodejs/1.0' },
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      console.error(`⚠️ ipapi.co HTTP ${response.status} pour ${cleanIp}`);
+      return FALLBACK;
+    }
+
+    const data = await response.json();
+
+    // ipapi.co renvoie { error: true, reason: ... } même avec un statut 200
+    if (data.error) {
+      console.error(`⚠️ ipapi.co erreur pour ${cleanIp}: ${data.reason}`);
+      return FALLBACK;
+    }
+
+    const parts = [data.city, data.country_name].filter(Boolean);
+    return parts.length > 0 ? parts.join(', ') : FALLBACK;
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      console.error(`⚠️ ipapi.co timeout pour ${cleanIp}`);
+    } else {
+      console.error(`⚠️ ipapi.co exception pour ${cleanIp}:`, error.message);
+    }
+    return FALLBACK;
+  } finally {
+    clearTimeout(timeout);
+  }
 };
 
 module.exports = {

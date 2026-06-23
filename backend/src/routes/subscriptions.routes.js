@@ -6,7 +6,7 @@ const { authenticateToken, requireRole } = require('../middleware/auth');
 const { PLANS, PAID_PLANS, CURRENCY, getPlan, getAmount } = require('../config/plans');
 const subscriptionService = require('../services/subscriptionService');
 const paymentService = require('../services/paymentService');
-const { createNotification } = require('../utils/helpers');
+const { createNotification, notifyAllAdmins } = require('../utils/helpers');
 
 const router = express.Router();
 
@@ -104,6 +104,21 @@ router.post('/api/subscription/subscribe', authenticateToken, requireRole('estab
         where: { id: payment.id },
         data: { statut: 'ECHOUE' },
       });
+
+      // Notifier les administrateurs de l'échec de paiement
+      try {
+        await notifyAllAdmins({
+          type: 'PAIEMENT_ECHOUE',
+          titre: 'Échec de paiement',
+          message: `Le paiement de l'abonnement ${plan} pour ${etablissement.nomEtablissement} a échoué.`,
+          important: true,
+          lienAction: '/dashboard?userType=admin',
+          metadonnees: { etablissementId: req.user.id, reference, plan }
+        });
+      } catch (notifError) {
+        console.error('⚠️ Erreur notification admins (paiement échoué):', notifError);
+      }
+
       return res.status(502).json({ success: false, message: 'Échec initialisation du paiement', error: result.error });
     }
 

@@ -1,51 +1,60 @@
-const nodemailer = require('nodemailer');
-
-const transporter = nodemailer.createTransport({
-  host: 'in-v3.mailjet.com',
-  port: 587,
-  auth: {
-    user: process.env.MJ_APIKEY_PUBLIC,
-    pass: process.env.MJ_APIKEY_PRIVATE
-  }
-});
+const EMAILJS_API_URL = 'https://api.emailjs.com/api/v1.0/email/send';
 
 /**
- * Envoie un email de réinitialisation de mot de passe via Mailjet+Nodemailer
+ * Envoie un email de réinitialisation de mot de passe via l'API REST EmailJS.
+ *
+ * Prérequis EmailJS :
+ *  - Variables d'env : EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_PUBLIC_KEY, EMAILJS_PRIVATE_KEY
+ *  - Dans le dashboard EmailJS (Account > Security), activer
+ *    "Allow EmailJS API for non-browser applications" pour autoriser cet appel serveur.
+ *  - Le template doit exposer les variables : {{to_email}}, {{user_name}}, {{reset_link}}
+ *
  * @param {string} email
  * @param {string} resetLink
  * @param {string} userName
  * @returns {Promise<{success: boolean, error?: string}>}
  */
 async function sendPasswordResetEmail(email, resetLink, userName = 'Utilisateur') {
+  const {
+    EMAILJS_SERVICE_ID,
+    EMAILJS_TEMPLATE_ID,
+    EMAILJS_PUBLIC_KEY,
+    EMAILJS_PRIVATE_KEY
+  } = process.env;
+
+  if (!EMAILJS_SERVICE_ID || !EMAILJS_TEMPLATE_ID || !EMAILJS_PUBLIC_KEY || !EMAILJS_PRIVATE_KEY) {
+    const error = 'Configuration EmailJS incomplète (vérifiez les variables EMAILJS_* dans .env)';
+    console.error(`❌ ${error}`);
+    return { success: false, error };
+  }
+
   try {
-    const result = await transporter.sendMail({
-      from: `"AuthCert" <${process.env.MAILJET_SENDER}>`,
-      to: email,
-      subject: "Réinitialisation de votre mot de passe AuthCert",
-      html: `
-        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
-          <div style="text-align: center; margin-bottom: 20px;">
-            <h1 style="color: #F43F5E;">AuthCert</h1>
-          </div>
-          <p>Bonjour <b>${userName}</b>,</p>
-          <p>Vous avez demandé la réinitialisation de votre mot de passe.</p>
-          <p style="text-align: center; margin: 30px 0;">
-            <a href="${resetLink}" style="background-color: #F43F5E; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-size: 16px;">
-              Réinitialiser mon mot de passe
-            </a>
-          </p>
-          <p>Ce lien est valable <strong>1 heure</strong>.<br>Si vous n'avez pas demandé cette action, ignorez cet email.</p>
-          <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-          <p style="text-align: center; font-size: 12px; color: #777;">
-            Ceci est un email automatique, merci de ne pas y répondre.
-          </p>
-        </div>
-      `
+    const response = await fetch(EMAILJS_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        service_id: EMAILJS_SERVICE_ID,
+        template_id: EMAILJS_TEMPLATE_ID,
+        user_id: EMAILJS_PUBLIC_KEY,
+        accessToken: EMAILJS_PRIVATE_KEY,
+        template_params: {
+          to_email: email,
+          user_name: userName,
+          reset_link: resetLink
+        }
+      })
     });
-    console.log(`✅ Email de réinitialisation envoyé à ${email} via Mailjet`);
+
+    if (!response.ok) {
+      const detail = await response.text();
+      console.error(`❌ Erreur d'envoi email EmailJS (HTTP ${response.status}):`, detail);
+      return { success: false, error: `EmailJS HTTP ${response.status}: ${detail}` };
+    }
+
+    console.log(`✅ Email de réinitialisation envoyé à ${email} via EmailJS`);
     return { success: true };
   } catch (error) {
-    console.error(`❌ Erreur d'envoi email Mailjet:`, error);
+    console.error(`❌ Erreur d'envoi email EmailJS:`, error);
     return { success: false, error: error.message };
   }
 }

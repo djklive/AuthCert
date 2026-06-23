@@ -6,7 +6,8 @@ export type Screen =
   | 'users'
   | 'subscriptions'
   | 'reports'
-  | 'settings';
+  | 'settings'
+  | 'notifications';
 
 export type NavigateFunction = (screen: Screen | string) => void;
 
@@ -65,4 +66,75 @@ export interface ActivityLog {
   timestamp: string;
   user: string;
   severity: 'info' | 'warning' | 'error' | 'success';
+}
+
+export type ChangeType = 'increase' | 'decrease' | 'neutral';
+
+export interface AdminKpi {
+  value: number;
+  change: number;
+  changeType: ChangeType;
+}
+
+export interface AdminActivityItem {
+  id: string;
+  action: string;
+  description: string;
+  date: string;
+  user: string;
+  severity: 'info' | 'warning' | 'error' | 'success';
+  timeAgo: string;
+}
+
+export interface AdminStats {
+  kpis: {
+    etablissements: AdminKpi;
+    apprenants: AdminKpi;
+    certificats: AdminKpi;
+    verifications: AdminKpi;
+  };
+  priorityActions: {
+    pendingEstablishments: number;
+    failedPayments: number;
+  };
+  recentActivity: AdminActivityItem[];
+  period: {
+    days: number;
+    newEstablishments: number;
+    newCertificates: number;
+    newVerifications: number;
+  };
+}
+
+export interface AdminNotification {
+  id: number;
+  userId: number;
+  userType: string;
+  type: string;
+  titre: string;
+  message: string;
+  lu: boolean;
+  important: boolean;
+  lienAction: string | null;
+  metadonnees: unknown;
+  createdAt: string;
+  readAt: string | null;
+}
+
+export interface AdminSettings {
+  emailAlerts: boolean;
+  pushNotifications: boolean;
+  autoReports: boolean;
+  language: 'fr' | 'en';
+  theme: 'light' | 'dark';
+}
+
+export interface AdminSession {
+  id: number;
+  device: string;
+  location: string;
+  lastActive: string;
+  type: 'desktop' | 'mobile';
+  current: boolean;
+  expiresAt: string;
 }

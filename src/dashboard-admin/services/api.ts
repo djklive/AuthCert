@@ -1,4 +1,11 @@
 import authService from '../../services/authService';
+import type {
+  AdminStats,
+  AdminActivityItem,
+  AdminNotification,
+  AdminSettings,
+  AdminSession
+} from '../types';
 
 const API_BASE_URL = import.meta.env.BACKEND_URL || 'https://authcert-production.up.railway.app/api';
 //const API_BASE_URL = 'https://authcert-production.up.railway.app/api';
@@ -416,6 +423,140 @@ export const api = {
     } catch (error) {
       console.error('Erreur API:', error);
       throw error;
+    }
+  },
+
+  // ===========================================
+  //   STATISTIQUES, ACTIVITÉ & NOTIFICATIONS
+  // ===========================================
+
+  // Statistiques du tableau de bord admin (KPIs, actions, activité)
+  async getAdminStats(days = 30): Promise<AdminStats> {
+    const response = await fetch(`${API_BASE_URL}/admin/stats?days=${days}`, {
+      headers: authService.getAuthHeaders()
+    });
+    if (!response.ok) throw new Error('Erreur lors de la récupération des statistiques');
+    const data = await response.json();
+    return data.data;
+  },
+
+  // Flux d'activité agrégé (lecture seule)
+  async getAdminActivity(limit = 20): Promise<AdminActivityItem[]> {
+    const response = await fetch(`${API_BASE_URL}/admin/activity?limit=${limit}`, {
+      headers: authService.getAuthHeaders()
+    });
+    if (!response.ok) throw new Error('Erreur lors de la récupération de l\'activité');
+    const data = await response.json();
+    return data.data;
+  },
+
+  // Notifications de l'admin connecté
+  async getNotifications(): Promise<AdminNotification[]> {
+    const response = await fetch(`${API_BASE_URL}/notifications`, {
+      headers: authService.getAuthHeaders()
+    });
+    if (!response.ok) throw new Error('Erreur lors de la récupération des notifications');
+    const data = await response.json();
+    return data.data;
+  },
+
+  async getUnreadCount(): Promise<number> {
+    const response = await fetch(`${API_BASE_URL}/notifications/unread-count`, {
+      headers: authService.getAuthHeaders()
+    });
+    if (!response.ok) throw new Error('Erreur lors du comptage des notifications');
+    const data = await response.json();
+    return data.data.count;
+  },
+
+  async markNotificationRead(id: number): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/notifications/${id}/read`, {
+      method: 'PATCH',
+      headers: authService.getAuthHeaders()
+    });
+    if (!response.ok) throw new Error('Erreur lors du marquage de la notification');
+  },
+
+  async markAllNotificationsRead(): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/notifications/read-all`, {
+      method: 'PATCH',
+      headers: authService.getAuthHeaders()
+    });
+    if (!response.ok) throw new Error('Erreur lors du marquage des notifications');
+  },
+
+  async deleteNotification(id: number): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/notifications/${id}`, {
+      method: 'DELETE',
+      headers: authService.getAuthHeaders()
+    });
+    if (!response.ok) throw new Error('Erreur lors de la suppression de la notification');
+  },
+
+  // ===========================================
+  //              PARAMÈTRES ADMIN
+  // ===========================================
+
+  async getAdminSettings(): Promise<AdminSettings> {
+    const response = await fetch(`${API_BASE_URL}/admin/settings`, {
+      headers: authService.getAuthHeaders()
+    });
+    if (!response.ok) throw new Error('Erreur lors de la récupération des paramètres');
+    const data = await response.json();
+    return data.data;
+  },
+
+  async updateAdminSettings(payload: Partial<AdminSettings>): Promise<AdminSettings> {
+    const response = await fetch(`${API_BASE_URL}/admin/settings`, {
+      method: 'PUT',
+      headers: authService.getAuthHeaders(),
+      body: JSON.stringify(payload)
+    });
+    if (!response.ok) throw new Error('Erreur lors de la mise à jour des paramètres');
+    const data = await response.json();
+    return data.data;
+  },
+
+  // ===========================================
+  //          SÉCURITÉ / SESSIONS ADMIN
+  // ===========================================
+
+  async getAdminSessions(): Promise<AdminSession[]> {
+    const response = await fetch(`${API_BASE_URL}/user/sessions`, {
+      headers: authService.getAuthHeaders()
+    });
+    if (!response.ok) throw new Error('Erreur lors de la récupération des sessions');
+    const data = await response.json();
+    return data.data;
+  },
+
+  async terminateAdminSession(sessionId: number): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/user/sessions/${sessionId}`, {
+      method: 'DELETE',
+      headers: authService.getAuthHeaders()
+    });
+    if (!response.ok) throw new Error('Erreur lors de la suppression de la session');
+  },
+
+  async cleanupSessions(): Promise<number> {
+    const response = await fetch(`${API_BASE_URL}/admin/cleanup-sessions`, {
+      method: 'POST',
+      headers: authService.getAuthHeaders()
+    });
+    if (!response.ok) throw new Error('Erreur lors du nettoyage des sessions');
+    const data = await response.json();
+    return data.cleanedCount ?? 0;
+  },
+
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/user/password`, {
+      method: 'PATCH',
+      headers: authService.getAuthHeaders(),
+      body: JSON.stringify({ currentPassword, newPassword })
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.message || 'Erreur lors du changement de mot de passe');
     }
   }
 };

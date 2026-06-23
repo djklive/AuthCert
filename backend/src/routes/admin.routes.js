@@ -665,4 +665,222 @@ router.delete('/api/admin/etablissement/:id', authenticateToken, requireRole('ad
     });
   }
 });
+
+// ========================================
+// STATISTIQUES & ACTIVITÉ ADMIN
+// ========================================
+
+// Calcule le pourcentage d'évolution entre deux valeurs
+function computeChange(current, previous) {
+  if (previous === 0) {
+    return {
+      change: current > 0 ? 100 : 0,
+      changeType: current > 0 ? 'increase' : 'neutral'
+    };
+  }
+  const pct = Math.round(((current - previous) / previous) * 100);
+  return {
+    change: Math.abs(pct),
+    changeType: pct > 0 ? 'increase' : pct < 0 ? 'decrease' : 'neutral'
+  };
+}
+
+// Tableau de bord admin : KPIs réels, actions prioritaires, activité récente
+router.get('/api/admin/stats', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const days = Math.max(1, parseInt(req.query.days) || 30);
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const endOfPrevMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+    const periodStart = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+
+    const [
+      totalEtablissements, etabThisMonth, etabPrevMonth,
+      totalApprenants, apprThisMonth, apprPrevMonth,
+      totalCertificats, certThisMonth, certPrevMonth,
+      totalVerifications, verifThisMonth, verifPrevMonth,
+      pendingEstablishments, failedPayments,
+      newEtabPeriod, newCertPeriod, newVerifPeriod
+    ] = await Promise.all([
+      prisma.etablissement.count(),
+      prisma.etablissement.count({ where: { dateCreation: { gte: startOfMonth } } }),
+      prisma.etablissement.count({ where: { dateCreation: { gte: startOfPrevMonth, lte: endOfPrevMonth } } }),
+      prisma.apprenant.count(),
+      prisma.apprenant.count({ where: { dateCreation: { gte: startOfMonth } } }),
+      prisma.apprenant.count({ where: { dateCreation: { gte: startOfPrevMonth, lte: endOfPrevMonth } } }),
+      prisma.certificat.count({ where: { statut: 'EMIS' } }),
+      prisma.certificat.count({ where: { statut: 'EMIS', createdAt: { gte: startOfMonth } } }),
+      prisma.certificat.count({ where: { statut: 'EMIS', createdAt: { gte: startOfPrevMonth, lte: endOfPrevMonth } } }),
+      prisma.verificationStat.count(),
+      prisma.verificationStat.count({ where: { verifiedAt: { gte: startOfMonth } } }),
+      prisma.verificationStat.count({ where: { verifiedAt: { gte: startOfPrevMonth, lte: endOfPrevMonth } } }),
+      prisma.etablissement.count({ where: { statut: 'EN_ATTENTE' } }),
+      prisma.payment.count({ where: { statut: 'ECHOUE' } }),
+      prisma.etablissement.count({ where: { dateCreation: { gte: periodStart } } }),
+      prisma.certificat.count({ where: { statut: 'EMIS', createdAt: { gte: periodStart } } }),
+      prisma.verificationStat.count({ where: { verifiedAt: { gte: periodStart } } })
+    ]);
+
+    const kpis = {
+      etablissements: { value: totalEtablissements, ...computeChange(etabThisMonth, etabPrevMonth) },
+      apprenants: { value: totalApprenants, ...computeChange(apprThisMonth, apprPrevMonth) },
+      certificats: { value: totalCertificats, ...computeChange(certThisMonth, certPrevMonth) },
+      verifications: { value: totalVerifications, ...computeChange(verifThisMonth, verifPrevMonth) }
+    };
+
+    // Activité récente agrégée
+    const activity = await buildActivityFeed(8);
+
+    res.json({
+      success: true,
+      data: {
+        kpis,
+        priorityActions: { pendingEstablishments, failedPayments },
+        recentActivity: activity,
+        period: {
+          days,
+          newEstablishments: newEtabPeriod,
+          newCertificates: newCertPeriod,
+          newVerifications: newVerifPeriod
+        }
+      }
+    });
+  } catch (error) {
+    console.error('❌ Erreur récupération stats admin:', error);
+    res.status(500).json({ success: false, message: 'Erreur lors de la récupération des statistiques', error: error.message });
+  }
+});
+
+// Construit un flux d'activité agrégé (établissements, certificats, paiements)
+async function buildActivityFeed(limit = 20) {
+  const perType = Math.max(3, Math.ceil(limit / 2));
+
+  const [etablissements, certificats, paiements] = await Promise.all([
+    prisma.etablissement.findMany({
+      select: { id_etablissement: true, nomEtablissement: true, statut: true, dateCreation: true },
+      orderBy: { dateCreation: 'desc' },
+      take: perType
+    }),
+    prisma.certificat.findMany({
+      where: { statut: 'EMIS' },
+      select: { id: true, titre: true, createdAt: true, issuedAt: true, etablissement: { select: { nomEtablissement: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: perType
+    }),
+    prisma.payment.findMany({
+      select: { id: true, plan: true, montant: true, devise: true, statut: true, createdAt: true, etablissement: { select: { nomEtablissement: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: perType
+    })
+  ]);
+
+  const items = [];
+
+  etablissements.forEach((e) => {
+    items.push({
+      id: `etab-${e.id_etablissement}`,
+      action: 'Nouvel établissement inscrit',
+      description: `${e.nomEtablissement}${e.statut === 'EN_ATTENTE' ? ' (en attente de validation)' : ''}`,
+      date: e.dateCreation,
+      user: 'Système',
+      severity: e.statut === 'EN_ATTENTE' ? 'warning' : 'info'
+    });
+  });
+
+  certificats.forEach((c) => {
+    items.push({
+      id: `cert-${c.id}`,
+      action: 'Certificat émis',
+      description: `${c.titre}${c.etablissement ? ' - ' + c.etablissement.nomEtablissement : ''}`,
+      date: c.issuedAt || c.createdAt,
+      user: 'Système',
+      severity: 'success'
+    });
+  });
+
+  paiements.forEach((p) => {
+    const labelStatut = p.statut === 'REUSSI' ? 'réussi' : p.statut === 'ECHOUE' ? 'échoué' : 'en attente';
+    items.push({
+      id: `pay-${p.id}`,
+      action: `Paiement ${labelStatut}`,
+      description: `Plan ${p.plan}${p.etablissement ? ' - ' + p.etablissement.nomEtablissement : ''} (${p.montant} ${p.devise})`,
+      date: p.createdAt,
+      user: 'Système',
+      severity: p.statut === 'ECHOUE' ? 'error' : p.statut === 'REUSSI' ? 'success' : 'info'
+    });
+  });
+
+  return items
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, limit)
+    .map((it) => ({ ...it, timeAgo: getTimeAgo(new Date(it.date)) }));
+}
+
+// Flux d'activité complet (lecture seule) pour la page Notifications/Activité
+router.get('/api/admin/activity', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 20));
+    const activity = await buildActivityFeed(limit);
+    res.json({ success: true, data: activity });
+  } catch (error) {
+    console.error('❌ Erreur récupération activité admin:', error);
+    res.status(500).json({ success: false, message: 'Erreur lors de la récupération de l\'activité', error: error.message });
+  }
+});
+
+// ========================================
+// PARAMÈTRES ADMIN
+// ========================================
+
+const DEFAULT_ADMIN_SETTINGS = {
+  emailAlerts: true,
+  pushNotifications: false,
+  autoReports: false,
+  language: 'fr',
+  theme: 'light'
+};
+
+// Récupérer les préférences de l'admin courant (création par défaut si absent)
+router.get('/api/admin/settings', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const adminId = req.user.id;
+    const settings = await prisma.adminSettings.upsert({
+      where: { adminId },
+      update: {},
+      create: { adminId, ...DEFAULT_ADMIN_SETTINGS }
+    });
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    console.error('❌ Erreur récupération paramètres admin:', error);
+    res.status(500).json({ success: false, message: 'Erreur lors de la récupération des paramètres', error: error.message });
+  }
+});
+
+// Mettre à jour les préférences de l'admin courant
+router.put('/api/admin/settings', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const adminId = req.user.id;
+    const { emailAlerts, pushNotifications, autoReports, language, theme } = req.body;
+
+    const data = {};
+    if (typeof emailAlerts === 'boolean') data.emailAlerts = emailAlerts;
+    if (typeof pushNotifications === 'boolean') data.pushNotifications = pushNotifications;
+    if (typeof autoReports === 'boolean') data.autoReports = autoReports;
+    if (language === 'fr' || language === 'en') data.language = language;
+    if (theme === 'light' || theme === 'dark') data.theme = theme;
+
+    const settings = await prisma.adminSettings.upsert({
+      where: { adminId },
+      update: data,
+      create: { adminId, ...DEFAULT_ADMIN_SETTINGS, ...data }
+    });
+
+    res.json({ success: true, message: 'Paramètres mis à jour', data: settings });
+  } catch (error) {
+    console.error('❌ Erreur mise à jour paramètres admin:', error);
+    res.status(500).json({ success: false, message: 'Erreur lors de la mise à jour des paramètres', error: error.message });
+  }
+});
+
 module.exports = router;

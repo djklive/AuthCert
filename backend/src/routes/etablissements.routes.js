@@ -22,7 +22,7 @@ const supabaseStorage = require('../services/storageService');
 const blockchain = require('../services/blockchainService');
 const { generateCertificatePdf, getEstablishmentLogo } = require('../services/pdfService');
 const { sendPasswordResetEmail } = require('../services/emailService');
-const { mapTypeEtablissement, getTimeAgo, createNotification } = require('../utils/helpers');
+const { mapTypeEtablissement, getTimeAgo, createNotification, notifyAllAdmins } = require('../utils/helpers');
 const { encryptPrivateKey, decryptPrivateKey, sha256Hex } = require('../utils/cryptoUtils');
 
 const router = express.Router();
@@ -222,6 +222,20 @@ router.post('/api/register/etablissement', async (req, res) => {
     }
 
     console.log('✅ Établissement créé avec succès, ID:', etablissement.id_etablissement);
+
+    // Notifier les administrateurs de la nouvelle demande à valider
+    try {
+      await notifyAllAdmins({
+        type: 'ETABLISSEMENT_INSCRIPTION',
+        titre: 'Nouvelle inscription établissement',
+        message: `${etablissement.nomEtablissement} a soumis une demande d'inscription à valider.`,
+        important: true,
+        lienAction: '/dashboard?userType=admin',
+        metadonnees: { etablissementId: etablissement.id_etablissement }
+      });
+    } catch (notifError) {
+      console.error('⚠️ Erreur notification admins (inscription):', notifError);
+    }
 
     // Suppression du mot de passe de la réponse
     const { motDePasseEtablissement: _, ...etablissementSansMotDePasse } = etablissement;
@@ -588,6 +602,20 @@ router.post('/api/register/etablissement/supabase', async (req, res) => {
     }
 
     console.log('✅ Établissement créé avec succès via Supabase, ID:', etablissement.id_etablissement);
+
+    // Notifier les administrateurs de la nouvelle demande à valider
+    try {
+      await notifyAllAdmins({
+        type: 'ETABLISSEMENT_INSCRIPTION',
+        titre: 'Nouvelle inscription établissement',
+        message: `${etablissement.nomEtablissement} a soumis une demande d'inscription à valider.`,
+        important: true,
+        lienAction: '/dashboard?userType=admin',
+        metadonnees: { etablissementId: etablissement.id_etablissement }
+      });
+    } catch (notifError) {
+      console.error('⚠️ Erreur notification admins (inscription Supabase):', notifError);
+    }
 
     // Suppression du mot de passe de la réponse
     const { motDePasseEtablissement: _, ...etablissementSansMotDePasse } = etablissement;

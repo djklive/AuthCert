@@ -332,19 +332,17 @@ router.post('/api/auth/forgot-password', async (req, res) => {
     console.log('📧 Lien de réinitialisation:', resetLink);
     console.log(`✅ Token de réinitialisation créé pour ${email} (expire dans 1h)`);
 
-    // Envoyer l'email de réinitialisation
-    if (process.env.NODE_ENV === 'production') {
-      try {
-        const emailResult = await sendPasswordResetEmail(email, resetLink);
-        if (emailResult.success) {
-          console.log('✅ Email de réinitialisation envoyé avec succès');
-        } else {
-          console.error('⚠️ Erreur envoi email, mais token créé en base:', emailResult.error);
-        }
-      } catch (emailError) {
-        console.error('⚠️ Exception envoi email:', emailError);
-        // On continue même si l'email échoue (le token est créé)
+    // Envoyer l'email de réinitialisation (dans tous les environnements via EmailJS)
+    try {
+      const emailResult = await sendPasswordResetEmail(email, resetLink);
+      if (emailResult.success) {
+        console.log('✅ Email de réinitialisation envoyé avec succès');
+      } else {
+        console.error('⚠️ Erreur envoi email, mais token créé en base:', emailResult.error);
       }
+    } catch (emailError) {
+      console.error('⚠️ Exception envoi email:', emailError);
+      // On continue même si l'email échoue (le token est créé)
     }
 
     res.json({

@@ -6,6 +6,7 @@ import { UsersScreen } from './screens/UsersScreen';
 import { SubscriptionsScreen } from './screens/SubscriptionsScreen';
 import { ReportsScreen } from './screens/ReportsScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
+import { NotificationsScreen } from './screens/NotificationsScreen';
 
 interface ScreenRendererProps {
   currentScreen: Screen;
@@ -33,6 +34,9 @@ export function ScreenRenderer({ currentScreen, onNavigate, user }: ScreenRender
       
       case 'settings':
         return <SettingsScreen />;
+
+      case 'notifications':
+        return <NotificationsScreen />;
       
       default:
         return (

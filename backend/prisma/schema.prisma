@@ -99,6 +99,9 @@ model Admin {
   // Relations avec les notifications
   notifications    Notification[] @relation("AdminNotifications")
 
+  // Préférences d'administration
+  settings         AdminSettings?
+
   @@map("admins")
 }
 
@@ -109,6 +112,13 @@ model Session {
   token     String   @unique
   expiresAt DateTime
   createdAt DateTime @default(now())
+
+  // Métadonnées de session (appareil, réseau, activité)
+  deviceName   String?
+  deviceType   String?
+  ipAddress    String?
+  location     String?
+  lastActivity DateTime @default(now())
 
   // Relations optionnelles pour l'intégrité référentielle
   // Note: Une seule relation sera non-null selon userType
@@ -452,6 +462,28 @@ enum TypeNotification {
   SYSTEME_MISE_A_JOUR     // Mise à jour système
   ABONNEMENT_EXPIRE       // Abonnement expiré
   ABONNEMENT_RENOUVELE    // Abonnement renouvelé
+  ETABLISSEMENT_INSCRIPTION // Nouvelle inscription d'établissement (à valider)
+  PAIEMENT_ECHOUE         // Échec d'un paiement
+}
+
+// ===============================================
+//          PARAMÈTRES ADMINISTRATEUR
+// ===============================================
+
+model AdminSettings {
+  id                Int      @id @default(autoincrement())
+  adminId           Int      @unique
+  emailAlerts       Boolean  @default(true)
+  pushNotifications Boolean  @default(false)
+  autoReports       Boolean  @default(false)
+  language          String   @default("fr")
+  theme             String   @default("light")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  admin             Admin    @relation(fields: [adminId], references: [id_admin], onDelete: Cascade)
+
+  @@map("admin_settings")
 }
 
 // ===============================================

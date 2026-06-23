@@ -74,9 +74,21 @@ function startBackgroundJobs() {
     }
   };
 
-  // Au démarrage puis toutes les 6 heures
+  const runStalePayments = async () => {
+    try {
+      const count = await subscriptionService.expireStalePendingPayments();
+      if (count > 0) console.log(`🧾 Paiements en attente expirés: ${count}`);
+    } catch (error) {
+      console.error('❌ Erreur job paiements en attente:', error.message);
+    }
+  };
+
+  // Abonnements expirés : au démarrage puis toutes les 6 heures
   runExpiration();
   setInterval(runExpiration, 6 * 60 * 60 * 1000);
+
+  // Paiements en attente abandonnés : toutes les 15 minutes
+  setInterval(runStalePayments, 15 * 60 * 1000);
 }
 
 // Démarrage du serveur (seulement si appelé directement)

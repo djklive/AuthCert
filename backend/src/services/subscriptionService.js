@@ -206,6 +206,50 @@ async function expireOverdue() {
   return overdue.length;
 }
 
+// Délai au-delà duquel un paiement resté EN_ATTENTE est considéré comme abandonné.
+const STALE_PENDING_MINUTES = 30;
+
+/**
+ * Nettoie les paiements restés EN_ATTENTE trop longtemps.
+ * Avant d'échouer un paiement, on re-vérifie auprès de NotchPay :
+ *  - s'il est finalement complété -> on active l'abonnement (filet de sécurité)
+ *  - sinon -> on le marque ECHOUE.
+ * Retourne le nombre de paiements marqués ECHOUE.
+ */
+async function expireStalePendingPayments() {
+  const paymentService = require('./paymentService');
+  const cutoff = new Date(Date.now() - STALE_PENDING_MINUTES * 60 * 1000);
+
+  const stale = await prisma.payment.findMany({
+    where: { statut: 'EN_ATTENTE', createdAt: { lt: cutoff } },
+  });
+  if (stale.length === 0) return 0;
+
+  let expired = 0;
+  for (const p of stale) {
+    try {
+      const refToVerify = p.notchpayReference || p.reference;
+      const v = await paymentService.verifyPayment(refToVerify);
+      const status = (v.status || '').toLowerCase();
+
+      if (v.success && (status === 'complete' || status === 'completed' || status === 'successful')) {
+        const periodeNorm = p.periode === 'ANNUEL' ? 'annuel' : 'mensuel';
+        const sub = await activateOrExtend(p.etablissementId, p.plan, periodeNorm, p.reference);
+        await prisma.payment.update({
+          where: { id: p.id },
+          data: { statut: 'REUSSI', paidAt: new Date(), subscriptionId: sub.id },
+        });
+      } else {
+        await prisma.payment.update({ where: { id: p.id }, data: { statut: 'ECHOUE' } });
+        expired++;
+      }
+    } catch (e) {
+      console.error('⚠️ expireStalePendingPayments:', e.message);
+    }
+  }
+  return expired;
+}
+
 /**
  * Vue complète pour le dashboard établissement : abonnement + plan + usage.
  */
@@ -239,5 +283,6 @@ module.exports = {
   activateOrExtend,
   getSubscriptionSummary,
   expireOverdue,
+  expireStalePendingPayments,
   addDays,
 };

@@ -14,6 +14,8 @@ import {
   Star,
   AlertCircle,
   Loader2,
+  Smartphone,
+  X,
 } from 'lucide-react';
 import { api, type SubscriptionSummary, type PaymentRecord, type PlanLimits } from '../../../services/api';
 
@@ -57,8 +59,15 @@ export function SubscriptionScreen() {
   const [plans, setPlans] = useState<PlanDef[]>([]);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [subscribingPlan, setSubscribingPlan] = useState<string | null>(null);
   const [alert, setAlert] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
+
+  // Paiement Mobile Money (charge directe)
+  const [payModal, setPayModal] = useState<{ open: boolean; planId: string | null }>({ open: false, planId: null });
+  const [operator, setOperator] = useState<'mtn' | 'orange'>('mtn');
+  const [phone, setPhone] = useState('');
+  const [processing, setProcessing] = useState(false);
+  const [payStatus, setPayStatus] = useState<string | null>(null);
+  const [verifyingRef, setVerifyingRef] = useState<string | null>(null);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -105,21 +114,103 @@ export function SubscriptionScreen() {
     })();
   }, [loadAll]);
 
-  const handleSubscribe = async (planId: string) => {
-    setSubscribingPlan(planId);
+  const handleSubscribe = (planId: string) => {
     setAlert(null);
+    setPayStatus(null);
+    setPayModal({ open: true, planId });
+  };
+
+  const pollPayment = (ref: string) => {
+    let attempts = 0;
+    const maxAttempts = 40; // ~ 2.5 min (40 x 4s)
+    const tick = async () => {
+      attempts += 1;
+      try {
+        const res = await api.verifySubscriptionPayment(ref);
+        if (res.success) {
+          localStorage.removeItem('pendingSubscriptionRef');
+          setProcessing(false);
+          setPayModal({ open: false, planId: null });
+          setPhone('');
+          setPayStatus(null);
+          setAlert({ type: 'success', message: 'Paiement confirmé, abonnement activé !' });
+          loadAll();
+          return;
+        }
+        const st = (res.status || '').toLowerCase();
+        if (['failed', 'canceled', 'cancelled', 'expired', 'rejected'].includes(st)) {
+          setProcessing(false);
+          setPayStatus(null);
+          setAlert({ type: 'error', message: 'Le paiement a échoué ou a été annulé. Vous pouvez réessayer.' });
+          return;
+        }
+      } catch {
+        /* on continue à interroger */
+      }
+      if (attempts >= maxAttempts) {
+        setProcessing(false);
+        setPayStatus(null);
+        setAlert({
+          type: 'info',
+          message:
+            "Toujours en attente. Si vous avez validé le paiement, l'activation se fera automatiquement ; vérifiez l'historique dans un instant.",
+        });
+        return;
+      }
+      window.setTimeout(tick, 4000);
+    };
+    window.setTimeout(tick, 4000);
+  };
+
+  const doPayment = async () => {
+    const planId = payModal.planId;
+    if (!planId) return;
+
+    const raw = phone.trim().replace(/\s+/g, '');
+    if (!/^\+?\d{8,15}$/.test(raw)) {
+      setAlert({ type: 'error', message: 'Numéro de téléphone invalide.' });
+      return;
+    }
+    const normalizedPhone = raw.startsWith('+') ? raw : `+237${raw}`;
+
+    setProcessing(true);
+    setAlert(null);
+    setPayStatus(null);
     try {
-      const res = await api.subscribe(planId, billingPeriod);
-      if (res.success && res.data?.paymentUrl) {
+      const res = await api.subscribe(planId, billingPeriod, { operator, phone: normalizedPhone });
+      if (res.success && res.data?.mode === 'direct') {
+        localStorage.setItem('pendingSubscriptionRef', res.data.reference);
+        setPayStatus(
+          'Une demande de paiement a été envoyée sur votre téléphone. Validez-la avec votre code PIN Mobile Money.'
+        );
+        pollPayment(res.data.reference);
+      } else if (res.success && res.data?.paymentUrl) {
         localStorage.setItem('pendingSubscriptionRef', res.data.reference);
         window.location.href = res.data.paymentUrl;
       } else {
+        setProcessing(false);
         setAlert({ type: 'error', message: res.message || "Impossible d'initialiser le paiement" });
       }
     } catch (e) {
+      setProcessing(false);
       setAlert({ type: 'error', message: e instanceof Error ? e.message : 'Erreur lors de la souscription' });
+    }
+  };
+
+  const verifyPending = async (ref: string) => {
+    setVerifyingRef(ref);
+    try {
+      const res = await api.verifySubscriptionPayment(ref);
+      if (res.success) {
+        setAlert({ type: 'success', message: 'Paiement confirmé, abonnement activé !' });
+        loadAll();
+      } else {
+        setAlert({ type: 'info', message: 'Paiement toujours en attente.' });
+      }
+    } catch {
+      setAlert({ type: 'error', message: 'Erreur lors de la vérification.' });
     } finally {
-      setSubscribingPlan(null);
+      setVerifyingRef(null);
     }
   };
 
@@ -334,15 +425,10 @@ export function SubscriptionScreen() {
                 <Button
                   className="w-full rounded-xl"
                   variant={isCurrent ? 'outline' : 'default'}
-                  disabled={isCurrent || subscribingPlan !== null}
+                  disabled={isCurrent}
                   onClick={() => handleSubscribe(plan.id)}
                 >
-                  {subscribingPlan === plan.id ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Redirection…
-                    </>
-                  ) : isCurrent ? (
+                  {isCurrent ? (
                     <>
                       <Check className="h-4 w-4 mr-2" />
                       Plan actuel
@@ -381,6 +467,21 @@ export function SubscriptionScreen() {
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="font-medium">{formatFcfa(p.montant)}</span>
+                    {p.statut === 'EN_ATTENTE' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="rounded-lg"
+                        disabled={verifyingRef === p.reference}
+                        onClick={() => verifyPending(p.reference)}
+                      >
+                        {verifyingRef === p.reference ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          'Vérifier'
+                        )}
+                      </Button>
+                    )}
                     <Badge
                       variant="outline"
                       className={
@@ -400,6 +501,107 @@ export function SubscriptionScreen() {
           )}
         </CardContent>
       </Card>
+
+      {/* Info frais blockchain */}
+      <Card className="rounded-2xl border-blue-200 bg-gradient-to-br from-blue-50 to-transparent">
+        <CardContent className="flex items-start gap-3 p-5">
+          <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5" />
+          <div>
+            <p className="font-medium text-blue-900">Frais blockchain inclus</p>
+            <p className="text-sm text-blue-700">
+              Les frais de publication sur la blockchain sont pris en charge par AuthCert dans le cadre de
+              votre abonnement. Vous n'avez aucun portefeuille crypto à gérer.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Modale de paiement Mobile Money (charge directe) */}
+      {payModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold flex items-center gap-2">
+                <Smartphone className="h-5 w-5 text-primary" />
+                Paiement Mobile Money
+              </h2>
+              {!processing && (
+                <button
+                  onClick={() => setPayModal({ open: false, planId: null })}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              )}
+            </div>
+
+            {!payStatus ? (
+              <>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Opérateur</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setOperator('mtn')}
+                      className={`py-3 rounded-xl border text-sm font-medium transition-colors ${
+                        operator === 'mtn'
+                          ? 'border-primary bg-primary/5 text-primary'
+                          : 'border-border text-muted-foreground hover:bg-muted'
+                      }`}
+                    >
+                      MTN Mobile Money
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOperator('orange')}
+                      className={`py-3 rounded-xl border text-sm font-medium transition-colors ${
+                        operator === 'orange'
+                          ? 'border-primary bg-primary/5 text-primary'
+                          : 'border-border text-muted-foreground hover:bg-muted'
+                      }`}
+                    >
+                      Orange Money
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Numéro de téléphone</label>
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="+237 6XX XX XX XX"
+                    className="w-full px-3 py-2.5 rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Le numéro Mobile Money à débiter. Une demande de validation arrivera sur ce téléphone.
+                  </p>
+                </div>
+
+                <Button className="w-full rounded-xl" disabled={processing} onClick={doPayment}>
+                  {processing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Initialisation…
+                    </>
+                  ) : (
+                    'Payer maintenant'
+                  )}
+                </Button>
+              </>
+            ) : (
+              <div className="text-center space-y-4 py-2">
+                <Loader2 className="h-10 w-10 text-primary animate-spin mx-auto" />
+                <p className="text-sm text-muted-foreground">{payStatus}</p>
+                <p className="text-xs text-muted-foreground">
+                  Composez le code de votre opérateur si aucune notification n'apparaît, puis patientez sur cette page.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Info frais blockchain */}
       <Card className="rounded-2xl border-blue-200 bg-gradient-to-br from-blue-50 to-transparent">

@@ -80,6 +80,42 @@ async function createPayment(paymentData) {
 }
 
 /**
+ * Charge directe Mobile Money : déclenche le push USSD sur le téléphone du client.
+ * À appeler APRÈS createPayment (qui fournit la référence de transaction NotchPay).
+ * @param {string} reference - Référence NotchPay de la transaction (trx....).
+ * @param {string} channel   - Canal NotchPay : 'cm.mtn' | 'cm.orange' | 'cm.mobile'.
+ * @param {string} phone     - Numéro Mobile Money du client (format +237XXXXXXXX).
+ * @returns {Promise<{success:boolean, status?:string, transaction?:object, error?:string}>}
+ */
+async function chargeMobileMoney(reference, channel, phone) {
+  if (!PUBLIC_KEY) {
+    return { success: false, error: 'NOTCH_PAY_PUBLIC_KEY manquant dans la configuration serveur' };
+  }
+
+  try {
+    const response = await fetch(`${NOTCHPAY_BASE}/payments/${encodeURIComponent(reference)}`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ channel, data: { phone } }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      const message = data.message || data.error || `HTTP ${response.status}`;
+      console.error('❌ Erreur charge Mobile Money NotchPay:', message, data);
+      return { success: false, error: message, data };
+    }
+
+    const transaction = data.transaction || data.data?.transaction || data.data || {};
+    return { success: true, status: transaction.status, transaction, raw: data };
+  } catch (error) {
+    console.error('❌ Erreur charge Mobile Money NotchPay:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
  * Vérifie le statut d'une transaction NotchPay.
  * @param {string} reference - Référence NotchPay (ou marchande) de la transaction.
  * @returns {Promise<{success:boolean, status?:string, transaction?:object, error?:string}>}
@@ -117,6 +153,7 @@ async function verifyPayment(reference) {
 
 module.exports = {
   createPayment,
+  chargeMobileMoney,
   verifyPayment,
   SECRET_KEY,
 };

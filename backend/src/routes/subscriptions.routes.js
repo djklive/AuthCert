@@ -52,7 +52,7 @@ router.get('/api/subscription/payments', authenticateToken, requireRole('establi
 // ---------------------------------------------------------------------------
 router.post('/api/subscription/subscribe', authenticateToken, requireRole('establishment'), async (req, res) => {
   try {
-    const { plan, periode } = req.body;
+    const { plan, periode, operator, phone } = req.body;
     const periodeNorm = periode === 'annuel' ? 'annuel' : 'mensuel';
 
     if (!plan || !PAID_PLANS.includes(plan)) {
@@ -123,18 +123,51 @@ router.post('/api/subscription/subscribe', authenticateToken, requireRole('estab
     }
 
     // Mémoriser la référence NotchPay + l'URL de paiement
+    const notchRef = result.transaction?.reference || null;
     await prisma.payment.update({
       where: { id: payment.id },
       data: {
-        notchpayReference: result.transaction?.reference || null,
+        notchpayReference: notchRef,
         paymentUrl: result.paymentUrl || null,
       },
     });
 
+    // ----- Mode CHARGE DIRECTE (push USSD) si opérateur + téléphone fournis -----
+    if (operator && phone) {
+      const channel =
+        operator === 'orange' ? 'cm.orange' : operator === 'mtn' ? 'cm.mtn' : 'cm.mobile';
+      const refToCharge = notchRef || reference;
+      const charge = await paymentService.chargeMobileMoney(refToCharge, channel, phone);
+
+      if (!charge.success) {
+        await prisma.payment.update({ where: { id: payment.id }, data: { statut: 'ECHOUE' } });
+        return res.status(502).json({
+          success: false,
+          message: "Échec de l'initiation du paiement Mobile Money",
+          error: charge.error,
+        });
+      }
+
+      return res.json({
+        success: true,
+        data: {
+          reference,
+          mode: 'direct',
+          status: charge.status || 'pending',
+          amount,
+          currency: CURRENCY,
+          plan,
+          periode: periodeNorm,
+        },
+      });
+    }
+
+    // ----- Mode PAGE HÉBERGÉE (fallback) -----
     res.json({
       success: true,
       data: {
         reference,
+        mode: 'hosted',
         paymentUrl: result.paymentUrl,
         amount,
         currency: CURRENCY,

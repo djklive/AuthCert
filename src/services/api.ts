@@ -606,16 +606,22 @@ function authHeaders(): Record<string, string> {
     return res.json();
   },
 
-  // Souscrire / renouveler -> renvoie l'URL de paiement NotchPay
-  async subscribe(plan: string, periode: 'mensuel' | 'annuel') {
+  // Souscrire / renouveler.
+  // - Mode direct (operator + phone) : déclenche le push USSD, renvoie { mode:'direct', status }.
+  // - Mode hébergé (sans operator) : renvoie { mode:'hosted', paymentUrl }.
+  async subscribe(
+    plan: string,
+    periode: 'mensuel' | 'annuel',
+    opts?: { operator?: 'mtn' | 'orange'; phone?: string }
+  ) {
     const res = await fetch(`${API_BASE_URL}/subscription/subscribe`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ plan, periode })
+      body: JSON.stringify({ plan, periode, operator: opts?.operator, phone: opts?.phone })
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || 'Erreur lors de la souscription');
+      throw new Error(err.message || err.error || 'Erreur lors de la souscription');
     }
     return res.json();
   },

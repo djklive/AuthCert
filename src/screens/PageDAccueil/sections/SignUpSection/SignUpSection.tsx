@@ -81,7 +81,7 @@ export const SignUpSection = () => {
             <Button
               className="w-full h-12 lg:h-[60px] bg-rose-500 hover:bg-rose-600 text-white rounded-lg px-6 py-4"
               size="lg"
-              onClick={() => navigate("/auth/register")}
+              onClick={() => navigate("/auth")}
             >
               <span className="[font-family:'Inter',Helvetica] font-semibold text-sm lg:text-base leading-5 lg:leading-6">
                 Creer Votre Compte

@@ -695,6 +695,8 @@ router.get('/api/admin/stats', authenticateToken, requireRole('admin'), async (r
     const endOfPrevMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
     const periodStart = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 
+    // Exécuté en une seule transaction (séquentiel, 1 connexion) pour éviter
+    // d'épuiser le pool de connexions du pooler Supabase.
     const [
       totalEtablissements, etabThisMonth, etabPrevMonth,
       totalApprenants, apprThisMonth, apprPrevMonth,
@@ -702,7 +704,7 @@ router.get('/api/admin/stats', authenticateToken, requireRole('admin'), async (r
       totalVerifications, verifThisMonth, verifPrevMonth,
       pendingEstablishments, failedPayments,
       newEtabPeriod, newCertPeriod, newVerifPeriod
-    ] = await Promise.all([
+    ] = await prisma.$transaction([
       prisma.etablissement.count(),
       prisma.etablissement.count({ where: { dateCreation: { gte: startOfMonth } } }),
       prisma.etablissement.count({ where: { dateCreation: { gte: startOfPrevMonth, lte: endOfPrevMonth } } }),
@@ -756,7 +758,7 @@ router.get('/api/admin/stats', authenticateToken, requireRole('admin'), async (r
 async function buildActivityFeed(limit = 20) {
   const perType = Math.max(3, Math.ceil(limit / 2));
 
-  const [etablissements, certificats, paiements] = await Promise.all([
+  const [etablissements, certificats, paiements] = await prisma.$transaction([
     prisma.etablissement.findMany({
       select: { id_etablissement: true, nomEtablissement: true, statut: true, dateCreation: true },
       orderBy: { dateCreation: 'desc' },

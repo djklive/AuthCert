@@ -211,7 +211,7 @@ export default function ResetPasswordPage() {
 
                     <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
                       <h4 className="text-sm font-medium text-green-800 mb-2">
-                        ✅ Conseils pour un mot de passe sécurisé :
+                        Conseils pour un mot de passe sécurisé :
                       </h4>
                       <ul className="text-xs text-green-700 space-y-1 ml-4 list-disc">
                         <li>Au moins 6 caractères</li>

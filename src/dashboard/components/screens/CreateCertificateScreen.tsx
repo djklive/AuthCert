@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -22,9 +23,14 @@ import {
   FileText,
   User,
   X,
-  GraduationCap
+  GraduationCap,
+  ScanLine,
+  Upload,
+  Loader2,
+  AlertTriangle,
+  CheckCircle2
 } from 'lucide-react';
-import { api, API_BASE } from '../../../services/api';
+import { api, API_BASE, type DiplomaExtraction } from '../../../services/api';
 import { useEffect } from 'react';
 import { useUser } from '../../hooks/useUser';
 import authService from '../../../services/authService';
@@ -64,6 +70,8 @@ interface CreateCertificateScreenProps {
 }
 
 export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenProps) {
+  const { t, i18n } = useTranslation();
+  const dateLocale = i18n.language.startsWith('fr') ? 'fr-FR' : 'en-US';
   const [currentStep, setCurrentStep] = useState(1);
   const [selectedStudent, setSelectedStudent] = useState<SelectedStudent | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -86,6 +94,9 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
   const [etudiantsLies, setEtudiantsLies] = useState<EtudiantLie[]>([]);
   const [formations, setFormations] = useState<Formation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [scanning, setScanning] = useState(false);
+  const [scanError, setScanError] = useState('');
+  const [scanResult, setScanResult] = useState<DiplomaExtraction | null>(null);
 
   // Charger les données
   useEffect(() => {
@@ -143,7 +154,7 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
       console.log('✅ Données formations reçues:', formationsData);
       setFormations(formationsData.data || []);
     } catch (err) {
-      setError('Erreur lors du chargement des données');
+      setError(t('createCertificate.loadError'));
       console.error('Erreur chargement données:', err);
     } finally {
       setLoading(false);
@@ -157,9 +168,9 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
 
 
   const steps = [
-    { title: 'Sélection de l\'étudiant', description: 'Choisissez l\'étudiant destinataire du certificat' },
-    { title: 'Détails du certificat', description: 'Configurez les informations du certificat' },
-    { title: 'Vérification & Publication', description: 'Validez et publiez sur la blockchain' }
+    { title: t('createCertificate.step1Title'), description: t('createCertificate.step1Desc') },
+    { title: t('createCertificate.step2Title'), description: t('createCertificate.step2Desc') },
+    { title: t('createCertificate.step3Title'), description: t('createCertificate.step3Desc') }
   ];
 
   const handleNext = async () => {
@@ -178,7 +189,7 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
       
       // Créer un brouillon côté backend
       if (!selectedStudent || !certificateData.title || !certificateData.issueDate || !certificateData.formationId) {
-        setError('Veuillez sélectionner un étudiant, une formation, un titre et une date.');
+        setError(t('createCertificate.selectStudentFormationError'));
         return;
       }
       
@@ -198,7 +209,7 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
         console.log('✅ Brouillon créé avec succès:', draft.id);
       } catch (error) {
         console.error('❌ Erreur création brouillon:', error);
-        setError('Erreur lors de la création du brouillon');
+        setError(t('createCertificate.draftError'));
       } finally {
         setIsCreatingDraft(false);
       }
@@ -229,9 +240,41 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
     });
   };
 
+  const handleScanDiploma = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // permet de re-sélectionner le même fichier
+    if (!file) return;
+    if (!selectedStudent) {
+      setScanError(t('createCertificate.selectStudentFirst'));
+      return;
+    }
+
+    setScanning(true);
+    setScanError('');
+    setScanResult(null);
+    try {
+      const res = await api.extractDiploma(file, selectedStudent.id, certificateData.formationId || undefined);
+      const { extracted } = res.data;
+      setScanResult(res.data);
+
+      // Préremplir le formulaire avec les informations extraites
+      setCertificateData(prev => ({
+        ...prev,
+        title: extracted.titre || prev.title,
+        grade: extracted.mention || prev.grade,
+        issueDate: extracted.dateObtention || prev.issueDate,
+        description: extracted.texteBrut ? extracted.texteBrut.slice(0, 500) : prev.description,
+      }));
+    } catch (err) {
+      setScanError(err instanceof Error ? err.message : t('createCertificate.scanError'));
+    } finally {
+      setScanning(false);
+    }
+  };
+
   const handlePublish = async () => {
     if (!draftId) {
-      setError('Brouillon introuvable.');
+      setError(t('createCertificate.draftNotFound'));
       return;
     }
     setIsPublishing(true);
@@ -246,7 +289,7 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
       await api.emitCertificate(draftId);
       onNavigate('certificates');
     } catch {
-      setError('Erreur lors de la génération du PDF');
+      setError(t('createCertificate.pdfError'));
     } finally {
     setIsPublishing(false);
     }
@@ -258,13 +301,13 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
     <div className="p-6 space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Créer un certificat</h1>
+          <h1 className="text-3xl font-bold">{t('createCertificate.title')}</h1>
           <p className="text-muted-foreground">
-            Étape {currentStep} sur 3 - {steps[currentStep - 1].description}
+            {t('createCertificate.subtitle', { current: currentStep, description: steps[currentStep - 1].description })}
           </p>
         </div>
         <Button variant="outline" onClick={() => onNavigate('dashboard')} className="rounded-xl">
-          Annuler
+          {t('common.cancel')}
         </Button>
       </div>
 
@@ -294,13 +337,13 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
             {currentStep === 1 && (
               <div className="space-y-6">
                 <div className="space-y-2">
-                  <Label>Rechercher un étudiant</Label>
+                  <Label>{t('createCertificate.searchStudent')}</Label>
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Nom ou email de l'étudiant..."
+                      placeholder={t('createCertificate.searchStudentPlaceholder')}
                       className="pl-10 h-12 rounded-xl"
                     />
                   </div>
@@ -308,7 +351,7 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
 
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <Label>Étudiants liés ({filteredLinkedStudents.length})</Label>
+                    <Label>{t('createCertificate.linkedStudents', { count: filteredLinkedStudents.length })}</Label>
                     <Button 
                       variant="outline" 
                       size="sm"
@@ -316,12 +359,12 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
                       className="rounded-lg"
                     >
                       <Plus className="h-4 w-4 mr-2" />
-                      Lier un nouvel étudiant
+                      {t('createCertificate.linkNewStudent')}
                     </Button>
                   </div>
 
                   {loading ? (
-                    <div className="text-center py-8 text-sm text-muted-foreground">Chargement des étudiants liés...</div>
+                    <div className="text-center py-8 text-sm text-muted-foreground">{t('createCertificate.loadingStudents')}</div>
                   ) : filteredLinkedStudents.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {filteredLinkedStudents.map((item) => (
@@ -348,7 +391,7 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
                                 <p className="text-sm text-muted-foreground">{item.apprenant.email}</p>
                               <div className="flex items-center gap-2 mt-2">
                                 <Badge variant="secondary" className="text-xs">
-                                    Lié le {new Date(item.dateApprobation).toLocaleDateString('fr-FR')}
+                                    {t('createCertificate.linkedOn', { date: new Date(item.dateApprobation).toLocaleDateString(dateLocale) })}
                                 </Badge>
                               </div>
                             </div>
@@ -363,13 +406,13 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
                   ) : (
                     <div className="text-center py-8">
                       <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                      <h3 className="font-medium mb-2">Aucun étudiant lié</h3>
+                      <h3 className="font-medium mb-2">{t('createCertificate.noLinkedStudents')}</h3>
                       <p className="text-sm text-muted-foreground mb-4">
-                        Liez d'abord des étudiants à votre établissement pour émettre des certificats.
+                        {t('createCertificate.noLinkedStudentsDesc')}
                       </p>
                       <Button onClick={() => onNavigate('students')} className="rounded-xl">
                         <Plus className="h-4 w-4 mr-2" />
-                        Lier un étudiant
+                        {t('createCertificate.linkStudent')}
                       </Button>
                     </div>
                   )}
@@ -383,17 +426,82 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
                 <div className="p-4 bg-accent/30 rounded-xl">
                   <div className="flex items-center gap-2 mb-2">
                     <User className="h-4 w-4 text-primary" />
-                    <span className="font-medium">Destinataire sélectionné</span>
+                    <span className="font-medium">{t('createCertificate.selectedRecipient')}</span>
                   </div>
                   <p className="text-sm">{selectedStudent?.name} - {selectedStudent?.email}</p>
                 </div>
 
+                {/* Numérisation OCR du diplôme */}
+                <div className="p-4 rounded-2xl border border-dashed border-primary/40 bg-primary/5 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <ScanLine className="h-5 w-5 text-primary" />
+                    <span className="font-medium">{t('createCertificate.scanTitle')}</span>
+                    <Badge variant="secondary" className="text-xs">{t('createCertificate.optional')}</Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {t('createCertificate.scanDesc')}
+                  </p>
+
+                  <label className="inline-flex">
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/jpg,application/pdf"
+                      className="hidden"
+                      onChange={handleScanDiploma}
+                      disabled={scanning}
+                    />
+                    <span className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl border text-sm cursor-pointer transition-colors ${scanning ? 'opacity-60 cursor-not-allowed' : 'hover:bg-accent'}`}>
+                      {scanning ? (
+                        <><Loader2 className="h-4 w-4 animate-spin" /> {t('createCertificate.scanInProgress')}</>
+                      ) : (
+                        <><Upload className="h-4 w-4" /> {t('createCertificate.importDiploma')}</>
+                      )}
+                    </span>
+                  </label>
+
+                  {scanError && (
+                    <div className="p-2 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700">
+                      {scanError}
+                    </div>
+                  )}
+
+                  {scanResult && (
+                    <div
+                      className={`p-3 rounded-lg border text-sm ${
+                        scanResult.match.ok
+                          ? 'bg-green-50 border-green-200 text-green-800'
+                          : 'bg-amber-50 border-amber-200 text-amber-800'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 font-medium mb-1">
+                        {scanResult.match.ok ? (
+                          <><CheckCircle2 className="h-4 w-4" /> {t('createCertificate.matchConfirmed')}</>
+                        ) : (
+                          <><AlertTriangle className="h-4 w-4" /> {t('createCertificate.matchToVerify')}</>
+                        )}
+                      </div>
+                      <p className="text-xs">
+                        {t('createCertificate.extractedName')} <span className="font-medium">{scanResult.extracted.nomComplet || t('createCertificate.notDetected')}</span>
+                        {' '}{t('createCertificate.scoreLine', { scoreNom: Math.round(scanResult.match.scoreNom * 100), scoreFormation: Math.round(scanResult.match.scoreFormation * 100) })}
+                      </p>
+                      {!scanResult.match.ok && (
+                        <p className="text-xs mt-1">
+                          {t('createCertificate.mismatchWarning')}
+                        </p>
+                      )}
+                      <p className="text-xs mt-1 text-muted-foreground">
+                        {t('createCertificate.prefilledNote')}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <Label htmlFor="formation">Formation *</Label>
+                    <Label htmlFor="formation">{t('createCertificate.formation')}</Label>
                     <Select value={certificateData.formationId} onValueChange={(value) => setCertificateData({...certificateData, formationId: value})}>
                       <SelectTrigger className="h-12 rounded-xl">
-                        <SelectValue placeholder="Sélectionner une formation" />
+                        <SelectValue placeholder={t('createCertificate.selectFormation')} />
                       </SelectTrigger>
                       <SelectContent>
                         {formations.length > 0 ? (
@@ -407,7 +515,7 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
                           ))
                         ) : (
                           <div className="p-2 text-sm text-gray-500">
-                            Aucune formation disponible. Créez d'abord des formations.
+                            {t('createCertificate.noFormations')}
                           </div>
                         )}
                       </SelectContent>
@@ -415,29 +523,29 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="title">Titre du certificat *</Label>
+                    <Label htmlFor="title">{t('createCertificate.certTitle')}</Label>
                     <Input
                       id="title"
                       value={certificateData.title}
                       onChange={(e) => setCertificateData({...certificateData, title: e.target.value})}
-                      placeholder="Master en Marketing Digital"
+                      placeholder={t('createCertificate.certTitlePlaceholder')}
                       className="h-12 rounded-xl"
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="grade">Mention/Note</Label>
+                    <Label htmlFor="grade">{t('createCertificate.grade')}</Label>
                     <Input
                       id="grade"
                       value={certificateData.grade}
                       onChange={(e) => setCertificateData({...certificateData, grade: e.target.value})}
-                      placeholder="Très Bien, 18/20, A+..."
+                      placeholder={t('createCertificate.gradePlaceholder')}
                       className="h-12 rounded-xl"
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="issueDate">Date d'émission *</Label>
+                    <Label htmlFor="issueDate">{t('createCertificate.issueDate')}</Label>
                     <Input
                       id="issueDate"
                       type="date"
@@ -449,24 +557,24 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="description">Description</Label>
+                  <Label htmlFor="description">{t('createCertificate.description')}</Label>
                   <Textarea
                     id="description"
                     value={certificateData.description}
                     onChange={(e) => setCertificateData({...certificateData, description: e.target.value})}
-                    placeholder="Description des compétences acquises ou du contenu de la formation..."
+                    placeholder={t('createCertificate.descriptionPlaceholder')}
                     className="rounded-xl"
                     rows={4}
                   />
                 </div>
 
                 <div className="space-y-4">
-                  <Label>Compétences certifiées</Label>
+                  <Label>{t('createCertificate.skills')}</Label>
                   <div className="flex gap-2">
                     <Input
                       value={newSkill}
                       onChange={(e) => setNewSkill(e.target.value)}
-                      placeholder="Ajouter une compétence..."
+                      placeholder={t('createCertificate.addSkillPlaceholder')}
                       className="h-10 rounded-lg"
                       onKeyPress={(e) => e.key === 'Enter' && handleAddSkill()}
                     />
@@ -510,7 +618,7 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
               <div className="space-y-6">
                 {/* Certificate Preview */}
                 <div className="space-y-4">
-                  <Label>Aperçu du certificat</Label>
+                  <Label>{t('createCertificate.certPreview')}</Label>
                   <div className="bg-gradient-to-br from-background to-accent/10 p-6 rounded-2xl">
                     <div className="aspect-[4/3] bg-white shadow-xl rounded-xl p-8 flex flex-col justify-between">
                       <div className="text-center space-y-4">
@@ -518,19 +626,19 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
                           <Award className="h-8 w-8 text-white" />
                         </div>
                         <div>
-                          <h2 className="text-2xl font-bold mb-2">{certificateData.title || 'Titre du certificat'}</h2>
-                          <p className="text-lg">Décerné à</p>
+                          <h2 className="text-2xl font-bold mb-2">{certificateData.title || t('createCertificate.certTitleDefault')}</h2>
+                          <p className="text-lg">{t('createCertificate.awardedTo')}</p>
                           <p className="text-xl font-bold text-primary">{selectedStudent?.name}</p>
                         </div>
                         {certificateData.grade && (
                           <div className="inline-block px-4 py-2 bg-primary/10 rounded-full">
-                            <span className="text-primary font-medium">Mention : {certificateData.grade}</span>
+                            <span className="text-primary font-medium">{t('createCertificate.mentionLabel', { grade: certificateData.grade })}</span>
                           </div>
                         )}
                       </div>
                       <div className="text-center text-sm text-muted-foreground">
-                        <p>Émis le {certificateData.issueDate || new Date().toLocaleDateString('fr-FR')}</p>
-                        <p>École Supérieure de Commerce • Certificat sécurisé par blockchain</p>
+                        <p>{t('createCertificate.issuedOn', { date: certificateData.issueDate || new Date().toLocaleDateString(dateLocale) })}</p>
+                        <p>{t('createCertificate.previewFooter')}</p>
                       </div>
                     </div>
                   </div>
@@ -542,33 +650,33 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
                     <CardHeader>
                       <CardTitle className="text-lg flex items-center gap-2">
                         <FileText className="h-5 w-5" />
-                        Résumé du certificat
+                        {t('createCertificate.summaryTitle')}
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Destinataire :</span>
+                        <span className="text-muted-foreground">{t('createCertificate.recipient')}</span>
                         <span className="font-medium">{selectedStudent?.name}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Formation :</span>
+                        <span className="text-muted-foreground">{t('createCertificate.formationLabel')}</span>
                         <span className="font-medium">
-                          {formations.find(f => f.id.toString() === certificateData.formationId)?.nomFormation || 'Aucune formation sélectionnée'}
+                          {formations.find(f => f.id.toString() === certificateData.formationId)?.nomFormation || t('createCertificate.noFormationSelected')}
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Titre :</span>
+                        <span className="text-muted-foreground">{t('createCertificate.titleLabel')}</span>
                         <span className="font-medium">{certificateData.title}</span>
                       </div>
                       {certificateData.grade && (
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Mention :</span>
+                          <span className="text-muted-foreground">{t('createCertificate.gradeLabel')}</span>
                           <span className="font-medium">{certificateData.grade}</span>
                         </div>
                       )}
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Compétences :</span>
-                        <span className="font-medium">{certificateData.skills.length} certifiées</span>
+                        <span className="text-muted-foreground">{t('createCertificate.skillsLabel')}</span>
+                        <span className="font-medium">{t('createCertificate.skillsCertified', { count: certificateData.skills.length })}</span>
                       </div>
                     </CardContent>
                   </Card>
@@ -577,26 +685,26 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
                     <CardHeader>
                       <CardTitle className="text-lg flex items-center gap-2">
                         <Shield className="h-5 w-5" />
-                        Publication blockchain
+                        {t('createCertificate.blockchainPublish')}
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Réseau :</span>
+                        <span className="text-muted-foreground">{t('createCertificate.network')}</span>
                         <span className="font-medium">Polygon Mainnet</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Coût estimé :</span>
+                        <span className="text-muted-foreground">{t('createCertificate.estimatedCost')}</span>
                         <span className="font-medium">~0.005 MATIC</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Temps :</span>
-                        <span className="font-medium">2-3 minutes</span>
+                        <span className="text-muted-foreground">{t('createCertificate.time')}</span>
+                        <span className="font-medium">{t('createCertificate.timeValue')}</span>
                       </div>
                       <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
                         <div className="flex items-center gap-2 text-sm text-green-700">
                           <Check className="h-4 w-4" />
-                          Frais de gaz inclus dans votre abonnement
+                          {t('createCertificate.gasIncluded')}
                         </div>
                       </div>
                     </CardContent>
@@ -608,24 +716,24 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
                       <Mail className="h-5 w-5" />
-                      Notifications
+                      {t('createCertificate.notifications')}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="font-medium">Notifier l'étudiant par email</p>
-                          <p className="text-sm text-muted-foreground">L'étudiant recevra un email avec le lien de téléchargement</p>
+                          <p className="font-medium">{t('createCertificate.notifyEmail')}</p>
+                          <p className="text-sm text-muted-foreground">{t('createCertificate.notifyEmailDesc')}</p>
                         </div>
-                        <input title="Notifier l'étudiant par email" type="checkbox" defaultChecked className="rounded" />
+                        <input title={t('createCertificate.notifyEmail')} type="checkbox" defaultChecked className="rounded" />
                       </div>
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="font-medium">Ajouter au portfolio public</p>
-                          <p className="text-sm text-muted-foreground">Le certificat sera visible sur le profil public de l'étudiant</p>
+                          <p className="font-medium">{t('createCertificate.addPortfolio')}</p>
+                          <p className="text-sm text-muted-foreground">{t('createCertificate.addPortfolioDesc')}</p>
                         </div>
-                        <input title='Ajouter au portfolio public' type="checkbox" defaultChecked className="rounded" />
+                        <input title={t('createCertificate.addPortfolio')} type="checkbox" defaultChecked className="rounded" />
                       </div>
                     </div>
                   </CardContent>
@@ -640,9 +748,9 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
                           <Shield className="h-8 w-8 text-primary" />
                         </div>
                         <div>
-                          <h3 className="font-bold text-lg mb-2">Publication en cours...</h3>
+                          <h3 className="font-bold text-lg mb-2">{t('createCertificate.publishingTitle')}</h3>
                           <p className="text-muted-foreground mb-4">
-                            Votre certificat est en cours de publication sur la blockchain. Cela peut prendre quelques minutes.
+                            {t('createCertificate.publishingDesc')}
                           </p>
                           <Progress value={66} className="h-2" />
                         </div>
@@ -662,7 +770,7 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
                 className="rounded-xl"
               >
                 <ArrowLeft className="h-4 w-4 mr-2" />
-                Retour
+                {t('createCertificate.back')}
               </Button>
               
               {currentStep < 3 ? (
@@ -675,7 +783,7 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
                   }
                   className="rounded-xl"
                 >
-                  {isCreatingDraft ? 'Création...' : 'Continuer'}
+                  {isCreatingDraft ? t('createCertificate.creating') : t('createCertificate.continue')}
                   <ArrowRight className="h-4 w-4 ml-2" />
                 </Button>
               ) : (
@@ -685,7 +793,7 @@ export function CreateCertificateScreen({ onNavigate }: CreateCertificateScreenP
                   className="rounded-xl"
                 >
                   <Rocket className="h-4 w-4 mr-2" />
-                  {isPublishing ? 'Publication...' : 'Publier le certificat'}
+                  {isPublishing ? t('createCertificate.publishing') : t('createCertificate.publish')}
                 </Button>
               )}
             </div>

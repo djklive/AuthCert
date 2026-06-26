@@ -23,6 +23,7 @@ import {
   CheckCircle,
 } from 'lucide-react';
 import { api } from '../../../services/api';
+import { useTranslation } from 'react-i18next';
 
 {/*interface FormationsScreenProps {
   onNavigate: (screen: string) => void;
@@ -42,31 +43,34 @@ interface Formation {
   etablissementId?: number;
 }
 
-const TYPE_FORMATION_LABELS = {
-  DIPLOME: 'Diplôme',
-  CERTIFICAT_FORMATION: 'Certificat de Formation',
-  ATTESTATION_PRESENCE: 'Attestation de Présence',
-  CERTIFICATION_COMPETENCES: 'Certification de Compétences',
-  FORMATION_CONTINUE: 'Formation Continue',
-  STAGE: 'Stage',
-  SEMINAIRE: 'Séminaire'
-};
-
-const NIVEAU_FORMATION_LABELS = {
-  DEBUTANT: 'Débutant',
-  INTERMEDIAIRE: 'Intermédiaire',
-  AVANCE: 'Avancé',
-  EXPERT: 'Expert'
-};
-
-const STATUT_LABELS = {
-  ACTIF: 'Actif',
-  INACTIF: 'Inactif',
-  ARCHIVE: 'Archivé'
-};
-
 export function FormationsScreen() {
   const { user } = useUser();
+  const { t, i18n } = useTranslation();
+  const dateLocale = i18n.language.startsWith('fr') ? 'fr-FR' : 'en-US';
+
+  const TYPE_FORMATION_LABELS: Record<Formation['typeFormation'], string> = {
+    DIPLOME: t('formations.typeDIPLOME'),
+    CERTIFICAT_FORMATION: t('formations.typeCERTIFICAT_FORMATION'),
+    ATTESTATION_PRESENCE: t('formations.typeATTESTATION_PRESENCE'),
+    CERTIFICATION_COMPETENCES: t('formations.typeCERTIFICATION_COMPETENCES'),
+    FORMATION_CONTINUE: t('formations.typeFORMATION_CONTINUE'),
+    STAGE: t('formations.typeSTAGE'),
+    SEMINAIRE: t('formations.typeSEMINAIRE')
+  };
+
+  const NIVEAU_FORMATION_LABELS: Record<NonNullable<Formation['niveauFormation']>, string> = {
+    DEBUTANT: t('formations.levelDEBUTANT'),
+    INTERMEDIAIRE: t('formations.levelINTERMEDIAIRE'),
+    AVANCE: t('formations.levelAVANCE'),
+    EXPERT: t('formations.levelEXPERT')
+  };
+
+  const STATUT_LABELS: Record<Formation['statut'], string> = {
+    ACTIF: t('formations.statusACTIF'),
+    INACTIF: t('formations.statusINACTIF'),
+    ARCHIVE: t('formations.statusARCHIVE')
+  };
+
   const [formations, setFormations] = useState<Formation[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -153,7 +157,7 @@ export function FormationsScreen() {
       });
 
       if (response.success) {
-        setMessage({ type: 'success', text: 'Formation créée avec succès !' });
+        setMessage({ type: 'success', text: t('formations.createdSuccess') });
         setShowCreateDialog(false);
         setFormData({
           nomFormation: '',
@@ -168,11 +172,11 @@ export function FormationsScreen() {
         // Masquer le message après 3 secondes
         setTimeout(() => setMessage(null), 3000);
       } else {
-        setMessage({ type: 'error', text: response.data.message || 'Erreur lors de la création' });
+        setMessage({ type: 'error', text: response.data.message || t('formations.createError') });
       }
     } catch (error) {
       console.error('Erreur lors de la création de la formation:', error);
-      setMessage({ type: 'error', text: 'Erreur lors de la création de la formation' });
+      setMessage({ type: 'error', text: t('formations.createErrorGeneric') });
     }
   };
 
@@ -188,7 +192,7 @@ export function FormationsScreen() {
       });
 
       if (response.success) {
-        setMessage({ type: 'success', text: 'Formation modifiée avec succès !' });
+        setMessage({ type: 'success', text: t('formations.editedSuccess') });
         setShowEditDialog(false);
         setEditingFormation(null);
         setFormData({
@@ -204,33 +208,33 @@ export function FormationsScreen() {
         // Masquer le message après 3 secondes
         setTimeout(() => setMessage(null), 3000);
       } else {
-        setMessage({ type: 'error', text: response.message || 'Erreur lors de la modification' });
+        setMessage({ type: 'error', text: response.message || t('formations.editError') });
       }
     } catch (error) {
       console.error('Erreur lors de la modification de la formation:', error);
-      setMessage({ type: 'error', text: 'Erreur lors de la modification de la formation' });
+      setMessage({ type: 'error', text: t('formations.editErrorGeneric') });
     }
   };
 
   // Supprimer une formation
   const handleDeleteFormation = async (formationId: number) => {
-    if (!confirm('Êtes-vous sûr de vouloir supprimer cette formation ?')) return;
+    if (!confirm(t('formations.deleteConfirm'))) return;
 
     try {
       setMessage(null);
       const response = await api.delete(`/formations/${formationId}`);
       if (response.success) {
-        setMessage({ type: 'success', text: 'Formation supprimée avec succès !' });
+        setMessage({ type: 'success', text: t('formations.deletedSuccess') });
         await loadFormations();
         
         // Masquer le message après 3 secondes
         setTimeout(() => setMessage(null), 3000);
       } else {
-        setMessage({ type: 'error', text: response.message || 'Erreur lors de la suppression' });
+        setMessage({ type: 'error', text: response.message || t('formations.deleteError') });
       }
     } catch (error) {
       console.error('Erreur lors de la suppression de la formation:', error);
-      setMessage({ type: 'error', text: 'Erreur lors de la suppression de la formation' });
+      setMessage({ type: 'error', text: t('formations.deleteErrorGeneric') });
     }
   };
 
@@ -288,12 +292,12 @@ export function FormationsScreen() {
       {/* En-tête */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Gestion des Formations</h1>
-          <p className="text-gray-600 mt-2">Créez et gérez les formations de votre établissement</p>
+          <h1 className="text-3xl font-bold text-gray-900">{t('formations.pageTitle')}</h1>
+          <p className="text-gray-600 mt-2">{t('formations.pageSubtitle')}</p>
         </div>
         <Button onClick={() => setShowCreateDialog(true)} className="flex items-center gap-2">
           <Plus className="w-4 h-4" />
-          Nouvelle Formation
+          {t('formations.newFormation')}
         </Button>
       </div>
 
@@ -303,7 +307,7 @@ export function FormationsScreen() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Total</p>
+                <p className="text-sm text-gray-600">{t('formations.total')}</p>
                 <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
               </div>
               <GraduationCap className="w-8 h-8 text-blue-600" />
@@ -315,7 +319,7 @@ export function FormationsScreen() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Actives</p>
+                <p className="text-sm text-gray-600">{t('formations.active')}</p>
                 <p className="text-2xl font-bold text-green-600">{stats.actifs}</p>
               </div>
               <CheckCircle className="w-8 h-8 text-green-600" />
@@ -327,7 +331,7 @@ export function FormationsScreen() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Inactives</p>
+                <p className="text-sm text-gray-600">{t('formations.inactive')}</p>
                 <p className="text-2xl font-bold text-yellow-600">{stats.inactifs}</p>
               </div>
               <AlertCircle className="w-8 h-8 text-yellow-600" />
@@ -339,7 +343,7 @@ export function FormationsScreen() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Archivées</p>
+                <p className="text-sm text-gray-600">{t('formations.archived')}</p>
                 <p className="text-2xl font-bold text-gray-600">{stats.archives}</p>
               </div>
               <Archive className="w-8 h-8 text-gray-600" />
@@ -356,7 +360,7 @@ export function FormationsScreen() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <Input
-                  placeholder="Rechercher une formation..."
+                  placeholder={t('formations.searchPlaceholder')}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
@@ -366,10 +370,10 @@ export function FormationsScreen() {
             
             <Select value={typeFilter} onValueChange={setTypeFilter}>
               <SelectTrigger className="w-full md:w-48">
-                <SelectValue placeholder="Type de formation" />
+                <SelectValue placeholder={t('formations.typePlaceholder')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tous les types</SelectItem>
+                <SelectItem value="all">{t('formations.allTypes')}</SelectItem>
                 {Object.entries(TYPE_FORMATION_LABELS).map(([value, label]) => (
                   <SelectItem key={value} value={value}>{label}</SelectItem>
                 ))}
@@ -378,10 +382,10 @@ export function FormationsScreen() {
             
             <Select value={statutFilter} onValueChange={setStatutFilter}>
               <SelectTrigger className="w-full md:w-48">
-                <SelectValue placeholder="Statut" />
+                <SelectValue placeholder={t('formations.statusPlaceholder')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tous les statuts</SelectItem>
+                <SelectItem value="all">{t('formations.allStatuses')}</SelectItem>
                 {Object.entries(STATUT_LABELS).map(([value, label]) => (
                   <SelectItem key={value} value={value}>{label}</SelectItem>
                 ))}
@@ -390,7 +394,7 @@ export function FormationsScreen() {
             
             <Button variant="outline" onClick={loadFormations} className="flex items-center gap-2">
               <RefreshCw className="w-4 h-4" />
-              Actualiser
+              {t('formations.refresh')}
             </Button>
           </div>
         </CardContent>
@@ -405,7 +409,7 @@ export function FormationsScreen() {
         ) : filteredFormations.length === 0 ? (
           <div className="col-span-full text-center py-8">
             <GraduationCap className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500">Aucune formation trouvée</p>
+            <p className="text-gray-500">{t('formations.noFormationFound')}</p>
           </div>
         ) : (
           filteredFormations.map((formation) => (
@@ -469,7 +473,7 @@ export function FormationsScreen() {
                   
                   <div className="flex items-center gap-2 text-sm text-gray-600">
                     <Calendar className="w-4 h-4" />
-                    Créé le {new Date(formation.dateCreation).toLocaleDateString('fr-FR')}
+                    {t('formations.createdOn', { date: new Date(formation.dateCreation).toLocaleDateString(dateLocale) })}
                   </div>
                 </div>
               </CardContent>
@@ -482,37 +486,37 @@ export function FormationsScreen() {
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Créer une nouvelle formation</DialogTitle>
+            <DialogTitle>{t('formations.createDialogTitle')}</DialogTitle>
             <DialogDescription>
-              Remplissez les informations pour créer une nouvelle formation.
+              {t('formations.createDialogDesc')}
             </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4">
             <div>
-              <Label htmlFor="nomFormation">Nom de la formation *</Label>
+              <Label htmlFor="nomFormation">{t('formations.nameLabel')}</Label>
               <Input
                 id="nomFormation"
                 value={formData.nomFormation}
                 onChange={(e) => setFormData({ ...formData, nomFormation: e.target.value })}
-                placeholder="Ex: Formation en Développement Web"
+                placeholder={t('formations.namePlaceholder')}
               />
             </div>
             
             <div>
-              <Label htmlFor="description">Description</Label>
+              <Label htmlFor="description">{t('formations.descriptionLabel')}</Label>
               <Textarea
                 id="description"
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Description de la formation..."
+                placeholder={t('formations.descriptionPlaceholder')}
                 rows={3}
               />
             </div>
             
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="typeFormation">Type de formation *</Label>
+                <Label htmlFor="typeFormation">{t('formations.typeLabel')}</Label>
                 <Select value={formData.typeFormation} onValueChange={(value: Formation['typeFormation'] | string) => setFormData({ ...formData, typeFormation: value as Formation['typeFormation'] })}>
                   <SelectTrigger>
                     <SelectValue />
@@ -526,7 +530,7 @@ export function FormationsScreen() {
               </div>
               
               <div>
-                <Label htmlFor="niveauFormation">Niveau</Label>
+                <Label htmlFor="niveauFormation">{t('formations.levelLabel')}</Label>
                 <Select value={formData.niveauFormation} onValueChange={(value: Formation['niveauFormation'] | string) => setFormData({ ...formData, niveauFormation: value as Formation['niveauFormation'] })}>
                   <SelectTrigger>
                     <SelectValue />
@@ -541,22 +545,22 @@ export function FormationsScreen() {
             </div>
             
             <div>
-              <Label htmlFor="dureeFormation">Durée de la formation</Label>
+              <Label htmlFor="dureeFormation">{t('formations.durationLabel')}</Label>
               <Input
                 id="dureeFormation"
                 value={formData.dureeFormation}
                 onChange={(e) => setFormData({ ...formData, dureeFormation: e.target.value })}
-                placeholder="Ex: 6 mois, 2 ans, 120 heures"
+                placeholder={t('formations.durationPlaceholder')}
               />
             </div>
           </div>
           
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
-              Annuler
+              {t('common.cancel')}
             </Button>
             <Button onClick={handleCreateFormation} disabled={!formData.nomFormation}>
-              Créer la formation
+              {t('formations.createBtn')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -566,37 +570,37 @@ export function FormationsScreen() {
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Modifier la formation</DialogTitle>
+            <DialogTitle>{t('formations.editDialogTitle')}</DialogTitle>
             <DialogDescription>
-              Modifiez les informations de la formation.
+              {t('formations.editDialogDesc')}
             </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4">
             <div>
-              <Label htmlFor="edit-nomFormation">Nom de la formation *</Label>
+              <Label htmlFor="edit-nomFormation">{t('formations.nameLabel')}</Label>
               <Input
                 id="edit-nomFormation"
                 value={formData.nomFormation}
                 onChange={(e) => setFormData({ ...formData, nomFormation: e.target.value })}
-                placeholder="Ex: Formation en Développement Web"
+                placeholder={t('formations.namePlaceholder')}
               />
             </div>
             
             <div>
-              <Label htmlFor="edit-description">Description</Label>
+              <Label htmlFor="edit-description">{t('formations.descriptionLabel')}</Label>
               <Textarea
                 id="edit-description"
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Description de la formation..."
+                placeholder={t('formations.descriptionPlaceholder')}
                 rows={3}
               />
             </div>
             
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="edit-typeFormation">Type de formation *</Label>
+                <Label htmlFor="edit-typeFormation">{t('formations.typeLabel')}</Label>
                 <Select value={formData.typeFormation} onValueChange={(value: Formation['typeFormation'] | string) => setFormData({ ...formData, typeFormation: value as Formation['typeFormation'] })}>
                   <SelectTrigger>
                     <SelectValue />
@@ -610,7 +614,7 @@ export function FormationsScreen() {
               </div>
               
               <div>
-                <Label htmlFor="edit-niveauFormation">Niveau</Label>
+                <Label htmlFor="edit-niveauFormation">{t('formations.levelLabel')}</Label>
                 <Select value={formData.niveauFormation} onValueChange={(value: Formation['niveauFormation'] | string) => setFormData({ ...formData, niveauFormation: value as Formation['niveauFormation'] })}>
                   <SelectTrigger>
                     <SelectValue />
@@ -625,22 +629,22 @@ export function FormationsScreen() {
             </div>
             
             <div>
-              <Label htmlFor="edit-dureeFormation">Durée de la formation</Label>
+              <Label htmlFor="edit-dureeFormation">{t('formations.durationLabel')}</Label>
               <Input
                 id="edit-dureeFormation"
                 value={formData.dureeFormation}
                 onChange={(e) => setFormData({ ...formData, dureeFormation: e.target.value })}
-                placeholder="Ex: 6 mois, 2 ans, 120 heures"
+                placeholder={t('formations.durationPlaceholder')}
               />
             </div>
           </div>
           
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowEditDialog(false)}>
-              Annuler
+              {t('common.cancel')}
             </Button>
             <Button onClick={handleEditFormation} disabled={!formData.nomFormation}>
-              Sauvegarder
+              {t('formations.saveBtn')}
             </Button>
           </DialogFooter>
         </DialogContent>

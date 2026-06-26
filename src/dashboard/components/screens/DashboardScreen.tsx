@@ -1,5 +1,6 @@
 import { useUser } from '../../hooks/useUser';
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
@@ -63,6 +64,8 @@ interface DashboardData {
 
 export function DashboardScreen({ hasData = true, onNavigate }: DashboardScreenProps) {
   const { user } = useUser();
+  const { t, i18n } = useTranslation();
+  const dateLocale = i18n.language.startsWith('fr') ? 'fr-FR' : 'en-US';
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -98,12 +101,12 @@ export function DashboardScreen({ hasData = true, onNavigate }: DashboardScreenP
         throw new Error(response.message || 'Erreur lors du chargement du dashboard');
       }
     } catch (err) {
-      setError('Erreur lors du chargement des données');
+      setError(t('common.loadDataError'));
       console.error('Erreur chargement dashboard:', err);
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  }, [user?.id, t]);
 
   useEffect(() => {
     loadDashboardData();
@@ -129,7 +132,7 @@ export function DashboardScreen({ hasData = true, onNavigate }: DashboardScreenP
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
-            <p className="text-muted-foreground">Chargement du dashboard...</p>
+            <p className="text-muted-foreground">{t('dashboard.loading')}</p>
           </div>
         </div>
       </div>
@@ -146,7 +149,7 @@ export function DashboardScreen({ hasData = true, onNavigate }: DashboardScreenP
             <p className="text-destructive mb-4">{error}</p>
             <Button onClick={loadDashboardData} variant="outline">
               <RefreshCw className="h-4 w-4 mr-2" />
-              Réessayer
+              {t('dashboard.retry')}
             </Button>
           </CardContent>
         </Card>
@@ -163,10 +166,9 @@ export function DashboardScreen({ hasData = true, onNavigate }: DashboardScreenP
           <div className="inline-flex items-center justify-center w-20 h-20 bg-muted rounded-2xl mb-6">
             <Award className="h-10 w-10 text-muted-foreground" />
           </div>
-          <h2 className="text-2xl font-bold mb-4">Commencez votre parcours</h2>
+          <h2 className="text-2xl font-bold mb-4">{t('dashboard.emptyTitle')}</h2>
           <p className="text-muted-foreground mb-8 max-w-md mx-auto">
-            Vous n'avez pas encore de certificats. Connectez-vous à vos établissements 
-            d'apprentissage pour commencer à collecter vos credentials.
+            {t('dashboard.emptyDesc')}
           </p>
           
           <div className="grid gap-4 md:grid-cols-2 max-w-2xl mx-auto mb-8">
@@ -175,10 +177,10 @@ export function DashboardScreen({ hasData = true, onNavigate }: DashboardScreenP
                 <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
                   <Building2 className="h-5 w-5 text-primary" />
                 </div>
-                <h3 className="font-semibold">Ajouter un établissement</h3>
+                <h3 className="font-semibold">{t('dashboard.addEstablishment')}</h3>
               </div>
               <p className="text-sm text-muted-foreground">
-                Connectez-vous à vos écoles et universités
+                {t('dashboard.addEstablishmentDesc')}
               </p>
             </Card>
             
@@ -187,17 +189,17 @@ export function DashboardScreen({ hasData = true, onNavigate }: DashboardScreenP
                 <div className="w-10 h-10 bg-chart-2/10 rounded-lg flex items-center justify-center">
                   <Plus className="h-5 w-5 text-chart-2" />
                 </div>
-                <h3 className="font-semibold">Demander un certificat</h3>
+                <h3 className="font-semibold">{t('dashboard.requestCertificate')}</h3>
               </div>
               <p className="text-sm text-muted-foreground">
-                Faites une demande de certificat directement
+                {t('dashboard.requestCertificateDesc')}
               </p>
             </Card>
           </div>
 
           <Button onClick={() => onNavigate('establishments')} className="rounded-xl">
             <Plus className="mr-2 h-4 w-4" />
-            Commencer
+            {t('dashboard.start')}
           </Button>
         </div>
       </div>
@@ -209,17 +211,17 @@ export function DashboardScreen({ hasData = true, onNavigate }: DashboardScreenP
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
         <div>
-          <h1 className="text-2xl lg:text-3xl font-bold">Bonjour, {getDisplayName()} ! 👋</h1>
-          <p className="text-sm lg:text-base text-muted-foreground">Voici un aperçu de vos certificats</p>
+          <h1 className="text-2xl lg:text-3xl font-bold">{t('dashboard.greeting', { name: getDisplayName() })}</h1>
+          <p className="text-sm lg:text-base text-muted-foreground">{t('dashboard.greetingSub')}</p>
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
           <Button variant="outline" size="sm" className="rounded-xl w-full sm:w-auto">
             <Calendar className="mr-2 h-4 w-4" />
-            Derniers 30 jours
+            {t('dashboard.last30days')}
           </Button>
           <Button size="sm" className="rounded-xl w-full sm:w-auto" onClick={() => onNavigate('requests')}>
             <Plus className="mr-2 h-4 w-4" />
-            Nouveau certificat
+            {t('dashboard.newCertificate')}
           </Button>
         </div>
       </div>
@@ -228,7 +230,7 @@ export function DashboardScreen({ hasData = true, onNavigate }: DashboardScreenP
       <div className="grid gap-4 lg:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
         <Card className="relative overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs lg:text-sm font-medium">Certificats</CardTitle>
+            <CardTitle className="text-xs lg:text-sm font-medium">{t('dashboard.statCertificates')}</CardTitle>
             <div className="w-8 h-8 lg:w-10 lg:h-10 bg-primary/10 rounded-lg flex items-center justify-center">
               <Award className="h-4 w-4 lg:h-5 lg:w-5 text-primary" />
             </div>
@@ -237,14 +239,14 @@ export function DashboardScreen({ hasData = true, onNavigate }: DashboardScreenP
             <div className="text-xl lg:text-2xl font-bold">{stats.totalCertificates}</div>
             <p className="text-xs text-muted-foreground flex items-center mt-1">
               <TrendingUp className="mr-1 h-3 w-3" />
-              {stats.certificatesIssued} émis
+              {t('dashboard.statIssued', { count: stats.certificatesIssued })}
             </p>
           </CardContent>
         </Card>
 
         <Card className="relative overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs lg:text-sm font-medium">Vérifications</CardTitle>
+            <CardTitle className="text-xs lg:text-sm font-medium">{t('dashboard.statVerifications')}</CardTitle>
             <div className="w-8 h-8 lg:w-10 lg:h-10 bg-chart-2/10 rounded-lg flex items-center justify-center">
               <Eye className="h-4 w-4 lg:h-5 lg:w-5 text-chart-2" />
             </div>
@@ -253,14 +255,14 @@ export function DashboardScreen({ hasData = true, onNavigate }: DashboardScreenP
             <div className="text-xl lg:text-2xl font-bold">{stats.totalVerifications}</div>
             <p className="text-xs text-muted-foreground flex items-center mt-1">
               <TrendingUp className="mr-1 h-3 w-3" />
-              +{stats.recentVerifications} ce mois
+              {t('dashboard.statThisMonth', { count: stats.recentVerifications })}
             </p>
           </CardContent>
         </Card>
 
         <Card className="relative overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs lg:text-sm font-medium">Établissements</CardTitle>
+            <CardTitle className="text-xs lg:text-sm font-medium">{t('dashboard.statEstablishments')}</CardTitle>
             <div className="w-8 h-8 lg:w-10 lg:h-10 bg-chart-5/10 rounded-lg flex items-center justify-center">
               <Building2 className="h-4 w-4 lg:h-5 lg:w-5 text-chart-5" />
             </div>
@@ -269,7 +271,7 @@ export function DashboardScreen({ hasData = true, onNavigate }: DashboardScreenP
             <div className="text-xl lg:text-2xl font-bold">{stats.linkedEstablishments}</div>
             <p className="text-xs text-muted-foreground flex items-center mt-1">
               <TrendingUp className="mr-1 h-3 w-3" />
-              {stats.pendingRequests} demandes en attente
+              {t('dashboard.statPendingRequests', { count: stats.pendingRequests })}
             </p>
           </CardContent>
         </Card>
@@ -282,11 +284,11 @@ export function DashboardScreen({ hasData = true, onNavigate }: DashboardScreenP
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle>Certificats récents</CardTitle>
-                  <CardDescription>Vos derniers achievements</CardDescription>
+                  <CardTitle>{t('dashboard.recentCerts')}</CardTitle>
+                  <CardDescription>{t('dashboard.recentCertsDesc')}</CardDescription>
                 </div>
                 <Button variant="outline" size="sm" onClick={() => onNavigate('certificates')}>
-                  Voir tout
+                  {t('common.viewAll')}
                 </Button>
               </div>
             </CardHeader>
@@ -303,12 +305,12 @@ export function DashboardScreen({ hasData = true, onNavigate }: DashboardScreenP
                         <div className="flex items-center space-x-2 text-xs sm:text-sm text-muted-foreground">
                           <span>{cert.etablissement}</span>
                           <span>•</span>
-                          <span>{new Date(cert.dateObtention).toLocaleDateString('fr-FR')}</span>
+                          <span>{new Date(cert.dateObtention).toLocaleDateString(dateLocale)}</span>
                         </div>
                       </div>
                       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2">
                         <Badge variant={cert.statut === 'EMIS' ? 'default' : 'secondary'} className="w-full sm:w-auto text-center">
-                          {cert.statut === 'EMIS' ? 'Vérifié' : cert.statut === 'REVOQUE' ? 'Révoqué' : 'En attente'}
+                          {cert.statut === 'EMIS' ? t('certificates.statusVerified') : cert.statut === 'REVOQUE' ? t('certificates.statusRevoked') : t('dashboard.statusPending')}
                         </Badge>
                         <div className="flex items-center justify-center sm:justify-start text-xs sm:text-sm text-muted-foreground">
                           <Eye className="mr-1 h-3 w-3" />
@@ -323,19 +325,19 @@ export function DashboardScreen({ hasData = true, onNavigate }: DashboardScreenP
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => onNavigate('certificates')}>
                               <Eye className="mr-2 h-4 w-4" />
-                              Voir détails
+                              {t('dashboard.viewDetails')}
                             </DropdownMenuItem>
                             <DropdownMenuItem>
                               <Download className="mr-2 h-4 w-4" />
-                              Télécharger PDF
+                              {t('common.downloadPdf')}
                             </DropdownMenuItem>
                             <DropdownMenuItem>
                               <QrCode className="mr-2 h-4 w-4" />
-                              QR Code
+                              {t('common.qrCode')}
                             </DropdownMenuItem>
                             <DropdownMenuItem>
                               <Share2 className="mr-2 h-4 w-4" />
-                              Partager
+                              {t('common.share')}
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -346,7 +348,7 @@ export function DashboardScreen({ hasData = true, onNavigate }: DashboardScreenP
                 ))
               ) : (
                 <div className="text-center py-8 text-sm text-muted-foreground">
-                  Aucun certificat récent
+                  {t('dashboard.noRecentCerts')}
                 </div>
               )}
             </CardContent>
@@ -358,28 +360,28 @@ export function DashboardScreen({ hasData = true, onNavigate }: DashboardScreenP
           {/* Activity Chart */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base lg:text-lg">Activité mensuelle</CardTitle>
-              <CardDescription className="text-xs lg:text-sm">Vérifications de vos certificats</CardDescription>
+              <CardTitle className="text-base lg:text-lg">{t('dashboard.monthlyActivity')}</CardTitle>
+              <CardDescription className="text-xs lg:text-sm">{t('dashboard.monthlyActivityDesc')}</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-3 lg:space-y-4">
                 <div className="space-y-2">
                   <div className="flex justify-between text-xs lg:text-sm">
-                    <span>Cette semaine</span>
+                    <span>{t('dashboard.thisWeek')}</span>
                     <span className="font-semibold">23</span>
                   </div>
                   <Progress value={75} className="h-2" />
                 </div>
                 <div className="space-y-2">
                   <div className="flex justify-between text-xs lg:text-sm">
-                    <span>Semaine dernière</span>
+                    <span>{t('dashboard.lastWeek')}</span>
                     <span className="font-semibold">18</span>
                   </div>
                   <Progress value={60} className="h-2" />
                 </div>
                 <div className="space-y-2">
                   <div className="flex justify-between text-xs lg:text-sm">
-                    <span>Il y a 2 semaines</span>
+                    <span>{t('dashboard.twoWeeksAgo')}</span>
                     <span className="font-semibold">31</span>
                   </div>
                   <Progress value={90} className="h-2" />
@@ -392,7 +394,7 @@ export function DashboardScreen({ hasData = true, onNavigate }: DashboardScreenP
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle className="text-base lg:text-lg">Notifications</CardTitle>
+                <CardTitle className="text-base lg:text-lg">{t('dashboard.notifications')}</CardTitle>
                 <Button variant="ghost" size="sm" onClick={() => onNavigate('notifications')}>
                   <Bell className="h-4 w-4" />
                 </Button>
@@ -417,7 +419,7 @@ export function DashboardScreen({ hasData = true, onNavigate }: DashboardScreenP
                 ))
               ) : (
                 <div className="text-center py-6 text-sm text-muted-foreground">
-                  Aucune notification récente
+                  {t('dashboard.noRecentNotifs')}
                 </div>
               )}
             </CardContent>

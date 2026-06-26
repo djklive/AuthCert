@@ -1,5 +1,6 @@
 import { useUser } from '../../hooks/useUser';
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '../ui/button';
 import { Card, CardContent } from '../ui/card';
 import { Badge } from '../ui/badge';
@@ -109,6 +110,8 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
   const [republishing, setRepublishing] = useState<number | null>(null);
 
   const { user } = useUser();
+  const { t, i18n } = useTranslation();
+  const dateLocale = i18n.language.startsWith('fr') ? 'fr-FR' : 'en-US';
 
   // Fonction pour tronquer les adresses longues
   const truncateAddress = (address: string, startLength: number = 6, endLength: number = 4): string => {
@@ -148,20 +151,20 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
                 console.log('❌ Erreur chargement formations:', formationsRes);
               }
       } catch {
-        setError('Erreur lors du chargement des données');
+        setError(t('common.loadDataError'));
       } finally {
         setLoading(false);
       }
     };
     load();
-  }, [user?.id, user?.role]);
+  }, [user?.id, user?.role, t]);
 
   const generateButton = () => {
     if (user?.role === 'establishment') {
       return (
         <Button onClick={() => onNavigate('create-certificate')} className="rounded-xl">
           <Award className="mr-2 h-4 w-4" />
-          Nouveau certificat
+          {t('certificates.newCertificate')}
         </Button>
       );
     } else {
@@ -362,7 +365,7 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
             </h3>
             <div className={`flex items-center ${isGridView ? 'justify-center' : ''} text-sm text-muted-foreground mb-2`}>
               <Building2 className="mr-1 h-3 w-3" />
-              <span>Émis le {new Date(certificate.dateObtention).toLocaleDateString('fr-FR')}</span>
+              <span>{t('certificates.issuedOn', { date: new Date(certificate.dateObtention).toLocaleDateString(dateLocale) })}</span>
             </div>
             
             {/* Affichage de l'établissement pour les étudiants */}
@@ -388,7 +391,7 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
                 <div className={`flex items-center ${isGridView ? 'justify-center' : ''} text-sm text-muted-foreground mb-2`}>
                   <Eye className="mr-1 h-3 w-3" />
                   <span>
-                    {verificationCount} vérification{verificationCount > 1 ? 's' : ''}
+                    {t('certificates.verificationCount', { count: verificationCount })}
                   </span>
                 </div>
               ) : null;
@@ -404,21 +407,21 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
             <div className={`flex items-center ${isGridView ? 'justify-center' : ''} space-x-2 mb-3`}>
               <Badge variant={certificate.statut === 'EMIS' ? 'default' : 'secondary'} className="text-xs">
                 {certificate.statut === 'EMIS' ? (
-                  <><Verified className="mr-1 h-3 w-3" /> Vérifié</>
+                  <><Verified className="mr-1 h-3 w-3" /> {t('certificates.statusVerified')}</>
                 ) : certificate.statut === 'BROUILLON' ? (
-                  <><AlertTriangle className="mr-1 h-3 w-3" /> Brouillon</>
+                  <><AlertTriangle className="mr-1 h-3 w-3" /> {t('certificates.statusDraft')}</>
                 ) : certificate.statut === 'REVOQUE' ? (
-                  <><Ban className="mr-1 h-3 w-3" /> Révoqué</>
+                  <><Ban className="mr-1 h-3 w-3" /> {t('certificates.statusRevoked')}</>
                 ) : certificate.statut === 'REVOQUE_ECHEC' ? (
-                  <><AlertTriangle className="mr-1 h-3 w-3" /> Révocation échouée</>
+                  <><AlertTriangle className="mr-1 h-3 w-3" /> {t('certificates.revocationFailed')}</>
                 ) : certificate.statut === 'EN_COURS_REVOCATION' ? (
-                  <><RefreshCw className="mr-1 h-3 w-3 animate-spin" /> Révocation en cours</>
+                  <><RefreshCw className="mr-1 h-3 w-3 animate-spin" /> {t('certificates.revocationInProgress')}</>
                 ) : certificate.statut === 'EMISSION_ECHEC' ? (
-                  <><AlertTriangle className="mr-1 h-3 w-3" /> Publication échouée</>
+                  <><AlertTriangle className="mr-1 h-3 w-3" /> {t('certificates.publicationFailed')}</>
                 ) : certificate.statut === 'EN_COURS_EMISSION' ? (
-                  <><RefreshCw className="mr-1 h-3 w-3 animate-spin" /> Publication en cours</>
+                  <><RefreshCw className="mr-1 h-3 w-3 animate-spin" /> {t('certificates.publicationInProgress')}</>
                 ) : (
-                  <>Brouillon</> // Default fallback
+                  <>{t('certificates.statusDraft')}</>
                 )}
               </Badge>
               {certificate.mention && (
@@ -440,7 +443,7 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
                   ) : (
                     <RefreshCw className="mr-1 h-3 w-3" />
                   )}
-                  Publier
+                  {t('certificates.publish')}
                 </Button>
                 )}
               {certificate.statut === 'EMISSION_ECHEC' && user?.role === 'establishment' && (
@@ -459,7 +462,7 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
                   ) : (
                     <RefreshCw className="mr-1 h-3 w-3" />
                   )}
-                  Republier
+                  {t('certificates.republish')}
                 </Button>
                 )}
               </div>
@@ -493,7 +496,7 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
               </Button>
               <Button size="sm" variant="outline" onClick={(e) => e.stopPropagation()}>
                 <Share2 className="mr-1 h-3 w-3" />
-                Partager
+                {t('common.share')}
               </Button>
             </div>
           </div>
@@ -506,8 +509,8 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
         <div>
-          <h1 className="text-3xl font-bold">Mes Certificats</h1>
-          <p className="text-muted-foreground">Gérez et partagez vos credentials</p>
+          <h1 className="text-3xl font-bold">{t('certificates.title')}</h1>
+          <p className="text-muted-foreground">{t('certificates.subtitle')}</p>
         </div>
         {generateButton()}
       </div>
@@ -518,7 +521,7 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Rechercher par titre..."
+                placeholder={t('certificates.searchPlaceholder')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10"
@@ -528,19 +531,19 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
             <div className="flex gap-3">
               <Select value={selectedStatus} onValueChange={(v) => setSelectedStatus(v as 'all' | CertificateStatus)}>
                 <SelectTrigger className="w-32">
-                  <SelectValue placeholder="Statut" />
+                  <SelectValue placeholder={t('certificates.status')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Tous</SelectItem>
-                  <SelectItem value="EMIS">Émis</SelectItem>
-                  <SelectItem value="REVOQUE">Révoqués</SelectItem>
+                  <SelectItem value="all">{t('certificates.all')}</SelectItem>
+                  <SelectItem value="EMIS">{t('certificates.emis')}</SelectItem>
+                  <SelectItem value="REVOQUE">{t('certificates.revoques')}</SelectItem>
                   {user?.role === 'establishment' && (
                     <>
-                      <SelectItem value="REVOQUE_ECHEC">Révocation échouée</SelectItem>
-                      <SelectItem value="EN_COURS_REVOCATION">En cours de révocation</SelectItem>
-                      <SelectItem value="EMISSION_ECHEC">Publication échouée</SelectItem>
-                      <SelectItem value="EN_COURS_EMISSION">En cours de publication</SelectItem>
-                      <SelectItem value="BROUILLON">Brouillons</SelectItem>
+                      <SelectItem value="REVOQUE_ECHEC">{t('certificates.revocationFailed')}</SelectItem>
+                      <SelectItem value="EN_COURS_REVOCATION">{t('certificates.revocationInProgress')}</SelectItem>
+                      <SelectItem value="EMISSION_ECHEC">{t('certificates.publicationFailed')}</SelectItem>
+                      <SelectItem value="EN_COURS_EMISSION">{t('certificates.publicationInProgress')}</SelectItem>
+                      <SelectItem value="BROUILLON">{t('certificates.drafts')}</SelectItem>
                     </>
                   )}
                 </SelectContent>
@@ -549,10 +552,10 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
               {formations.length > 0 && (
                 <Select value={selectedFormation} onValueChange={setSelectedFormation}>
                   <SelectTrigger className="w-48">
-                    <SelectValue placeholder="Formation" />
+                    <SelectValue placeholder={t('certificates.formation')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Toutes les formations</SelectItem>
+                    <SelectItem value="all">{t('certificates.allFormations')}</SelectItem>
                     {formations.map((formation) => (
                       <SelectItem key={formation.id} value={formation.id.toString()}>
                         {formation.nomFormation}
@@ -566,10 +569,10 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
               {user?.role === 'student' && (
                 <Select value={selectedEtablissement} onValueChange={setSelectedEtablissement}>
                   <SelectTrigger className="w-48">
-                    <SelectValue placeholder="Établissement" />
+                    <SelectValue placeholder={t('certificates.establishment')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Tous les établissements</SelectItem>
+                    <SelectItem value="all">{t('certificates.allEstablishments')}</SelectItem>
                     {Array.from(new Set(certificates.map(cert => cert.etablissement).filter(Boolean))).map((etab) => (
                       <SelectItem key={etab!.id_etablissement} value={etab!.id_etablissement.toString()}>
                         {etab!.nomEtablissement}
@@ -583,10 +586,10 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
               {user?.role === 'establishment' && (
                 <Select value={selectedApprenant} onValueChange={setSelectedApprenant}>
                   <SelectTrigger className="w-48">
-                    <SelectValue placeholder="Étudiant" />
+                    <SelectValue placeholder={t('certificates.student')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Tous les étudiants</SelectItem>
+                    <SelectItem value="all">{t('certificates.allStudents')}</SelectItem>
                     {Array.from(new Set(certificates.map(cert => cert.apprenant).filter(Boolean))).map((apprenant) => (
                       <SelectItem key={apprenant!.id_apprenant} value={apprenant!.id_apprenant.toString()}>
                         {apprenant!.prenom} {apprenant!.nom}
@@ -626,18 +629,18 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
       {loading ? ( 
         <div className="text-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-          <p className="text-sm text-muted-foreground mt-2">Chargement des certificats...</p>
+          <p className="text-sm text-muted-foreground mt-2">{t('certificates.loading')}</p>
         </div>
       ) : filteredCertificates.length === 0 ? (
         <div className="text-center py-8">
           <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
           <h3 className="font-medium mb-2">
-            {searchQuery ? 'Aucun certificat trouvé' : 'Aucun certificat'}
+            {searchQuery ? t('certificates.noneFoundSearch') : t('certificates.none')}
           </h3>
           <p className="text-sm text-muted-foreground mb-4">
             {searchQuery 
-              ? 'Modifiez votre recherche pour voir d\'autres certificats.' 
-              : 'Aucun certificat n\'a été émis pour le moment.'
+              ? t('certificates.modifySearch')
+              : t('certificates.noneIssued')
             }
           </p>
           {!searchQuery && (
@@ -673,14 +676,14 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
                     <DialogTitle className="text-xl">{selectedCertificate.titre}</DialogTitle>
                     <DialogDescription className="flex items-center mt-1">
                       <Building2 className="mr-1 h-4 w-4" />
-                      Émis le {new Date(selectedCertificate.dateObtention).toLocaleDateString('fr-FR')}
+                      {t('certificates.issuedOn', { date: new Date(selectedCertificate.dateObtention).toLocaleDateString(dateLocale) })}
                     </DialogDescription>
                   </div>
                   <Badge variant={selectedCertificate.statut === 'EMIS' ? 'default' : 'secondary'}>
                     {selectedCertificate.statut === 'EMIS' ? (
-                      <><Verified className="mr-1 h-3 w-3" /> Vérifié</>
+                      <><Verified className="mr-1 h-3 w-3" /> {t('certificates.statusVerified')}</>
                     ) : (
-                      <>Brouillon</>
+                      <>{t('certificates.statusDraft')}</>
                     )}
                   </Badge>
                 </div>
@@ -688,43 +691,43 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
 
               <Tabs defaultValue="details" className="w-full">
                 <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="details">Détails</TabsTrigger>
-                  <TabsTrigger value="security">Sécurité</TabsTrigger>
-                  <TabsTrigger value="share">Partage</TabsTrigger>
+                  <TabsTrigger value="details">{t('certificates.tabDetails')}</TabsTrigger>
+                  <TabsTrigger value="security">{t('certificates.tabSecurity')}</TabsTrigger>
+                  <TabsTrigger value="share">{t('certificates.tabShare')}</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="details" className="space-y-6">
                   <div className="space-y-4">
                   <div>
-                      <h4 className="font-semibold mb-2">Informations du certificat</h4>
+                      <h4 className="font-semibold mb-2">{t('certificates.certInfo')}</h4>
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Titre:</span>
+                          <span className="text-muted-foreground">{t('certificates.fieldTitle')}</span>
                           <span className="font-medium">{selectedCertificate.titre}</span>
                         </div>
                         {selectedCertificate.mention && (
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">Mention:</span>
+                            <span className="text-muted-foreground">{t('certificates.fieldMention')}</span>
                             <span className="font-medium">{selectedCertificate.mention}</span>
                   </div>
                         )}
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Date d'obtention:</span>
-                          <span className="font-medium">{new Date(selectedCertificate.dateObtention).toLocaleDateString('fr-FR')}</span>
+                          <span className="text-muted-foreground">{t('certificates.fieldDate')}</span>
+                          <span className="font-medium">{new Date(selectedCertificate.dateObtention).toLocaleDateString(dateLocale)}</span>
                     </div>
                         {selectedCertificate.formation && (
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">Formation:</span>
+                            <span className="text-muted-foreground">{t('certificates.fieldFormation')}</span>
                             <span className="font-medium">{selectedCertificate.formation.nomFormation}</span>
                   </div>
                         )}
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Statut:</span>
+                          <span className="text-muted-foreground">{t('certificates.fieldStatus')}</span>
                           <Badge variant={selectedCertificate.statut === 'EMIS' ? 'default' : 'secondary'} className="text-xs">
                             {selectedCertificate.statut === 'EMIS' ? (
-                              <><Verified className="mr-1 h-3 w-3" /> Vérifié</>
+                              <><Verified className="mr-1 h-3 w-3" /> {t('certificates.statusVerified')}</>
                             ) : (
-                              <><AlertTriangle className="mr-1 h-3 w-3" /> Brouillon</>
+                              <><AlertTriangle className="mr-1 h-3 w-3" /> {t('certificates.statusDraft')}</>
                             )}
                           </Badge>
                     </div>
@@ -732,10 +735,10 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
                   </div>
 
                   <div>
-                      <h4 className="font-semibold mb-2">Identifiants techniques</h4>
+                      <h4 className="font-semibold mb-2">{t('certificates.technicalIds')}</h4>
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between items-center">
-                          <span className="text-muted-foreground">UUID:</span>
+                          <span className="text-muted-foreground">UUID :</span>
                           <div className="flex items-center gap-2">
                             <span className="font-mono text-xs bg-muted px-2 py-1 rounded">
                               {truncateAddress(selectedCertificate.uuid, 8, 8)}
@@ -751,7 +754,7 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
                           </div>
                         </div>
                         <div className="flex justify-between items-center">
-                          <span className="text-muted-foreground">Hash PDF:</span>
+                          <span className="text-muted-foreground">{t('certificates.hashPdf')}</span>
                           <div className="flex items-center gap-2">
                             <span className="font-mono text-xs bg-muted px-2 py-1 rounded">
                               {selectedCertificate.pdfHash ? truncateAddress(selectedCertificate.pdfHash, 8, 8) : '—'}
@@ -777,15 +780,15 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
                   <div className="flex items-center space-x-3 p-4 bg-accent/50 rounded-lg">
                     <Shield className="h-6 w-6 text-primary" />
                     <div>
-                      <h4 className="font-semibold">Sécurisé par Blockchain</h4>
-                      <p className="text-sm text-muted-foreground">Ce certificat est vérifiable et infalsifiable</p>
+                      <h4 className="font-semibold">{t('certificates.securedByBlockchain')}</h4>
+                      <p className="text-sm text-muted-foreground">{t('certificates.securedDesc')}</p>
                     </div>
                   </div>
 
                   <div className="space-y-3 text-sm">
                     <div className="space-y-2">
                       <div className="flex justify-between items-center">
-                        <span className="text-muted-foreground">Hash PDF:</span>
+                        <span className="text-muted-foreground">{t('certificates.hashPdf')}</span>
                         <div className="flex items-center gap-2">
                           <span className="font-mono text-xs bg-muted px-2 py-1 rounded">
                             {selectedCertificate.pdfHash ? truncateAddress(selectedCertificate.pdfHash, 8, 8) : '—'}
@@ -803,7 +806,7 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
                         </div>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-muted-foreground">Transaction:</span>
+                        <span className="text-muted-foreground">{t('certificates.transaction')}</span>
                         <div className="flex items-center gap-2">
                           <span className="font-mono text-xs bg-muted px-2 py-1 rounded">
                             {selectedCertificate.txHash ? truncateAddress(selectedCertificate.txHash, 8, 8) : '—'}
@@ -821,7 +824,7 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
                         </div>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-muted-foreground">Contrat:</span>
+                        <span className="text-muted-foreground">{t('certificates.contract')}</span>
                         <div className="flex items-center gap-2">
                           <span className="font-mono text-xs bg-muted px-2 py-1 rounded">
                             {selectedCertificate.contractAddress ? truncateAddress(selectedCertificate.contractAddress, 8, 8) : '—'}
@@ -855,12 +858,12 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
                             : 'On-chain: Non';
                           alert(msg);
                         } catch {
-                          alert('Erreur vérification on-chain');
+                          alert(t('certificates.onchainError'));
                         }
                       }}
                     >
                       <Shield className="mr-2 h-4 w-4" />
-                      Vérifier on-chain
+                      {t('certificates.verifyOnchain')}
                     </Button>
                     <Button
                       variant="outline"
@@ -873,7 +876,7 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
                       disabled={!selectedCertificate.txHash}
                     >
                     <ExternalLink className="mr-2 h-4 w-4" />
-                      Voir sur Polygonscan
+                      {t('certificates.viewPolygonscan')}
                   </Button>
                   </div>
                 </TabsContent>
@@ -884,18 +887,18 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
                       <QrCode className="h-24 w-24 text-muted-foreground" />
                     </div>
                     <p className="text-sm text-muted-foreground mb-4">
-                      Scannez ce QR code pour vérifier le certificat
+                      {t('certificates.scanToVerify')}
                     </p>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
                     <Button variant="outline" onClick={() => handleDownload(selectedCertificate)} disabled={!selectedCertificate.pdfUrl}>
                       <Download className="mr-2 h-4 w-4" />
-                      Télécharger PDF
+                      {t('common.downloadPdf')}
                     </Button>
                     <Button variant="outline" onClick={() => navigator.clipboard.writeText(`${window.location.origin}/verifier-certificat?uuid=${selectedCertificate.uuid}`)}>
                       <Share2 className="mr-2 h-4 w-4" />
-                      Copier lien
+                      {t('common.copyLink')}
                     </Button>
                   </div>
                 </TabsContent>
@@ -914,12 +917,12 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
                     ) : (
                       <RefreshCw className="h-4 w-4" />
                     )}
-                    {republishing === selectedCertificate.id ? 'Republication...' : 'Republier sur blockchain'}
+                    {republishing === selectedCertificate.id ? t('certificates.republishing') : t('certificates.republishToBlockchain')}
                   </Button>
                 )}
                 <Button variant="outline" onClick={() => handleDownload(selectedCertificate)} disabled={!selectedCertificate.pdfUrl}>
                   <Download className="mr-2 h-4 w-4" />
-                  Télécharger PDF
+                  {t('common.downloadPdf')}
                 </Button>
               </div>
             </>
@@ -932,7 +935,7 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
                 variant="outline"
                 onClick={() => setSelectedCertificate(null)}
               >
-                Fermer
+                {t('common.close')}
               </Button>
               
               {(selectedCertificate.statut === 'EMIS' || selectedCertificate.statut === 'REVOQUE_ECHEC') && user?.role === 'establishment' && (
@@ -942,7 +945,7 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
                   className="flex items-center gap-2"
                 >
                   <Ban className="h-4 w-4" />
-                  {selectedCertificate.statut === 'REVOQUE_ECHEC' ? 'Re-révoquer' : 'Révoquer'}
+                  {selectedCertificate.statut === 'REVOQUE_ECHEC' ? t('certificates.reRevoke') : t('certificates.revoke')}
                 </Button>
               )}
             </DialogFooter>
@@ -954,25 +957,25 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
       <Dialog open={isQrOpen} onOpenChange={setIsQrOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Vérifier le certificat</DialogTitle>
-            <DialogDescription>Scannez ce QR ou utilisez le lien</DialogDescription>
+            <DialogTitle>{t('certificates.qrTitle')}</DialogTitle>
+            <DialogDescription>{t('certificates.qrDesc')}</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col items-center gap-3">
             {qrLoading ? (
-              <div className="text-sm text-muted-foreground">Génération du QR...</div>
+              <div className="text-sm text-muted-foreground">{t('certificates.qrGenerating')}</div>
             ) : qrDataUrl ? (
               <img src={qrDataUrl} alt="QR Code" className="w-56 h-56" />
             ) : (
-              <div className="text-sm text-red-600">Erreur de génération</div>
+              <div className="text-sm text-red-600">{t('certificates.qrError')}</div>
             )}
             <Input readOnly value={qrLink} className="text-xs" />
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => navigator.clipboard.writeText(qrLink)}>
-                Copier lien
+                {t('common.copyLink')}
               </Button>
               {qrDataUrl && (
                 <a href={qrDataUrl} download={`qr-${Date.now()}.png`}>
-                  <Button variant="outline">Télécharger QR</Button>
+                  <Button variant="outline">{t('certificates.downloadQr')}</Button>
                 </a>
               )}
             </div>
@@ -986,25 +989,25 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-destructive">
               <AlertTriangle className="h-5 w-5" />
-              Révoquer le certificat
+              {t('certificates.revokeTitle')}
             </DialogTitle>
             <DialogDescription>
-              Cette action est irréversible. Le certificat sera marqué comme révoqué et ne pourra plus être utilisé.
+              {t('certificates.revokeDesc')}
             </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium">Certificat à révoquer</label>
+              <label className="text-sm font-medium">{t('certificates.revokeTarget')}</label>
               <p className="text-sm text-muted-foreground">{selectedCertificate?.titre}</p>
             </div>
             
             <div>
-              <label className="text-sm font-medium">Raison de la révocation (optionnel)</label>
+              <label className="text-sm font-medium">{t('certificates.revokeReason')}</label>
               <textarea
                 value={revokeReason}
                 onChange={(e) => setRevokeReason(e.target.value)}
-                placeholder="Ex: Erreur dans les informations, certificat frauduleux..."
+                placeholder={t('certificates.revokeReasonPlaceholder')}
                 className="w-full mt-1 p-2 border rounded-md text-sm"
                 rows={3}
               />
@@ -1019,7 +1022,7 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
                 setRevokeReason('');
               }}
             >
-              Annuler
+              {t('common.cancel')}
             </Button>
             <Button
               variant="destructive"
@@ -1030,12 +1033,12 @@ export function CertificatesScreen({ onNavigate }: CertificatesScreenProps) {
               {revoking ? (
                 <>
                   <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                  {selectedCertificate?.statut === 'REVOQUE_ECHEC' ? 'Re-révocation...' : 'Révocation...'}
+                  {selectedCertificate?.statut === 'REVOQUE_ECHEC' ? t('certificates.reRevoking') : t('certificates.revoking')}
                 </>
               ) : (
                 <>
                   <Ban className="h-4 w-4" />
-                  {selectedCertificate?.statut === 'REVOQUE_ECHEC' ? 'Confirmer la re-révocation' : 'Confirmer la révocation'}
+                  {selectedCertificate?.statut === 'REVOQUE_ECHEC' ? t('certificates.confirmReRevoke') : t('certificates.confirmRevoke')}
                 </>
               )}
             </Button>

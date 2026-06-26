@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
@@ -132,6 +133,8 @@ interface Establishment {
 
 export function EstablishmentsScreen({ onNavigate }: EstablishmentsScreenProps) {
   //const { user } = useUser();
+  const { t, i18n } = useTranslation();
+  const dateLocale = i18n.language.startsWith('fr') ? 'fr-FR' : 'en-US';
   const [searchQuery, setSearchQuery] = useState('');
   const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false);
   const [selectedEstablishment, setSelectedEstablishment] = useState('');
@@ -165,7 +168,7 @@ export function EstablishmentsScreen({ onNavigate }: EstablishmentsScreenProps) 
       const data = await response.json();
       setLiaisons(data.data);
     } catch (err) {
-      setError('Erreur lors du chargement des données');
+      setError(t('establishments.loadError'));
       console.error('Erreur chargement liaisons:', err);
     } finally {
       setLoading(false);
@@ -240,7 +243,7 @@ export function EstablishmentsScreen({ onNavigate }: EstablishmentsScreenProps) 
       
       // TODO: Afficher un toast de succès
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur lors de l\'envoi de la demande');
+      setError(err instanceof Error ? err.message : t('establishments.sendError'));
       console.error('Erreur envoi demande:', err);
     }
   };
@@ -251,28 +254,28 @@ export function EstablishmentsScreen({ onNavigate }: EstablishmentsScreenProps) 
         return (
           <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
             <CheckCircle className="mr-1 h-3 w-3" />
-            Connecté
+            {t('establishments.statusConnected')}
           </Badge>
         );
       case 'EN_ATTENTE':
         return (
           <Badge variant="secondary">
             <Clock className="mr-1 h-3 w-3" />
-            En attente
+            {t('establishments.statusPending')}
           </Badge>
         );
       case 'REJETE':
         return (
           <Badge variant="destructive">
             <XCircle className="mr-1 h-3 w-3" />
-            Refusé
+            {t('establishments.statusRejected')}
           </Badge>
         );
       case 'SUSPENDU':
         return (
           <Badge variant="outline" className="border-orange-200 text-orange-700">
             <Clock className="mr-1 h-3 w-3" />
-            Suspendu
+            {t('establishments.statusSuspended')}
           </Badge>
         );
       default:
@@ -293,42 +296,42 @@ export function EstablishmentsScreen({ onNavigate }: EstablishmentsScreenProps) 
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
         <div>
-          <h1 className="text-3xl font-bold">Établissements</h1>
-          <p className="text-muted-foreground">Gérez vos connexions avec les établissements d'enseignement</p>
+          <h1 className="text-3xl font-bold">{t('establishments.title')}</h1>
+          <p className="text-muted-foreground">{t('establishments.subtitle')}</p>
         </div>
         <Dialog open={isRequestDialogOpen} onOpenChange={setIsRequestDialogOpen}>
           <DialogTrigger asChild>
             <Button className="rounded-xl">
               <Plus className="mr-2 h-4 w-4" />
-              Ajouter un établissement
+              {t('establishments.add')}
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>Demande de connexion</DialogTitle>
+              <DialogTitle>{t('establishments.requestTitle')}</DialogTitle>
               <DialogDescription>
-                Demandez à être connecté à un établissement pour recevoir vos certificats
+                {t('establishments.requestDesc')}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <div>
-                <Label htmlFor="establishment">Établissement</Label>
+                <Label htmlFor="establishment">{t('establishments.establishmentLabel')}</Label>
                 <Select value={selectedEstablishment} onValueChange={setSelectedEstablishment}>
                   <SelectTrigger>
                     <SelectValue placeholder={
                       loadingEstablishments 
-                        ? "Chargement des établissements..." 
-                        : "Sélectionner un établissement"
+                        ? t('establishments.loadingEstablishments')
+                        : t('establishments.selectEstablishment')
                     } />
                   </SelectTrigger>
                   <SelectContent>
                     {loadingEstablishments ? (
                       <SelectItem value="" disabled>
-                        Chargement...
+                        {t('establishments.loadingShort')}
                       </SelectItem>
                     ) : establishments.length === 0 ? (
                       <SelectItem value="" disabled>
-                        Aucun établissement disponible
+                        {t('establishments.noneAvailable')}
                       </SelectItem>
                     ) : (
                       establishments.map((est) => (
@@ -349,10 +352,10 @@ export function EstablishmentsScreen({ onNavigate }: EstablishmentsScreenProps) 
                 </Select>
               </div>
               <div>
-                <Label htmlFor="message">Message (optionnel)</Label>
+                <Label htmlFor="message">{t('establishments.messageOptional')}</Label>
                 <Textarea
                   id="message"
-                  placeholder="Expliquez votre demande de connexion..."
+                  placeholder={t('establishments.messagePlaceholder')}
                   value={requestMessage}
                   onChange={(e) => setRequestMessage(e.target.value)}
                   rows={3}
@@ -360,11 +363,11 @@ export function EstablishmentsScreen({ onNavigate }: EstablishmentsScreenProps) 
               </div>
               <div className="flex justify-end space-x-3">
                 <Button variant="outline" onClick={() => setIsRequestDialogOpen(false)}>
-                  Annuler
+                  {t('common.cancel')}
                 </Button>
                 <Button onClick={handleConnectionRequest} disabled={!selectedEstablishment}>
                   <Send className="mr-2 h-4 w-4" />
-                  Envoyer la demande
+                  {t('establishments.send')}
                 </Button>
               </div>
             </div>
@@ -378,7 +381,7 @@ export function EstablishmentsScreen({ onNavigate }: EstablishmentsScreenProps) 
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Rechercher un établissement..."
+              placeholder={t('establishments.searchPlaceholder')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"
@@ -397,7 +400,7 @@ export function EstablishmentsScreen({ onNavigate }: EstablishmentsScreenProps) 
               </div>
               <div>
                 <p className="text-2xl font-bold">{statsCalculated.liaisonsApprouvees}</p>
-                <p className="text-sm text-muted-foreground">Établissements connectés</p>
+                <p className="text-sm text-muted-foreground">{t('establishments.statConnected')}</p>
               </div>
             </div>
           </CardContent>
@@ -410,7 +413,7 @@ export function EstablishmentsScreen({ onNavigate }: EstablishmentsScreenProps) 
               </div>
               <div>
                 <p className="text-2xl font-bold">{statsCalculated.demandesEnAttente}</p>
-                <p className="text-sm text-muted-foreground">Demandes en attente</p>
+                <p className="text-sm text-muted-foreground">{t('establishments.statPending')}</p>
               </div>
             </div>
           </CardContent>
@@ -423,7 +426,7 @@ export function EstablishmentsScreen({ onNavigate }: EstablishmentsScreenProps) 
               </div>
               <div>
                 <p className="text-2xl font-bold">{statsCalculated.totalLiaisons}</p>
-                <p className="text-sm text-muted-foreground">Total des liaisons</p>
+                <p className="text-sm text-muted-foreground">{t('establishments.statTotal')}</p>
               </div>
             </div>
           </CardContent>
@@ -440,7 +443,7 @@ export function EstablishmentsScreen({ onNavigate }: EstablishmentsScreenProps) 
                     ? Math.round((statsCalculated.liaisonsApprouvees / statsCalculated.totalLiaisons) * 100)
                     : 0}%
                 </p>
-                <p className="text-sm text-muted-foreground">Taux d'approbation</p>
+                <p className="text-sm text-muted-foreground">{t('establishments.statApprovalRate')}</p>
               </div>
             </div>
           </CardContent>
@@ -458,29 +461,29 @@ export function EstablishmentsScreen({ onNavigate }: EstablishmentsScreenProps) 
 
       {/* Establishments List */}
       <div className="space-y-6">
-        <h2 className="text-xl font-semibold">Mes établissements</h2>
+        <h2 className="text-xl font-semibold">{t('establishments.myEstablishments')}</h2>
         
         {loading ? (
           <div className="text-center py-8">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-            <p className="text-sm text-muted-foreground mt-2">Chargement des établissements...</p>
+            <p className="text-sm text-muted-foreground mt-2">{t('establishments.loadingEstablishments')}</p>
           </div>
         ) : filteredLiaisons.length === 0 ? (
           <div className="text-center py-8">
             <Building2 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="font-medium mb-2">
-              {searchQuery ? 'Aucun établissement trouvé' : 'Aucun établissement lié'}
+              {searchQuery ? t('establishments.noneFoundSearch') : t('establishments.noneLinked')}
             </h3>
             <p className="text-sm text-muted-foreground mb-4">
               {searchQuery 
-                ? 'Modifiez votre recherche pour voir d\'autres établissements.' 
-                : 'Commencez par faire une demande de liaison avec un établissement.'
+                ? t('establishments.modifySearch')
+                : t('establishments.startRequest')
               }
             </p>
             {!searchQuery && (
               <Button onClick={() => setIsRequestDialogOpen(true)}>
                 <Plus className="h-4 w-4 mr-2" />
-                Faire une demande
+                {t('establishments.makeRequest')}
               </Button>
             )}
           </div>
@@ -518,18 +521,18 @@ export function EstablishmentsScreen({ onNavigate }: EstablishmentsScreenProps) 
                   <div className="flex items-center justify-between text-sm">
                     <div className="flex items-center space-x-1 text-muted-foreground">
                       <Clock className="h-3 w-3" />
-                      <span>Demandé le {new Date(liaison.dateDemande).toLocaleDateString('fr-FR')}</span>
+                      <span>{t('establishments.requestedOn', { date: new Date(liaison.dateDemande).toLocaleDateString(dateLocale) })}</span>
                     </div>
                     {liaison.dateApprobation && (
                       <span className="text-muted-foreground">
-                        Approuvé le {new Date(liaison.dateApprobation).toLocaleDateString('fr-FR')}
+                        {t('establishments.approvedOn', { date: new Date(liaison.dateApprobation).toLocaleDateString(dateLocale) })}
                       </span>
                     )}
                   </div>
 
                   {liaison.messageDemande && (
                     <div className="p-3 bg-accent/30 rounded-lg">
-                      <p className="text-xs text-muted-foreground mb-1">Message envoyé :</p>
+                      <p className="text-xs text-muted-foreground mb-1">{t('establishments.messageSent')}</p>
                       <p className="text-sm">{liaison.messageDemande}</p>
                     </div>
                   )}
@@ -538,12 +541,12 @@ export function EstablishmentsScreen({ onNavigate }: EstablishmentsScreenProps) 
                     <Button variant="outline" size="sm" asChild>
                       <a href={`mailto:${liaison.etablissement.emailEtablissement}`}>
                         <ExternalLink className="mr-1 h-3 w-3" />
-                        Contacter
+                        {t('establishments.contact')}
                       </a>
                     </Button>
                     {liaison.statutLiaison === 'APPROUVE' && (
                       <Button size="sm" onClick={() => onNavigate('certificates')}>
-                        Voir certificats
+                        {t('establishments.viewCertificates')}
                       </Button>
                     )}
                   </div>
@@ -557,22 +560,22 @@ export function EstablishmentsScreen({ onNavigate }: EstablishmentsScreenProps) 
       {/* Available Establishments */}
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Établissements disponibles</h2>
+          <h2 className="text-xl font-semibold">{t('establishments.availableEstablishments')}</h2>
           <Button variant="ghost" size="sm" onClick={() => onNavigate('dashboard')}>
-            Voir tous
+            {t('establishments.viewAll')}
           </Button>
         </div>
         {loadingEstablishments ? (
           <div className="text-center py-8">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-            <p className="text-muted-foreground">Chargement des établissements...</p>
+            <p className="text-muted-foreground">{t('establishments.loadingEstablishments')}</p>
           </div>
         ) : establishments.length === 0 ? (
           <div className="text-center py-8">
             <Building2 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="font-medium mb-2">Aucun établissement disponible</h3>
+            <h3 className="font-medium mb-2">{t('establishments.noneAvailable')}</h3>
             <p className="text-sm text-muted-foreground">
-              Il n'y a actuellement aucun établissement actif sur la plateforme.
+              {t('establishments.noneActive')}
             </p>
           </div>
         ) : (

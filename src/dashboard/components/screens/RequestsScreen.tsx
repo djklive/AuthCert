@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
@@ -62,6 +63,8 @@ interface Etablissement {
 
 export function RequestsScreen() {
   const { user } = useUser();
+  const { t, i18n } = useTranslation();
+  const dateLocale = i18n.language.startsWith('fr') ? 'fr-FR' : 'en-US';
   const [isNewRequestOpen, setIsNewRequestOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [, setSelectedEstablishment] = useState('');
@@ -110,12 +113,12 @@ export function RequestsScreen() {
       setDemandes(demandesData.data || []);
       setEtablissements(etablissementsData.data || []);
     } catch (err) {
-      setError('Erreur lors du chargement des données');
+      setError(t('requests.loadError'));
       console.error('Erreur chargement données:', err);
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  }, [user?.id, t]);
 
   // Charger les données au montage
   useEffect(() => {
@@ -128,28 +131,28 @@ export function RequestsScreen() {
         return (
           <Badge variant="secondary">
             <Clock className="mr-1 h-3 w-3" />
-            En attente
+            {t('requests.statusPending')}
           </Badge>
         );
       case 'APPROUVE':
         return (
           <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
             <CheckCircle className="mr-1 h-3 w-3" />
-            Approuvé
+            {t('requests.statusApproved')}
           </Badge>
         );
       case 'REJETE':
         return (
           <Badge variant="destructive">
             <XCircle className="mr-1 h-3 w-3" />
-            Refusé
+            {t('requests.statusRejected')}
           </Badge>
         );
       case 'EN_COURS_TRAITEMENT':
         return (
           <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-200">
             <Clock className="mr-1 h-3 w-3" />
-            En cours
+            {t('requests.statusInProgress')}
           </Badge>
         );
       default:
@@ -167,7 +170,7 @@ export function RequestsScreen() {
 
   const handleSubmitRequest = async () => {
     if (!selectedEstablishmentId || !titre.trim()) {
-      setError('Veuillez sélectionner un établissement et saisir un titre');
+      setError(t('requests.selectAndTitleError'));
       return;
     }
 
@@ -193,11 +196,11 @@ export function RequestsScreen() {
         resetForm();
         await loadData();
       } else {
-        throw new Error(result.message || 'Erreur lors de la création de la demande');
+        throw new Error(result.message || t('requests.createError'));
       }
 
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur lors de la création de la demande');
+      setError(err instanceof Error ? err.message : t('requests.createError'));
     } finally {
       setSubmitting(false);
     }
@@ -235,10 +238,10 @@ export function RequestsScreen() {
         setSelectedDemande(result.data);
         setIsDetailModalOpen(true);
       } else {
-        setError('Erreur lors du chargement des détails');
+        setError(t('requests.detailsError'));
       }
     } catch (err) {
-      setError('Erreur lors du chargement des détails');
+      setError(t('requests.detailsError'));
       console.error('Erreur chargement détails:', err);
     }
   };
@@ -255,21 +258,21 @@ export function RequestsScreen() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
         <div>
-          <h1 className="text-3xl font-bold">Demandes de Certificat</h1>
-          <p className="text-muted-foreground">Suivez vos demandes et créez-en de nouvelles</p>
+          <h1 className="text-3xl font-bold">{t('requests.title')}</h1>
+          <p className="text-muted-foreground">{t('requests.subtitle')}</p>
         </div>
         <Dialog open={isNewRequestOpen} onOpenChange={setIsNewRequestOpen}>
           <DialogTrigger asChild>
             <Button className="rounded-xl">
               <Plus className="mr-2 h-4 w-4" />
-              Nouvelle demande
+              {t('requests.newRequest')}
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Nouvelle demande de certificat</DialogTitle>
+              <DialogTitle>{t('requests.newRequestTitle')}</DialogTitle>
               <DialogDescription>
-                Étape {currentStep} sur 3 - Remplissez les informations nécessaires
+                {t('requests.step', { current: currentStep })}
               </DialogDescription>
             </DialogHeader>
 
@@ -284,13 +287,13 @@ export function RequestsScreen() {
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className={currentStep >= 1 ? "text-primary" : "text-muted-foreground"}>
-                    Établissement
+                    {t('requests.stepEstablishment')}
                   </span>
                   <span className={currentStep >= 2 ? "text-primary" : "text-muted-foreground"}>
-                    Titre
+                    {t('requests.stepTitle')}
                   </span>
                   <span className={currentStep >= 3 ? "text-primary" : "text-muted-foreground"}>
-                    Finalisation
+                    {t('requests.stepFinalize')}
                   </span>
                 </div>
                 <Progress value={(currentStep / 3) * 100} />
@@ -300,7 +303,7 @@ export function RequestsScreen() {
               {currentStep === 1 && (
                 <div className="space-y-4">
                   <div>
-                    <Label htmlFor="establishment">Sélectionner un établissement</Label>
+                    <Label htmlFor="establishment">{t('requests.selectEstablishment')}</Label>
                     <Select 
                       value={selectedEstablishmentId?.toString() || ''} 
                       onValueChange={(value) => {
@@ -311,7 +314,7 @@ export function RequestsScreen() {
                       }}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Choisir un établissement" />
+                        <SelectValue placeholder={t('requests.chooseEstablishment')} />
                       </SelectTrigger>
                       <SelectContent>
                         {etablissements.filter(e => e.statut === 'ACTIF').map((etab) => (
@@ -328,11 +331,11 @@ export function RequestsScreen() {
 
                   {selectedEstablishmentData && (
                     <div className="p-4 bg-accent/50 rounded-lg">
-                      <h4 className="font-semibold mb-2">À propos de {selectedEstablishmentData.nomEtablissement}</h4>
+                      <h4 className="font-semibold mb-2">{t('requests.about', { name: selectedEstablishmentData.nomEtablissement })}</h4>
                       <p className="text-sm text-muted-foreground">
-                        Type: {selectedEstablishmentData.typeEtablissement}
+                        {t('requests.aboutType', { type: selectedEstablishmentData.typeEtablissement })}
                         <br />
-                        En moyenne, les demandes sont traitées sous 5-7 jours ouvrés.
+                        {t('requests.processingTime')}
                       </p>
                     </div>
                   )}
@@ -343,10 +346,10 @@ export function RequestsScreen() {
               {currentStep === 2 && (
                 <div className="space-y-4">
                   <div>
-                    <Label htmlFor="titre">Titre du certificat *</Label>
+                    <Label htmlFor="titre">{t('requests.certificateTitle')}</Label>
                     <Input
                       id="titre"
-                      placeholder="Ex: Master en Marketing Digital"
+                      placeholder={t('requests.certificateTitlePlaceholder')}
                       value={titre}
                       onChange={(e) => setTitre(e.target.value)}
                       className="h-12 rounded-xl"
@@ -354,10 +357,10 @@ export function RequestsScreen() {
                   </div>
 
                   <div>
-                    <Label htmlFor="description">Description (optionnel)</Label>
+                    <Label htmlFor="description">{t('requests.descriptionLabel')}</Label>
                     <Textarea
                       id="description"
-                      placeholder="Décrivez brièvement le certificat demandé..."
+                      placeholder={t('requests.descriptionPlaceholder')}
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
                       rows={3}
@@ -366,9 +369,9 @@ export function RequestsScreen() {
                   </div>
 
                   <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                    <h4 className="font-semibold mb-2 text-blue-800">Note importante</h4>
+                    <h4 className="font-semibold mb-2 text-blue-800">{t('requests.importantNote')}</h4>
                     <p className="text-sm text-blue-700">
-                      Comme les établissements n'ont pas encore de formations définies, vous pouvez passer cette étape et aller directement à la finalisation.
+                      {t('requests.importantNoteText')}
                     </p>
                     <Button 
                       variant="outline" 
@@ -376,7 +379,7 @@ export function RequestsScreen() {
                       className="mt-2 border-blue-300 text-blue-700 hover:bg-blue-100"
                       onClick={skipCourseStep}
                     >
-                      Passer cette étape
+                      {t('requests.skipStep')}
                     </Button>
                   </div>
                 </div>
@@ -386,10 +389,10 @@ export function RequestsScreen() {
               {currentStep === 3 && (
                 <div className="space-y-4">
                   <div>
-                    <Label htmlFor="message">Message à l'établissement</Label>
+                    <Label htmlFor="message">{t('requests.messageToEstablishment')}</Label>
                     <Textarea
                       id="message"
-                      placeholder="Expliquez votre parcours et votre motivation..."
+                      placeholder={t('requests.messagePlaceholder')}
                       value={requestMessage}
                       onChange={(e) => setRequestMessage(e.target.value)}
                       rows={4}
@@ -398,14 +401,14 @@ export function RequestsScreen() {
                   </div>
 
                   <div>
-                    <Label htmlFor="documents">Documents justificatifs (optionnel)</Label>
+                    <Label htmlFor="documents">{t('requests.documents')}</Label>
                     <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center">
                       <Upload className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
                       <div className="space-y-2">
-                        <p className="text-sm font-medium">Glissez vos fichiers ici ou</p>
+                        <p className="text-sm font-medium">{t('requests.dragFiles')}</p>
                         <Button variant="outline" size="sm" asChild>
                           <label htmlFor="file-upload" className="cursor-pointer">
-                            Parcourir les fichiers
+                            {t('requests.browseFiles')}
                           </label>
                         </Button>
                         <input
@@ -418,7 +421,7 @@ export function RequestsScreen() {
                         />
                       </div>
                       <p className="text-xs text-muted-foreground mt-2">
-                        PDF, DOC, JPG, PNG jusqu'à 10MB chacun
+                        {t('requests.fileTypes')}
                       </p>
                     </div>
                     
@@ -450,7 +453,7 @@ export function RequestsScreen() {
                   disabled={currentStep === 1}
                 >
                   <ArrowLeft className="mr-2 h-4 w-4" />
-                  Précédent
+                  {t('requests.previous')}
                 </Button>
 
                 {currentStep < 3 ? (
@@ -461,7 +464,7 @@ export function RequestsScreen() {
                       (currentStep === 2 && !titre.trim())
                     }
                   >
-                    Suivant
+                    {t('requests.next')}
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Button>
                 ) : (
@@ -470,7 +473,7 @@ export function RequestsScreen() {
                     disabled={submitting}
                   >
                     <Send className="mr-2 h-4 w-4" />
-                    {submitting ? 'Envoi...' : 'Envoyer la demande'}
+                    {submitting ? t('requests.sending') : t('requests.send')}
                   </Button>
                 )}
               </div>
@@ -485,7 +488,7 @@ export function RequestsScreen() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Rechercher par titre ou établissement..."
+              placeholder={t('requests.searchPlaceholder')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"
@@ -504,7 +507,7 @@ export function RequestsScreen() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{demandes.length}</p>
-                <p className="text-sm text-muted-foreground">Total demandes</p>
+                <p className="text-sm text-muted-foreground">{t('requests.statTotal')}</p>
               </div>
             </div>
           </CardContent>
@@ -517,7 +520,7 @@ export function RequestsScreen() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{demandes.filter(d => d.statutDemande === 'EN_ATTENTE').length}</p>
-                <p className="text-sm text-muted-foreground">En attente</p>
+                <p className="text-sm text-muted-foreground">{t('requests.statPending')}</p>
               </div>
             </div>
           </CardContent>
@@ -530,7 +533,7 @@ export function RequestsScreen() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{demandes.filter(d => d.statutDemande === 'APPROUVE').length}</p>
-                <p className="text-sm text-muted-foreground">Approuvées</p>
+                <p className="text-sm text-muted-foreground">{t('requests.statApproved')}</p>
               </div>
             </div>
           </CardContent>
@@ -543,7 +546,7 @@ export function RequestsScreen() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{demandes.filter(d => d.statutDemande === 'REJETE').length}</p>
-                <p className="text-sm text-muted-foreground">Refusées</p>
+                <p className="text-sm text-muted-foreground">{t('requests.statRejected')}</p>
               </div>
             </div>
           </CardContent>
@@ -560,14 +563,14 @@ export function RequestsScreen() {
       {/* Requests List */}
       <Card>
         <CardHeader>
-          <CardTitle>Mes demandes</CardTitle>
-          <CardDescription>Suivez l'état de vos demandes de certificat</CardDescription>
+          <CardTitle>{t('requests.myRequests')}</CardTitle>
+          <CardDescription>{t('requests.myRequestsDesc')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           {loading ? (
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-              <p className="text-sm text-muted-foreground mt-2">Chargement des demandes...</p>
+              <p className="text-sm text-muted-foreground mt-2">{t('requests.loading')}</p>
             </div>
           ) : filteredDemandes.length > 0 ? (
             filteredDemandes.map((demande) => (
@@ -585,7 +588,7 @@ export function RequestsScreen() {
                       </div>
                       <div className="flex items-center">
                         <Calendar className="mr-1 h-3 w-3" />
-                        Demandé le {new Date(demande.dateDemande).toLocaleDateString('fr-FR')}
+                        {t('requests.requestedOn', { date: new Date(demande.dateDemande).toLocaleDateString(dateLocale) })}
                       </div>
                     </div>
                     {demande.description && (
@@ -601,7 +604,7 @@ export function RequestsScreen() {
                         <p className={`text-sm font-medium mb-1 ${
                           demande.statutDemande === 'REJETE' ? 'text-destructive' : 'text-green-800'
                         }`}>
-                          {demande.statutDemande === 'REJETE' ? 'Raison du refus:' : 'Réponse de l\'établissement:'}
+                          {demande.statutDemande === 'REJETE' ? t('requests.rejectReason') : t('requests.establishmentResponse')}
                         </p>
                         <p className="text-sm text-muted-foreground">{demande.messageReponse}</p>
                       </div>
@@ -611,7 +614,7 @@ export function RequestsScreen() {
 
                 <div className="flex items-center justify-between pt-4 border-t">
                   <div className="text-sm text-muted-foreground">
-                    {demande.documents.length} document{demande.documents.length !== 1 ? 's' : ''} fourni{demande.documents.length !== 1 ? 's' : ''}
+                    {t('requests.documentsProvided', { count: demande.documents.length })}
                   </div>
                   <div className="flex space-x-2">
                     <Button 
@@ -620,11 +623,11 @@ export function RequestsScreen() {
                       onClick={() => handleViewDetails(demande)}
                     >
                       <Eye className="mr-1 h-3 w-3" />
-                      Voir détails
+                      {t('requests.viewDetails')}
                     </Button>
                     {demande.statutDemande === 'REJETE' && (
                       <Button size="sm">
-                        Relancer
+                        {t('requests.relaunch')}
                       </Button>
                     )}
                   </div>
@@ -635,18 +638,18 @@ export function RequestsScreen() {
             <div className="text-center py-8">
               <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="font-medium mb-2">
-                {searchQuery ? 'Aucune demande trouvée' : 'Aucune demande de certificat'}
+                {searchQuery ? t('requests.noneFoundSearch') : t('requests.none')}
               </h3>
               <p className="text-sm text-muted-foreground mb-4">
                 {searchQuery 
-                  ? 'Modifiez votre recherche pour voir d\'autres demandes.' 
-                  : 'Créez votre première demande de certificat.'
+                  ? t('requests.modifySearch')
+                  : t('requests.createFirst')
                 }
               </p>
               {!searchQuery && (
                 <Button onClick={() => setIsNewRequestOpen(true)}>
                   <Plus className="mr-2 h-4 w-4" />
-                  Créer une demande
+                  {t('requests.createRequest')}
                 </Button>
               )}
             </div>
@@ -658,9 +661,9 @@ export function RequestsScreen() {
       <Dialog open={isDetailModalOpen} onOpenChange={setIsDetailModalOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Détails de la demande</DialogTitle>
+            <DialogTitle>{t('requests.detailsTitle')}</DialogTitle>
             <DialogDescription>
-              Informations complètes sur votre demande de certificat
+              {t('requests.detailsDesc')}
             </DialogDescription>
           </DialogHeader>
 
@@ -669,23 +672,23 @@ export function RequestsScreen() {
               {/* Informations générales */}
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <Label className="text-sm font-medium text-muted-foreground">Titre</Label>
+                  <Label className="text-sm font-medium text-muted-foreground">{t('requests.fieldTitle')}</Label>
                   <p className="text-lg font-semibold">{selectedDemande.titre}</p>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium text-muted-foreground">Statut</Label>
+                  <Label className="text-sm font-medium text-muted-foreground">{t('requests.fieldStatus')}</Label>
                   <div className="mt-1">
                     {getStatusBadge(selectedDemande.statutDemande)}
                   </div>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium text-muted-foreground">Établissement</Label>
+                  <Label className="text-sm font-medium text-muted-foreground">{t('requests.fieldEstablishment')}</Label>
                   <p className="font-medium">{selectedDemande.etablissement.nomEtablissement}</p>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium text-muted-foreground">Date de demande</Label>
+                  <Label className="text-sm font-medium text-muted-foreground">{t('requests.fieldDate')}</Label>
                   <p className="font-medium">
-                    {new Date(selectedDemande.dateDemande).toLocaleDateString('fr-FR', {
+                    {new Date(selectedDemande.dateDemande).toLocaleDateString(dateLocale, {
                       year: 'numeric',
                       month: 'long',
                       day: 'numeric',
@@ -699,7 +702,7 @@ export function RequestsScreen() {
               {/* Description */}
               {selectedDemande.description && (
                 <div>
-                  <Label className="text-sm font-medium text-muted-foreground">Description</Label>
+                  <Label className="text-sm font-medium text-muted-foreground">{t('requests.fieldDescription')}</Label>
                   <p className="mt-1 text-sm">{selectedDemande.description}</p>
                 </div>
               )}
@@ -707,7 +710,7 @@ export function RequestsScreen() {
               {/* Message de demande */}
               {selectedDemande.messageDemande && (
                 <div>
-                  <Label className="text-sm font-medium text-muted-foreground">Votre message</Label>
+                  <Label className="text-sm font-medium text-muted-foreground">{t('requests.yourMessage')}</Label>
                   <div className="mt-1 p-3 bg-accent/50 rounded-lg">
                     <p className="text-sm">{selectedDemande.messageDemande}</p>
                   </div>
@@ -718,7 +721,7 @@ export function RequestsScreen() {
               {selectedDemande.messageReponse && (
                 <div>
                   <Label className="text-sm font-medium text-muted-foreground">
-                    {selectedDemande.statutDemande === 'REJETE' ? 'Raison du refus' : 'Réponse de l\'établissement'}
+                    {selectedDemande.statutDemande === 'REJETE' ? t('requests.rejectReasonLabel') : t('requests.establishmentResponseLabel')}
                   </Label>
                   <div className={`mt-1 p-3 rounded-lg ${
                     selectedDemande.statutDemande === 'REJETE' 
@@ -737,7 +740,7 @@ export function RequestsScreen() {
               {/* Documents fournis */}
               <div>
                 <Label className="text-sm font-medium text-muted-foreground">
-                  Documents fournis ({selectedDemande.documents.length})
+                  {t('requests.documentsProvidedCount', { count: selectedDemande.documents.length })}
                 </Label>
                 {selectedDemande.documents.length > 0 ? (
                   <div className="mt-2 space-y-2">
@@ -768,13 +771,13 @@ export function RequestsScreen() {
                             }
                           }}
                         >
-                          Ouvrir
+                          {t('requests.open')}
                         </Button>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="mt-2 text-sm text-muted-foreground">Aucun document fourni</p>
+                  <p className="mt-2 text-sm text-muted-foreground">{t('requests.noDocuments')}</p>
                 )}
               </div>
             </div>

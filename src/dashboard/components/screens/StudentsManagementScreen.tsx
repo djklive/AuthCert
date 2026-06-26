@@ -25,6 +25,7 @@ import {
 import { useUser } from '../../hooks/useUser';
 import authService from '../../../services/authService';
 import { API_BASE, api } from '../../../services/api';
+import { useTranslation } from 'react-i18next';
 
 //const API_BASE_URL = 'https://authcert-production.up.railway.app/api';
 //const API_BASE_URL = 'http://localhost:5000/api';
@@ -91,6 +92,8 @@ interface StudentsManagementScreenProps {
 
 export function StudentsManagementScreen({ onNavigate }: StudentsManagementScreenProps) {
   const { user } = useUser();
+  const { t, i18n } = useTranslation();
+  const dateLocale = i18n.language.startsWith('fr') ? 'fr-FR' : 'en-US';
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('linked');
   const [demandesEnAttente, setDemandesEnAttente] = useState<DemandeLiaison[]>([]);
@@ -143,12 +146,12 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
       setEtudiantsLies(etudiantsData.data);
       setDemandesCertificat(demandesCertificatData.data);
     } catch (err) {
-      setError('Erreur lors du chargement des données');
+      setError(t('studentsMgmt.loadError'));
       console.error('Erreur chargement données:', err);
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  }, [user?.id, t]);
 
   // Charger les données
   useEffect(() => {
@@ -175,7 +178,7 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
         },
         body: JSON.stringify({
           statut: 'APPROUVE',
-          messageReponse: 'Demande approuvée avec succès'
+          messageReponse: t('studentsMgmt.defaultApproveMsg')
         })
       });
 
@@ -187,7 +190,7 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
       await loadData();
       console.log('Demande approuvée:', requestId);
     } catch (err) {
-      setError('Erreur lors de l\'approbation de la demande');
+      setError(t('studentsMgmt.approveError'));
       console.error('Erreur approbation:', err);
     }
   };
@@ -202,7 +205,7 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
         },
         body: JSON.stringify({
           statut: 'REJETE',
-          messageReponse: 'Demande rejetée'
+          messageReponse: t('studentsMgmt.defaultRejectMsg')
         })
       });
 
@@ -214,7 +217,7 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
       await loadData();
       console.log('Demande rejetée:', requestId);
     } catch (err) {
-      setError('Erreur lors du rejet de la demande');
+      setError(t('studentsMgmt.rejectError'));
       console.error('Erreur rejet:', err);
     }
   };
@@ -238,7 +241,7 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Erreur lors du traitement de la demande');
+        throw new Error(errorData.message || t('studentsMgmt.processError'));
       }
 
       // Fermer le modal et recharger les données
@@ -248,7 +251,7 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
       await loadData();
       
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur lors du traitement de la demande');
+      setError(err instanceof Error ? err.message : t('studentsMgmt.processError'));
     } finally {
       setProcessingDemande(null);
     }
@@ -266,28 +269,28 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
         return (
           <Badge variant="secondary">
             <Clock className="mr-1 h-3 w-3" />
-            En attente
+            {t('studentsMgmt.statusEnAttente')}
           </Badge>
         );
       case 'APPROUVE':
         return (
           <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
             <CheckCircle className="mr-1 h-3 w-3" />
-            Approuvé
+            {t('studentsMgmt.statusApprouve')}
           </Badge>
         );
       case 'REJETE':
         return (
           <Badge variant="destructive">
             <XCircle className="mr-1 h-3 w-3" />
-            Refusé
+            {t('studentsMgmt.statusRejete')}
           </Badge>
         );
       case 'EN_COURS_TRAITEMENT':
         return (
           <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-200">
             <Clock className="mr-1 h-3 w-3" />
-            En cours
+            {t('studentsMgmt.statusEnCours')}
           </Badge>
         );
       default:
@@ -333,19 +336,19 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
     <div className="p-4 lg:p-6 space-y-6 lg:space-y-8">
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <h1 className="text-2xl lg:text-3xl font-bold">Gestion des étudiants</h1>
+          <h1 className="text-2xl lg:text-3xl font-bold">{t('studentsMgmt.pageTitle')}</h1>
           <p className="text-sm lg:text-base text-muted-foreground">
-            Gérez vos étudiants liés et traitez les nouvelles demandes de liaison
+            {t('studentsMgmt.pageSubtitle')}
           </p>
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
           <Button variant="outline" className="rounded-xl w-full sm:w-auto">
             <Download className="h-4 w-4 mr-2" />
-            Exporter
+            {t('studentsMgmt.export')}
           </Button>
           <Button className="rounded-xl w-full sm:w-auto">
             <UserPlus className="h-4 w-4 mr-2" />
-            Inviter un étudiant
+            {t('studentsMgmt.inviteStudent')}
           </Button>
         </div>
       </div>
@@ -365,13 +368,13 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
               <Input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Rechercher par nom, email ou formation..."
+                placeholder={t('studentsMgmt.searchPlaceholder')}
                 className="pl-10 h-12 rounded-xl"
               />
             </div>
             <Button variant="outline" className="rounded-xl">
               <Filter className="h-4 w-4 mr-2" />
-              Filtres
+              {t('studentsMgmt.filters')}
             </Button>
           </div>
         </CardContent>
@@ -382,15 +385,15 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
         <TabsList className="grid w-full grid-cols-3 h-12 rounded-xl bg-muted">
           <TabsTrigger value="linked" className="flex items-center gap-2 h-10 rounded-lg">
             <CheckCircle className="h-4 w-4" />
-            Étudiants liés ({etudiantsLies.length})
+            {t('studentsMgmt.tabLinked', { count: etudiantsLies.length })}
           </TabsTrigger>
           <TabsTrigger value="pending" className="flex items-center gap-2 h-10 rounded-lg">
             <Clock className="h-4 w-4" />
-            Demandes liaison ({demandesEnAttente.length})
+            {t('studentsMgmt.tabPending', { count: demandesEnAttente.length })}
           </TabsTrigger>
           <TabsTrigger value="certificates" className="flex items-center gap-2 h-10 rounded-lg">
             <FileText className="h-4 w-4" />
-            Demandes certificat ({demandesCertificat.length})
+            {t('studentsMgmt.tabCertificates', { count: demandesCertificat.length })}
           </TabsTrigger>
         </TabsList>
 
@@ -401,7 +404,7 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">Total étudiants</p>
+                    <p className="text-sm text-muted-foreground">{t('studentsMgmt.totalStudents')}</p>
                     <p className="text-3xl font-bold">{etudiantsLies.length}</p>
                   </div>
                   <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
@@ -415,7 +418,7 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">Étudiants actifs</p>
+                    <p className="text-sm text-muted-foreground">{t('studentsMgmt.activeStudents')}</p>
                     <p className="text-3xl font-bold">{etudiantsLies.filter(e => e.apprenant.statut === 'ACTIF').length}</p>
                   </div>
                   <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
@@ -429,7 +432,7 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">Demandes en attente</p>
+                    <p className="text-sm text-muted-foreground">{t('studentsMgmt.pendingRequests')}</p>
                     <p className="text-3xl font-bold">{demandesEnAttente.length}</p>
                   </div>
                   <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
@@ -442,16 +445,16 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
 
           <Card className="rounded-2xl">
             <CardHeader>
-              <CardTitle>Liste des étudiants liés</CardTitle>
+              <CardTitle>{t('studentsMgmt.linkedListTitle')}</CardTitle>
               <CardDescription>
-                Gérez vos étudiants et leurs certificats
+                {t('studentsMgmt.linkedListDesc')}
               </CardDescription>
             </CardHeader>
             <CardContent>
               {loading ? (
                 <div className="text-center py-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                  <p className="text-sm text-muted-foreground mt-2">Chargement des étudiants...</p>
+                  <p className="text-sm text-muted-foreground mt-2">{t('studentsMgmt.loadingStudents')}</p>
                 </div>
               ) : (
               <div className="space-y-4">
@@ -468,10 +471,10 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
                           <p className="text-sm text-muted-foreground">{etudiant.apprenant.email}</p>
                         <div className="flex items-center gap-2 mt-2">
                             <Badge variant={etudiant.apprenant.statut === 'ACTIF' ? 'default' : 'secondary'} className="text-xs">
-                              {etudiant.apprenant.statut === 'ACTIF' ? 'Actif' : 'Inactif'}
+                              {etudiant.apprenant.statut === 'ACTIF' ? t('studentsMgmt.active') : t('studentsMgmt.inactive')}
                           </Badge>
                           <Badge variant="outline" className="text-xs">
-                              Lié le {new Date(etudiant.dateApprobation).toLocaleDateString('fr-FR')}
+                              {t('studentsMgmt.linkedOn', { date: new Date(etudiant.dateApprobation).toLocaleDateString(dateLocale) })}
                           </Badge>
                         </div>
                       </div>
@@ -484,7 +487,7 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
                         onClick={() => onNavigate('profile')}
                       >
                         <Eye className="h-4 w-4 mr-1" />
-                        Voir profil
+                        {t('studentsMgmt.viewProfile')}
                       </Button>
                       <Button
                         size="sm"
@@ -492,7 +495,7 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
                         onClick={() => onNavigate('create-certificate')}
                       >
                         <Plus className="h-4 w-4 mr-1" />
-                        Créer certificat
+                        {t('studentsMgmt.createCertificate')}
                       </Button>
                       <Button variant="ghost" size="sm" className="rounded-lg">
                         <MoreHorizontal className="h-4 w-4" />
@@ -504,9 +507,9 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
                   {filteredLinkedStudents.length === 0 && !loading && (
                   <div className="text-center py-8">
                     <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <h3 className="font-medium mb-2">Aucun étudiant trouvé</h3>
+                    <h3 className="font-medium mb-2">{t('studentsMgmt.noStudentFound')}</h3>
                     <p className="text-sm text-muted-foreground">
-                        {searchQuery ? 'Modifiez votre recherche ou' : 'Commencez par'} approuver des demandes de liaison d\'étudiants.
+                        {searchQuery ? t('studentsMgmt.noStudentDescSearch') : t('studentsMgmt.noStudentDescEmpty')}
                     </p>
                   </div>
                 )}
@@ -523,7 +526,7 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">Demandes en attente</p>
+                    <p className="text-sm text-muted-foreground">{t('studentsMgmt.pendingRequests')}</p>
                     <p className="text-3xl font-bold text-orange-600">{demandesEnAttente.length}</p>
                   </div>
                   <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
@@ -537,7 +540,7 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">Traitées cette semaine</p>
+                    <p className="text-sm text-muted-foreground">{t('studentsMgmt.processedThisWeek')}</p>
                     <p className="text-3xl font-bold">12</p>
                   </div>
                   <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
@@ -551,7 +554,7 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">Temps moyen de traitement</p>
+                    <p className="text-sm text-muted-foreground">{t('studentsMgmt.avgProcessTime')}</p>
                     <p className="text-3xl font-bold">2.5j</p>
                   </div>
                   <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
@@ -565,7 +568,7 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
           {loading ? (
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-              <p className="text-sm text-muted-foreground mt-2">Chargement des demandes...</p>
+              <p className="text-sm text-muted-foreground mt-2">{t('studentsMgmt.loadingRequests')}</p>
             </div>
           ) : (
           <div className="space-y-4">
@@ -590,30 +593,30 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
                       </div>
                       <div className="text-right">
                         <p className="text-sm text-muted-foreground">
-                            Demandé le {new Date(demande.dateDemande).toLocaleDateString('fr-FR')}
+                            {t('studentsMgmt.requestedOn', { date: new Date(demande.dateDemande).toLocaleDateString(dateLocale) })}
                         </p>
                         <Badge variant="secondary" className="mt-1">
                           <Clock className="h-3 w-3 mr-1" />
-                          En attente
+                          {t('studentsMgmt.statusEnAttente')}
                         </Badge>
                       </div>
                     </div>
 
                       {demande.messageDemande && (
                     <div className="p-4 bg-accent/30 rounded-xl">
-                      <h4 className="font-medium mb-2">Message de l'étudiant :</h4>
+                      <h4 className="font-medium mb-2">{t('studentsMgmt.studentMessage')}</h4>
                           <p className="text-sm text-muted-foreground">{demande.messageDemande}</p>
                     </div>
                       )}
 
                       <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                        <h4 className="font-medium mb-2 text-blue-800">Informations de l'étudiant :</h4>
+                        <h4 className="font-medium mb-2 text-blue-800">{t('studentsMgmt.studentInfo')}</h4>
                         <div className="grid grid-cols-2 gap-2 text-sm text-blue-700">
                           <div>
-                            <span className="font-medium">Inscrit le :</span> {new Date(demande.apprenant.dateCreation).toLocaleDateString('fr-FR')}
+                            <span className="font-medium">{t('studentsMgmt.registeredOn')}</span> {new Date(demande.apprenant.dateCreation).toLocaleDateString(dateLocale)}
                           </div>
                       <div>
-                            <span className="font-medium">ID :</span> {demande.apprenant.id_apprenant}
+                            <span className="font-medium">{t('studentsMgmt.idLabel')}</span> {demande.apprenant.id_apprenant}
                           </div>
                         </div>
                       </div>
@@ -628,12 +631,12 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
                           >
                             <a href={`mailto:${demande.apprenant.email}`}>
                           <Mail className="h-4 w-4 mr-1" />
-                          Contacter
+                          {t('studentsMgmt.contact')}
                             </a>
                         </Button>
                         <Button variant="outline" size="sm" className="rounded-lg">
                           <Eye className="h-4 w-4 mr-1" />
-                          Voir détails
+                          {t('studentsMgmt.viewDetails')}
                         </Button>
                       </div>
                       <div className="flex items-center gap-2">
@@ -644,7 +647,7 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
                             onClick={() => handleRejectRequest(demande.id)}
                         >
                           <XCircle className="h-4 w-4 mr-1" />
-                          Rejeter
+                          {t('studentsMgmt.reject')}
                         </Button>
                         <Button 
                           size="sm" 
@@ -652,7 +655,7 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
                             onClick={() => handleApproveRequest(demande.id)}
                         >
                           <CheckCircle className="h-4 w-4 mr-1" />
-                          Approuver
+                          {t('studentsMgmt.approve')}
                         </Button>
                       </div>
                     </div>
@@ -665,12 +668,12 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
               <div className="text-center py-8">
                 <Clock className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                 <h3 className="font-medium mb-2">
-                  {searchQuery ? 'Aucune demande trouvée' : 'Aucune demande en attente'}
+                  {searchQuery ? t('studentsMgmt.noRequestFound') : t('studentsMgmt.noPendingRequest')}
                 </h3>
                 <p className="text-sm text-muted-foreground">
                   {searchQuery 
-                    ? 'Modifiez votre recherche pour voir d\'autres demandes.' 
-                    : 'Toutes les demandes de liaison ont été traitées.'
+                    ? t('studentsMgmt.noRequestSearchDesc')
+                    : t('studentsMgmt.allRequestsProcessed')
                   }
                 </p>
               </div>
@@ -684,7 +687,7 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
           {loading ? (
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-              <p className="text-sm text-muted-foreground mt-2">Chargement des demandes...</p>
+              <p className="text-sm text-muted-foreground mt-2">{t('studentsMgmt.loadingRequests')}</p>
             </div>
           ) : (
             <>
@@ -694,7 +697,7 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-muted-foreground">Total demandes</p>
+                        <p className="text-sm text-muted-foreground">{t('studentsMgmt.totalRequests')}</p>
                         <p className="text-3xl font-bold">{getCertificateStats().total}</p>
                       </div>
                       <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
@@ -708,7 +711,7 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-muted-foreground">En attente</p>
+                        <p className="text-sm text-muted-foreground">{t('studentsMgmt.pending')}</p>
                         <p className="text-3xl font-bold text-orange-600">{getCertificateStats().enAttente}</p>
                       </div>
                       <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
@@ -722,7 +725,7 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-muted-foreground">Approuvées</p>
+                        <p className="text-sm text-muted-foreground">{t('studentsMgmt.approved')}</p>
                         <p className="text-3xl font-bold text-green-600">{getCertificateStats().approuvees}</p>
                       </div>
                       <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
@@ -736,7 +739,7 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-muted-foreground">Rejetées</p>
+                        <p className="text-sm text-muted-foreground">{t('studentsMgmt.rejected')}</p>
                         <p className="text-3xl font-bold text-red-600">{getCertificateStats().rejetees}</p>
                       </div>
                       <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
@@ -755,7 +758,7 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
                     <div className="relative flex-1">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input
-                        placeholder="Rechercher par titre, étudiant ou email..."
+                        placeholder={t('studentsMgmt.searchCertPlaceholder')}
                         value={certificateSearchQuery}
                         onChange={(e) => setCertificateSearchQuery(e.target.value)}
                         className="pl-10 h-12 rounded-xl"
@@ -770,7 +773,7 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
                         onClick={() => setCertificateFilter('all')}
                         className="rounded-lg"
                       >
-                        Toutes ({getCertificateStats().total})
+                        {t('studentsMgmt.filterAll', { count: getCertificateStats().total })}
                       </Button>
                       <Button
                         variant={certificateFilter === 'EN_ATTENTE' ? 'default' : 'outline'}
@@ -779,7 +782,7 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
                         className="rounded-lg"
                       >
                         <Clock className="mr-1 h-3 w-3" />
-                        En attente ({getCertificateStats().enAttente})
+                        {t('studentsMgmt.filterPending', { count: getCertificateStats().enAttente })}
                       </Button>
                       <Button
                         variant={certificateFilter === 'APPROUVE' ? 'default' : 'outline'}
@@ -788,7 +791,7 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
                         className="rounded-lg"
                       >
                         <CheckCircle className="mr-1 h-3 w-3" />
-                        Approuvées ({getCertificateStats().approuvees})
+                        {t('studentsMgmt.filterApproved', { count: getCertificateStats().approuvees })}
                       </Button>
                       <Button
                         variant={certificateFilter === 'REJETE' ? 'default' : 'outline'}
@@ -797,7 +800,7 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
                         className="rounded-lg"
                       >
                         <XCircle className="mr-1 h-3 w-3" />
-                        Rejetées ({getCertificateStats().rejetees})
+                        {t('studentsMgmt.filterRejected', { count: getCertificateStats().rejetees })}
                       </Button>
                     </div>
                   </div>
@@ -810,11 +813,11 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
                   <Card className="rounded-2xl">
                     <CardContent className="p-8 text-center">
                       <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                      <h3 className="font-semibold mb-2">Aucune demande trouvée</h3>
+                      <h3 className="font-semibold mb-2">{t('studentsMgmt.noCertRequestFound')}</h3>
                       <p className="text-sm text-muted-foreground">
                         {certificateFilter !== 'all' || certificateSearchQuery.trim() 
-                          ? 'Aucune demande ne correspond aux filtres sélectionnés.'
-                          : 'Aucune demande de certificat n\'a été soumise pour le moment.'
+                          ? t('studentsMgmt.noCertMatchFilters')
+                          : t('studentsMgmt.noCertSubmitted')
                         }
                       </p>
                     </CardContent>
@@ -834,7 +837,7 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
                             <div className="flex items-center gap-4 text-sm text-muted-foreground">
                               <span>{demande.apprenant.prenom} {demande.apprenant.nom}</span>
                               <span>{demande.apprenant.email}</span>
-                              <span>{new Date(demande.dateDemande).toLocaleDateString('fr-FR')}</span>
+                              <span>{new Date(demande.dateDemande).toLocaleDateString(dateLocale)}</span>
                             </div>
                           </div>
                           {getStatusBadge(demande.statutDemande)}
@@ -846,14 +849,14 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
 
                         {demande.messageDemande && (
                           <div className="p-3 bg-accent/50 rounded-lg mb-3">
-                            <p className="text-sm font-medium mb-1">Message de l'étudiant:</p>
+                            <p className="text-sm font-medium mb-1">{t('studentsMgmt.studentMessageLabel')}</p>
                             <p className="text-sm text-muted-foreground">{demande.messageDemande}</p>
                           </div>
                         )}
 
                         {demande.documents.length > 0 && (
                           <div className="mb-3">
-                            <p className="text-sm font-medium mb-2">Documents fournis:</p>
+                            <p className="text-sm font-medium mb-2">{t('studentsMgmt.documentsProvided')}</p>
                             <div className="flex flex-wrap gap-2">
                               {demande.documents.map((doc) => (
                                 <Badge key={doc.id} variant="outline" className="text-xs">
@@ -874,7 +877,7 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
                             <p className={`text-sm font-medium mb-1 ${
                               demande.statutDemande === 'REJETE' ? 'text-red-800' : 'text-green-800'
                             }`}>
-                              Votre réponse:
+                              {t('studentsMgmt.yourResponse')}
                             </p>
                             <p className="text-sm text-muted-foreground">{demande.messageReponse}</p>
                           </div>
@@ -889,7 +892,7 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
                           onClick={() => openDetailModal(demande)}
                         >
                           <Eye className="h-4 w-4 mr-1" />
-                          Voir détails
+                          {t('studentsMgmt.viewDetails')}
                         </Button>
                         
                         {demande.statutDemande === 'EN_ATTENTE' && (
@@ -902,7 +905,7 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
                               disabled={processingDemande === demande.id}
                             >
                               <XCircle className="h-4 w-4 mr-1" />
-                              Rejeter
+                              {t('studentsMgmt.reject')}
                             </Button>
                             <Button 
                               size="sm" 
@@ -911,7 +914,7 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
                               disabled={processingDemande === demande.id}
                             >
                               <CheckCircle className="h-4 w-4 mr-1" />
-                              Approuver
+                              {t('studentsMgmt.approve')}
                             </Button>
                           </>
                         )}
@@ -934,10 +937,10 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
             <DialogHeader>
               <DialogTitle className="flex items-center gap-3">
                 <FileText className="h-6 w-6 text-primary" />
-                Détails de la demande de certificat
+                {t('studentsMgmt.detailTitle')}
               </DialogTitle>
               <DialogDescription>
-                Demande de {selectedDemande.apprenant.prenom} {selectedDemande.apprenant.nom}
+                {t('studentsMgmt.requestFrom', { name: `${selectedDemande.apprenant.prenom} ${selectedDemande.apprenant.nom}` })}
               </DialogDescription>
             </DialogHeader>
 
@@ -945,24 +948,24 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
               {/* Informations générales */}
               <div className="space-y-4">
                 <div>
-                  <h4 className="font-semibold mb-2">Informations du certificat</h4>
+                  <h4 className="font-semibold mb-2">{t('studentsMgmt.certInfo')}</h4>
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Titre:</span>
+                      <span className="text-muted-foreground">{t('studentsMgmt.titleLabel')}</span>
                       <span className="font-medium">{selectedDemande.titre}</span>
                     </div>
                     {selectedDemande.description && (
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Description:</span>
+                        <span className="text-muted-foreground">{t('studentsMgmt.descriptionLabel')}</span>
                         <span className="font-medium">{selectedDemande.description}</span>
                       </div>
                     )}
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Date de demande:</span>
-                      <span className="font-medium">{new Date(selectedDemande.dateDemande).toLocaleDateString('fr-FR')}</span>
+                      <span className="text-muted-foreground">{t('studentsMgmt.requestDate')}</span>
+                      <span className="font-medium">{new Date(selectedDemande.dateDemande).toLocaleDateString(dateLocale)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Statut:</span>
+                      <span className="text-muted-foreground">{t('studentsMgmt.statusLabel')}</span>
                       {getStatusBadge(selectedDemande.statutDemande)}
                     </div>
                   </div>
@@ -970,19 +973,19 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
 
                 {/* Informations de l'étudiant */}
                 <div>
-                  <h4 className="font-semibold mb-2">Informations de l'étudiant</h4>
+                  <h4 className="font-semibold mb-2">{t('studentsMgmt.studentInfoTitle')}</h4>
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Nom:</span>
+                      <span className="text-muted-foreground">{t('studentsMgmt.nameLabel')}</span>
                       <span className="font-medium">{selectedDemande.apprenant.prenom} {selectedDemande.apprenant.nom}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Email:</span>
+                      <span className="text-muted-foreground">{t('studentsMgmt.emailLabel')}</span>
                       <span className="font-medium">{selectedDemande.apprenant.email}</span>
                     </div>
                     {selectedDemande.apprenant.telephone && (
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Téléphone:</span>
+                        <span className="text-muted-foreground">{t('studentsMgmt.phoneLabel')}</span>
                         <span className="font-medium">{selectedDemande.apprenant.telephone}</span>
                       </div>
                     )}
@@ -992,7 +995,7 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
                 {/* Message de l'étudiant */}
                 {selectedDemande.messageDemande && (
                   <div>
-                    <h4 className="font-semibold mb-2">Message de l'étudiant</h4>
+                    <h4 className="font-semibold mb-2">{t('studentsMgmt.studentMessageTitle')}</h4>
                     <div className="p-3 bg-accent/50 rounded-lg">
                       <p className="text-sm text-muted-foreground">{selectedDemande.messageDemande}</p>
                     </div>
@@ -1002,7 +1005,7 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
                 {/* Documents */}
                 {selectedDemande.documents.length > 0 && (
                   <div>
-                    <h4 className="font-semibold mb-2">Documents fournis</h4>
+                    <h4 className="font-semibold mb-2">{t('studentsMgmt.documentsProvidedTitle')}</h4>
                     <div className="space-y-2">
                       {selectedDemande.documents.map((doc) => (
                         <div key={doc.id} className="flex items-center justify-between p-3 bg-accent/30 rounded-lg">
@@ -1030,7 +1033,7 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
                             }}
                           >
                             <Download className="h-3 w-3 mr-1" />
-                            Ouvrir
+                            {t('studentsMgmt.open')}
                           </Button>
                         </div>
                       ))}
@@ -1041,7 +1044,7 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
                 {/* Réponse (si déjà traitée) */}
                 {selectedDemande.messageReponse && (
                   <div>
-                    <h4 className="font-semibold mb-2">Votre réponse</h4>
+                    <h4 className="font-semibold mb-2">{t('studentsMgmt.yourResponseTitle')}</h4>
                     <div className={`p-3 rounded-lg ${
                       selectedDemande.statutDemande === 'REJETE' 
                         ? 'bg-red-50 border border-red-200' 
@@ -1055,9 +1058,9 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
                 {/* Zone de réponse (si en attente) */}
                 {selectedDemande.statutDemande === 'EN_ATTENTE' && (
                   <div>
-                    <h4 className="font-semibold mb-2">Votre réponse</h4>
+                    <h4 className="font-semibold mb-2">{t('studentsMgmt.yourResponseTitle')}</h4>
                     <Textarea
-                      placeholder="Ajoutez un message pour l'étudiant (optionnel)..."
+                      placeholder={t('studentsMgmt.responsePlaceholder')}
                       value={messageReponse}
                       onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setMessageReponse(e.target.value)}
                       rows={3}
@@ -1073,7 +1076,7 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
                 variant="outline"
                 onClick={() => setIsDetailModalOpen(false)}
               >
-                Fermer
+                {t('studentsMgmt.close')}
               </Button>
               
               {selectedDemande.statutDemande === 'EN_ATTENTE' && (
@@ -1087,12 +1090,12 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
                     {processingDemande === selectedDemande.id ? (
                       <>
                         <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                        Traitement...
+                        {t('studentsMgmt.processing')}
                       </>
                     ) : (
                       <>
                         <XCircle className="h-4 w-4" />
-                        Rejeter
+                        {t('studentsMgmt.reject')}
                       </>
                     )}
                   </Button>
@@ -1104,12 +1107,12 @@ export function StudentsManagementScreen({ onNavigate }: StudentsManagementScree
                     {processingDemande === selectedDemande.id ? (
                       <>
                         <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                        Traitement...
+                        {t('studentsMgmt.processing')}
                       </>
                     ) : (
                       <>
                         <CheckCircle className="h-4 w-4" />
-                        Approuver
+                        {t('studentsMgmt.approve')}
                       </>
                     )}
                   </Button>

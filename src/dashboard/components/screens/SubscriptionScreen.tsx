@@ -18,6 +18,7 @@ import {
   X,
 } from 'lucide-react';
 import { api, type SubscriptionSummary, type PaymentRecord, type PlanLimits } from '../../../services/api';
+import { useTranslation } from 'react-i18next';
 
 type BillingPeriod = 'mensuel' | 'annuel';
 
@@ -41,19 +42,20 @@ function pct(used: number, limit: number | null) {
   return Math.min(100, Math.round((used / limit) * 100));
 }
 
-function limitLabel(limit: number | null) {
-  return limit === null ? 'illimité' : String(limit);
-}
-
-const STATUT_LABEL: Record<string, { label: string; cls: string }> = {
-  TRIAL: { label: "Essai gratuit", cls: 'text-blue-600 border-blue-200 bg-blue-50' },
-  ACTIF: { label: 'Actif', cls: 'text-green-600 border-green-200 bg-green-50' },
-  PAST_DUE: { label: 'Paiement en retard', cls: 'text-orange-600 border-orange-200 bg-orange-50' },
-  EXPIRE: { label: 'Expiré', cls: 'text-red-600 border-red-200 bg-red-50' },
-  ANNULE: { label: 'Annulé', cls: 'text-gray-600 border-gray-200 bg-gray-50' },
-};
-
 export function SubscriptionScreen() {
+  const { t, i18n } = useTranslation();
+  const dateLocale = i18n.language.startsWith('fr') ? 'fr-FR' : 'en-US';
+
+  const limitLabel = (limit: number | null) => (limit === null ? t('subscription.unlimitedShort') : String(limit));
+
+  const STATUT_LABEL: Record<string, { label: string; cls: string }> = {
+    TRIAL: { label: t('subscription.statusTrial'), cls: 'text-blue-600 border-blue-200 bg-blue-50' },
+    ACTIF: { label: t('subscription.statusActif'), cls: 'text-green-600 border-green-200 bg-green-50' },
+    PAST_DUE: { label: t('subscription.statusPastDue'), cls: 'text-orange-600 border-orange-200 bg-orange-50' },
+    EXPIRE: { label: t('subscription.statusExpire'), cls: 'text-red-600 border-red-200 bg-red-50' },
+    ANNULE: { label: t('subscription.statusAnnule'), cls: 'text-gray-600 border-gray-200 bg-gray-50' },
+  };
+
   const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>('mensuel');
   const [summary, setSummary] = useState<SubscriptionSummary | null>(null);
   const [plans, setPlans] = useState<PlanDef[]>([]);
@@ -84,11 +86,11 @@ export function SubscriptionScreen() {
       }
       if (payRes.success) setPayments(payRes.data);
     } catch (e) {
-      setAlert({ type: 'error', message: e instanceof Error ? e.message : 'Erreur de chargement' });
+      setAlert({ type: 'error', message: e instanceof Error ? e.message : t('subscription.loadError') });
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     loadAll();
@@ -102,17 +104,17 @@ export function SubscriptionScreen() {
       try {
         const res = await api.verifySubscriptionPayment(pendingRef);
         if (res.success) {
-          setAlert({ type: 'success', message: 'Paiement confirmé, abonnement activé !' });
+          setAlert({ type: 'success', message: t('subscription.paymentConfirmed') });
           localStorage.removeItem('pendingSubscriptionRef');
           loadAll();
         } else {
-          setAlert({ type: 'info', message: 'Paiement en cours de confirmation…' });
+          setAlert({ type: 'info', message: t('subscription.paymentConfirming') });
         }
       } catch {
         /* le webhook finalisera de toute façon */
       }
     })();
-  }, [loadAll]);
+  }, [loadAll, t]);
 
   const handleSubscribe = (planId: string) => {
     setAlert(null);
@@ -133,7 +135,7 @@ export function SubscriptionScreen() {
           setPayModal({ open: false, planId: null });
           setPhone('');
           setPayStatus(null);
-          setAlert({ type: 'success', message: 'Paiement confirmé, abonnement activé !' });
+          setAlert({ type: 'success', message: t('subscription.paymentConfirmed') });
           loadAll();
           return;
         }
@@ -141,7 +143,7 @@ export function SubscriptionScreen() {
         if (['failed', 'canceled', 'cancelled', 'expired', 'rejected'].includes(st)) {
           setProcessing(false);
           setPayStatus(null);
-          setAlert({ type: 'error', message: 'Le paiement a échoué ou a été annulé. Vous pouvez réessayer.' });
+          setAlert({ type: 'error', message: t('subscription.paymentFailed') });
           return;
         }
       } catch {
@@ -152,8 +154,7 @@ export function SubscriptionScreen() {
         setPayStatus(null);
         setAlert({
           type: 'info',
-          message:
-            "Toujours en attente. Si vous avez validé le paiement, l'activation se fera automatiquement ; vérifiez l'historique dans un instant.",
+          message: t('subscription.paymentPending'),
         });
         return;
       }
@@ -168,7 +169,7 @@ export function SubscriptionScreen() {
 
     const raw = phone.trim().replace(/\s+/g, '');
     if (!/^\+?\d{8,15}$/.test(raw)) {
-      setAlert({ type: 'error', message: 'Numéro de téléphone invalide.' });
+      setAlert({ type: 'error', message: t('subscription.invalidPhone') });
       return;
     }
     const normalizedPhone = raw.startsWith('+') ? raw : `+237${raw}`;
@@ -180,20 +181,18 @@ export function SubscriptionScreen() {
       const res = await api.subscribe(planId, billingPeriod, { operator, phone: normalizedPhone });
       if (res.success && res.data?.mode === 'direct') {
         localStorage.setItem('pendingSubscriptionRef', res.data.reference);
-        setPayStatus(
-          'Une demande de paiement a été envoyée sur votre téléphone. Validez-la avec votre code PIN Mobile Money.'
-        );
+        setPayStatus(t('subscription.paymentRequestSent'));
         pollPayment(res.data.reference);
       } else if (res.success && res.data?.paymentUrl) {
         localStorage.setItem('pendingSubscriptionRef', res.data.reference);
         window.location.href = res.data.paymentUrl;
       } else {
         setProcessing(false);
-        setAlert({ type: 'error', message: res.message || "Impossible d'initialiser le paiement" });
+        setAlert({ type: 'error', message: res.message || t('subscription.paymentInitError') });
       }
     } catch (e) {
       setProcessing(false);
-      setAlert({ type: 'error', message: e instanceof Error ? e.message : 'Erreur lors de la souscription' });
+      setAlert({ type: 'error', message: e instanceof Error ? e.message : t('subscription.subscribeError') });
     }
   };
 
@@ -202,13 +201,13 @@ export function SubscriptionScreen() {
     try {
       const res = await api.verifySubscriptionPayment(ref);
       if (res.success) {
-        setAlert({ type: 'success', message: 'Paiement confirmé, abonnement activé !' });
+        setAlert({ type: 'success', message: t('subscription.paymentConfirmed') });
         loadAll();
       } else {
-        setAlert({ type: 'info', message: 'Paiement toujours en attente.' });
+        setAlert({ type: 'info', message: t('subscription.paymentStillPending') });
       }
     } catch {
-      setAlert({ type: 'error', message: 'Erreur lors de la vérification.' });
+      setAlert({ type: 'error', message: t('subscription.verifyError') });
     } finally {
       setVerifyingRef(null);
     }
@@ -229,9 +228,9 @@ export function SubscriptionScreen() {
   return (
     <div className="p-6 space-y-8">
       <div>
-        <h1 className="text-3xl font-bold">Gestion d'abonnement</h1>
+        <h1 className="text-3xl font-bold">{t('subscription.title')}</h1>
         <p className="text-muted-foreground">
-          Gérez votre plan, suivez votre utilisation et vos paiements
+          {t('subscription.subtitle')}
         </p>
       </div>
 
@@ -260,12 +259,13 @@ export function SubscriptionScreen() {
                 </div>
                 <div>
                   <CardTitle className="flex items-center gap-2">
-                    Plan {sub.planName}
-                    <Badge className="bg-primary/10 text-primary border-primary/20">Actuel</Badge>
+                    {t('subscription.planLabel', { name: sub.planName })}
+                    <Badge className="bg-primary/10 text-primary border-primary/20">{t('subscription.current')}</Badge>
                   </CardTitle>
                   <CardDescription>
-                    {sub.actif ? 'Valable' : 'Expiré le'} jusqu'au{' '}
-                    {new Date(sub.dateFin).toLocaleDateString('fr-FR')}
+                    {sub.actif
+                      ? t('subscription.validUntil', { date: new Date(sub.dateFin).toLocaleDateString(dateLocale) })
+                      : t('subscription.expiredUntil', { date: new Date(sub.dateFin).toLocaleDateString(dateLocale) })}
                   </CardDescription>
                 </div>
               </div>
@@ -279,7 +279,7 @@ export function SubscriptionScreen() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Certificats émis ({usage.fenetreJours} j)</span>
+                    <span className="text-sm text-muted-foreground">{t('subscription.certsIssued', { days: usage.fenetreJours })}</span>
                     <span className="text-sm font-medium">
                       {usage.certificats.utilises}/{limitLabel(usage.certificats.limite)}
                     </span>
@@ -289,15 +289,15 @@ export function SubscriptionScreen() {
                     <Award className="h-3 w-3 text-primary" />
                     <span className="text-xs text-muted-foreground">
                       {usage.certificats.limite === null
-                        ? 'Illimité'
-                        : `${usage.certificats.restant} restant(s)`}
+                        ? t('subscription.unlimited')
+                        : t('subscription.remaining', { count: usage.certificats.restant })}
                     </span>
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Apprenants liés</span>
+                    <span className="text-sm text-muted-foreground">{t('subscription.linkedLearners')}</span>
                     <span className="text-sm font-medium">
                       {usage.apprenants.utilises}/{limitLabel(usage.apprenants.limite)}
                     </span>
@@ -305,13 +305,13 @@ export function SubscriptionScreen() {
                   <Progress value={pct(usage.apprenants.utilises, usage.apprenants.limite)} className="h-2" />
                   <div className="flex items-center gap-1">
                     <Users className="h-3 w-3 text-green-600" />
-                    <span className="text-xs text-muted-foreground">Total actifs</span>
+                    <span className="text-xs text-muted-foreground">{t('subscription.totalActive')}</span>
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Formations</span>
+                    <span className="text-sm text-muted-foreground">{t('subscription.formationsLabel')}</span>
                     <span className="text-sm font-medium">
                       {usage.formations.utilises}/{limitLabel(usage.formations.limite)}
                     </span>
@@ -319,7 +319,7 @@ export function SubscriptionScreen() {
                   <Progress value={pct(usage.formations.utilises, usage.formations.limite)} className="h-2" />
                   <div className="flex items-center gap-1">
                     <Shield className="h-3 w-3 text-purple-600" />
-                    <span className="text-xs text-muted-foreground">Créées</span>
+                    <span className="text-xs text-muted-foreground">{t('subscription.created')}</span>
                   </div>
                 </div>
               </div>
@@ -337,7 +337,7 @@ export function SubscriptionScreen() {
             onClick={() => setBillingPeriod('mensuel')}
             className="rounded-lg"
           >
-            Mensuel
+            {t('subscription.monthly')}
           </Button>
           <Button
             variant={billingPeriod === 'annuel' ? 'default' : 'ghost'}
@@ -345,8 +345,8 @@ export function SubscriptionScreen() {
             onClick={() => setBillingPeriod('annuel')}
             className="rounded-lg"
           >
-            Annuel
-            <Badge variant="secondary" className="ml-2">Économisez</Badge>
+            {t('subscription.annual')}
+            <Badge variant="secondary" className="ml-2">{t('subscription.save')}</Badge>
           </Button>
         </div>
       </div>
@@ -369,7 +369,7 @@ export function SubscriptionScreen() {
                 <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
                   <Badge className="bg-primary text-primary-foreground">
                     <Star className="h-3 w-3 mr-1" />
-                    Plus populaire
+                    {t('subscription.mostPopular')}
                   </Badge>
                 </div>
               )}
@@ -377,17 +377,17 @@ export function SubscriptionScreen() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   {plan.name}
-                  {isCurrent && <Badge variant="outline" className="text-xs">Actuel</Badge>}
+                  {isCurrent && <Badge variant="outline" className="text-xs">{t('subscription.current')}</Badge>}
                   {plan.id === 'EXCLUSIVE' && <Crown className="h-5 w-5 text-yellow-600" />}
                 </CardTitle>
                 <CardDescription>{plan.description}</CardDescription>
                 <div className="pt-4">
                   <div className="flex items-baseline gap-1">
                     <span className="text-3xl font-bold">{formatFcfa(amount)}</span>
-                    <span className="text-muted-foreground">/{billingPeriod === 'annuel' ? 'an' : 'mois'}</span>
+                    <span className="text-muted-foreground">/{billingPeriod === 'annuel' ? t('subscription.perYear') : t('subscription.perMonth')}</span>
                   </div>
                   {billingPeriod === 'annuel' && (
-                    <p className="text-sm text-green-600 mt-1">Soit {formatFcfa(monthlyEq)}/mois</p>
+                    <p className="text-sm text-green-600 mt-1">{t('subscription.monthlyEquivalent', { amount: formatFcfa(monthlyEq) })}</p>
                   )}
                 </div>
               </CardHeader>
@@ -397,25 +397,25 @@ export function SubscriptionScreen() {
                   <li className="flex items-center gap-2">
                     <Check className="h-4 w-4 text-green-600 flex-shrink-0" />
                     {plan.limits.certificatsParMois === null
-                      ? 'Certificats illimités'
-                      : `${plan.limits.certificatsParMois} certificats / mois`}
+                      ? t('subscription.unlimitedCerts')
+                      : t('subscription.certsPerMonth', { count: plan.limits.certificatsParMois })}
                   </li>
                   <li className="flex items-center gap-2">
                     <Check className="h-4 w-4 text-green-600 flex-shrink-0" />
-                    {plan.limits.statsAvancees ? 'Statistiques avancées' : 'Statistiques de base'}
+                    {plan.limits.statsAvancees ? t('subscription.advancedStats') : t('subscription.basicStats')}
                   </li>
                   <li className="flex items-center gap-2">
                     <Check className="h-4 w-4 text-green-600 flex-shrink-0" />
-                    {plan.limits.storageGB === null ? 'Stockage illimité' : `${plan.limits.storageGB} GB de stockage`}
+                    {plan.limits.storageGB === null ? t('subscription.unlimitedStorage') : t('subscription.storageGB', { count: plan.limits.storageGB })}
                   </li>
                   <li className="flex items-center gap-2">
                     <Check className="h-4 w-4 text-green-600 flex-shrink-0" />
-                    {plan.limits.apprenants === null ? 'Apprenants illimités' : `${plan.limits.apprenants} apprenants`}
+                    {plan.limits.apprenants === null ? t('subscription.unlimitedLearners') : t('subscription.learnersCount', { count: plan.limits.apprenants })}
                   </li>
                   {plan.limits.apiAccess && (
                     <li className="flex items-center gap-2">
                       <Check className="h-4 w-4 text-green-600 flex-shrink-0" />
-                      Accès API
+                      {t('subscription.apiAccess')}
                     </li>
                   )}
                 </ul>
@@ -431,10 +431,10 @@ export function SubscriptionScreen() {
                   {isCurrent ? (
                     <>
                       <Check className="h-4 w-4 mr-2" />
-                      Plan actuel
+                      {t('subscription.currentPlan')}
                     </>
                   ) : (
-                    `Souscrire ${plan.name}`
+                    t('subscription.subscribePlan', { name: plan.name })
                   )}
                 </Button>
               </CardContent>
@@ -448,21 +448,21 @@ export function SubscriptionScreen() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5" />
-            Historique de paiement
+            {t('subscription.paymentHistory')}
           </CardTitle>
-          <CardDescription>Vos transactions d'abonnement</CardDescription>
+          <CardDescription>{t('subscription.paymentHistoryDesc')}</CardDescription>
         </CardHeader>
         <CardContent>
           {payments.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-6">Aucun paiement pour le moment</p>
+            <p className="text-sm text-muted-foreground text-center py-6">{t('subscription.noPayment')}</p>
           ) : (
             <div className="space-y-3">
               {payments.map((p) => (
                 <div key={p.id} className="flex items-center justify-between p-3 border border-border rounded-xl">
                   <div>
-                    <p className="font-medium">{p.plan} • {p.periode === 'ANNUEL' ? 'Annuel' : 'Mensuel'}</p>
+                    <p className="font-medium">{p.plan} • {p.periode === 'ANNUEL' ? t('subscription.annual') : t('subscription.monthly')}</p>
                     <p className="text-sm text-muted-foreground">
-                      {new Date(p.createdAt).toLocaleDateString('fr-FR')} • {p.reference}
+                      {new Date(p.createdAt).toLocaleDateString(dateLocale)} • {p.reference}
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
@@ -478,7 +478,7 @@ export function SubscriptionScreen() {
                         {verifyingRef === p.reference ? (
                           <Loader2 className="h-3 w-3 animate-spin" />
                         ) : (
-                          'Vérifier'
+                          t('subscription.verify')
                         )}
                       </Button>
                     )}
@@ -492,7 +492,7 @@ export function SubscriptionScreen() {
                           : 'text-red-600 border-red-200 bg-red-50'
                       }
                     >
-                      {p.statut === 'REUSSI' ? 'Payé' : p.statut === 'EN_ATTENTE' ? 'En attente' : 'Échoué'}
+                      {p.statut === 'REUSSI' ? t('subscription.paid') : p.statut === 'EN_ATTENTE' ? t('subscription.pending') : t('subscription.failed')}
                     </Badge>
                   </div>
                 </div>
@@ -507,10 +507,9 @@ export function SubscriptionScreen() {
         <CardContent className="flex items-start gap-3 p-5">
           <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5" />
           <div>
-            <p className="font-medium text-blue-900">Frais blockchain inclus</p>
+            <p className="font-medium text-blue-900">{t('subscription.feesIncludedTitle')}</p>
             <p className="text-sm text-blue-700">
-              Les frais de publication sur la blockchain sont pris en charge par AuthCert dans le cadre de
-              votre abonnement. Vous n'avez aucun portefeuille crypto à gérer.
+              {t('subscription.feesIncludedDesc')}
             </p>
           </div>
         </CardContent>
@@ -523,7 +522,7 @@ export function SubscriptionScreen() {
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold flex items-center gap-2">
                 <Smartphone className="h-5 w-5 text-primary" />
-                Paiement Mobile Money
+                {t('subscription.mobileMoneyPayment')}
               </h2>
               {!processing && (
                 <button
@@ -538,7 +537,7 @@ export function SubscriptionScreen() {
             {!payStatus ? (
               <>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Opérateur</label>
+                  <label className="text-sm font-medium">{t('subscription.operator')}</label>
                   <div className="grid grid-cols-2 gap-3">
                     <button
                       type="button"
@@ -566,7 +565,7 @@ export function SubscriptionScreen() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Numéro de téléphone</label>
+                  <label className="text-sm font-medium">{t('subscription.phoneNumber')}</label>
                   <input
                     type="tel"
                     value={phone}
@@ -575,7 +574,7 @@ export function SubscriptionScreen() {
                     className="w-full px-3 py-2.5 rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-primary/30"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Le numéro Mobile Money à débiter. Une demande de validation arrivera sur ce téléphone.
+                    {t('subscription.phoneHint')}
                   </p>
                 </div>
 
@@ -583,10 +582,10 @@ export function SubscriptionScreen() {
                   {processing ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Initialisation…
+                      {t('subscription.initializing')}
                     </>
                   ) : (
-                    'Payer maintenant'
+                    t('subscription.payNow')
                   )}
                 </Button>
               </>
@@ -595,7 +594,7 @@ export function SubscriptionScreen() {
                 <Loader2 className="h-10 w-10 text-primary animate-spin mx-auto" />
                 <p className="text-sm text-muted-foreground">{payStatus}</p>
                 <p className="text-xs text-muted-foreground">
-                  Composez le code de votre opérateur si aucune notification n'apparaît, puis patientez sur cette page.
+                  {t('subscription.payInstructions')}
                 </p>
               </div>
             )}
@@ -608,10 +607,9 @@ export function SubscriptionScreen() {
         <CardContent className="flex items-start gap-3 p-5">
           <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5" />
           <div>
-            <p className="font-medium text-blue-900">Frais blockchain inclus</p>
+            <p className="font-medium text-blue-900">{t('subscription.feesIncludedTitle')}</p>
             <p className="text-sm text-blue-700">
-              Les frais de publication sur la blockchain sont pris en charge par AuthCert dans le cadre de
-              votre abonnement. Vous n'avez aucun portefeuille crypto à gérer.
+              {t('subscription.feesIncludedDesc')}
             </p>
           </div>
         </CardContent>

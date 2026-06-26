@@ -14,16 +14,20 @@ import {
   Users,
   BarChart3,
   Crown,
+  Sparkles,
   Menu,
   X
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { type Screen, type UserType, type NavigateFunction } from '../types';
 import { useUser } from '../hooks/useUser';
 import { api } from '../../services/api';
+import { LanguageSwitcher } from './LanguageSwitcher';
 
 interface NavigationItem {
   screen: Screen;
   label: string;
+  labelKey?: string;
   icon: string;
 }
 
@@ -44,7 +48,8 @@ const iconMap = {
   Bell,
   Users,
   BarChart3,
-  Crown
+  Crown,
+  Sparkles
 };
 
 export function Navigation({ 
@@ -56,6 +61,7 @@ export function Navigation({
 }: NavigationProps) {
   const navigate = useNavigate();
   const { user } = useUser();
+  const { t } = useTranslation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
 
@@ -112,7 +118,7 @@ export function Navigation({
           <div className="min-w-0">
             <h1 className="font-bold text-base lg:text-lg">AuthCert</h1>
             <p className="text-xs text-muted-foreground truncate">
-              {userType === 'establishment' ? 'Établissement' : 'Apprenant'}
+              {userType === 'establishment' ? t('nav.role_establishment') : t('nav.role_student')}
             </p>
           </div>
         </div>
@@ -140,7 +146,7 @@ export function Navigation({
               }}
             >
               <IconComponent className="h-4 w-4 lg:h-5 lg:w-5 flex-shrink-0" />
-              <span className="flex-1 text-left truncate text-sm lg:text-base">{item.label}</span>
+              <span className="flex-1 text-left truncate text-sm lg:text-base">{item.labelKey ? t(item.labelKey, item.label) : item.label}</span>
               {notificationCount > 0 && (
                 <Badge variant="destructive" className="ml-auto flex-shrink-0">
                   {notificationCount}
@@ -171,12 +177,14 @@ export function Navigation({
             </p>
             <p className="text-xs text-muted-foreground truncate">
               {userType === 'establishment' 
-                ? (user?.statut === 'ACTIF' ? 'Établissement certifié' : `Statut: ${user?.statut || 'EN_ATTENTE'}`)
-                : 'Étudiant actif'
+                ? (user?.statut === 'ACTIF' ? t('nav.establishment_certified') : t('nav.status_label', { status: user?.statut || 'EN_ATTENTE' }))
+                : t('nav.student_active')
               }
             </p>
           </div>
         </div>
+
+        <LanguageSwitcher />
 
         <Button
           variant="ghost"
@@ -184,7 +192,7 @@ export function Navigation({
           onClick={handleLogout}
         >
           <LogOut className="h-4 w-4 lg:h-5 lg:w-5 flex-shrink-0" />
-          <span className="truncate">Se déconnecter</span>
+          <span className="truncate">{t('nav.logout')}</span>
         </Button>
       </div>
     </>

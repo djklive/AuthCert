@@ -1,5 +1,6 @@
 import { useUser } from '../../hooks/useUser';
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { 
@@ -59,6 +60,8 @@ export function EstablishmentDashboardScreen({ hasData = true, onNavigate }: Est
   const [error, setError] = useState('');
 
   const { user } = useUser();
+  const { t, i18n } = useTranslation();
+  const dateLocale = i18n.language.startsWith('fr') ? 'fr-FR' : 'en-US';
 
   // Générer le nom d'affichage
   const getDisplayName = () => {
@@ -91,12 +94,12 @@ export function EstablishmentDashboardScreen({ hasData = true, onNavigate }: Est
         throw new Error(response.message || 'Erreur lors du chargement du dashboard');
       }
     } catch (err) {
-      setError('Erreur lors du chargement des données');
+      setError(t('common.loadDataError'));
       console.error('Erreur chargement dashboard:', err);
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  }, [user?.id, t]);
 
   useEffect(() => {
     loadDashboardData();
@@ -121,7 +124,7 @@ export function EstablishmentDashboardScreen({ hasData = true, onNavigate }: Est
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
-            <p className="text-muted-foreground">Chargement du dashboard...</p>
+            <p className="text-muted-foreground">{t('estDashboard.loading')}</p>
           </div>
         </div>
       </div>
@@ -138,7 +141,7 @@ export function EstablishmentDashboardScreen({ hasData = true, onNavigate }: Est
             <p className="text-destructive mb-4">{error}</p>
             <Button onClick={loadDashboardData} variant="outline">
               <RefreshCw className="h-4 w-4 mr-2" />
-              Réessayer
+              {t('estDashboard.retry')}
             </Button>
           </CardContent>
         </Card>
@@ -151,8 +154,8 @@ export function EstablishmentDashboardScreen({ hasData = true, onNavigate }: Est
       <div className="p-4 lg:p-6 space-y-6 lg:space-y-8">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
-            <h1 className="text-2xl lg:text-3xl font-bold">Dashboard Établissement</h1>
-            <p className="text-sm lg:text-base text-muted-foreground">Bienvenue ! Commencez par configurer votre première émission de certificat.</p>
+            <h1 className="text-2xl lg:text-3xl font-bold">{t('estDashboard.emptyTitle')}</h1>
+            <p className="text-sm lg:text-base text-muted-foreground">{t('estDashboard.emptyWelcome')}</p>
           </div>
         </div>
 
@@ -162,7 +165,7 @@ export function EstablishmentDashboardScreen({ hasData = true, onNavigate }: Est
             <CardContent className="p-4 lg:p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs lg:text-sm text-muted-foreground">Certificats émis</p>
+                  <p className="text-xs lg:text-sm text-muted-foreground">{t('estDashboard.certificatesIssued')}</p>
                   <p className="text-2xl lg:text-3xl font-bold">0</p>
                 </div>
                 <div className="w-10 h-10 lg:w-12 lg:h-12 bg-primary/10 rounded-xl flex items-center justify-center">
@@ -176,7 +179,7 @@ export function EstablishmentDashboardScreen({ hasData = true, onNavigate }: Est
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Vérifications</p>
+                  <p className="text-sm text-muted-foreground">{t('estDashboard.verifications')}</p>
                   <p className="text-3xl font-bold">0</p>
                 </div>
                 <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
@@ -190,7 +193,7 @@ export function EstablishmentDashboardScreen({ hasData = true, onNavigate }: Est
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Étudiants actifs</p>
+                  <p className="text-sm text-muted-foreground">{t('estDashboard.activeStudents')}</p>
                   <p className="text-3xl font-bold">0</p>
                 </div>
                 <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
@@ -204,7 +207,7 @@ export function EstablishmentDashboardScreen({ hasData = true, onNavigate }: Est
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Demandes en attente</p>
+                  <p className="text-sm text-muted-foreground">{t('estDashboard.pendingRequests')}</p>
                   <p className="text-3xl font-bold">0</p>
                 </div>
                 <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
@@ -220,10 +223,9 @@ export function EstablishmentDashboardScreen({ hasData = true, onNavigate }: Est
           <CardContent className="flex items-start gap-3 p-5">
             <Award className="w-5 h-5 text-emerald-600 mt-0.5" />
             <div>
-              <p className="font-medium text-gray-900">Frais blockchain pris en charge par la plateforme</p>
+              <p className="font-medium text-gray-900">{t('estDashboard.feesTitle')}</p>
               <p className="text-sm text-gray-500">
-                Vous n'avez aucun portefeuille à gérer ni à approvisionner. L'émission et la
-                révocation de vos certificats sur la blockchain sont payées automatiquement par AuthCert.
+                {t('estDashboard.feesDesc')}
               </p>
             </div>
           </CardContent>
@@ -235,16 +237,16 @@ export function EstablishmentDashboardScreen({ hasData = true, onNavigate }: Est
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <UserPlus className="h-5 w-5 text-primary" />
-                Lier vos premiers étudiants
+                {t('estDashboard.linkStudentsTitle')}
               </CardTitle>
               <CardDescription>
-                Commencez par établir des liens avec vos étudiants pour pouvoir leur émettre des certificats.
+                {t('estDashboard.linkStudentsDesc')}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Button onClick={() => onNavigate('students')} className="w-full rounded-xl">
                 <UserPlus className="h-4 w-4 mr-2" />
-                Gérer les étudiants
+                {t('estDashboard.manageStudents')}
               </Button>
             </CardContent>
           </Card>
@@ -253,16 +255,16 @@ export function EstablishmentDashboardScreen({ hasData = true, onNavigate }: Est
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Plus className="h-5 w-5 text-green-600" />
-                Créer votre premier certificat
+                {t('estDashboard.firstCertTitle')}
               </CardTitle>
               <CardDescription>
-                Une fois vos étudiants liés, vous pourrez leur émettre des certificats numériques sécurisés.
+                {t('estDashboard.firstCertDesc')}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Button onClick={() => onNavigate('create-certificate')} variant="outline" className="w-full rounded-xl border-green-200 text-green-700 hover:bg-green-50">
                 <Plus className="h-4 w-4 mr-2" />
-                Créer un certificat
+                {t('estDashboard.createCertificate')}
               </Button>
             </CardContent>
           </Card>
@@ -271,24 +273,24 @@ export function EstablishmentDashboardScreen({ hasData = true, onNavigate }: Est
         {/* Help Section */}
         <Card className="rounded-2xl">
           <CardHeader>
-            <CardTitle className="text-base lg:text-lg">Besoin d'aide pour commencer ?</CardTitle>
+            <CardTitle className="text-base lg:text-lg">{t('estDashboard.helpTitle')}</CardTitle>
             <CardDescription className="text-xs lg:text-sm">
-              Découvrez comment tirer le meilleur parti de CertifiED pour votre établissement.
+              {t('estDashboard.helpDesc')}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 lg:space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 lg:gap-4">
               <Button variant="outline" className="h-auto p-3 lg:p-4 rounded-xl flex flex-col items-center gap-2">
                 <FileText className="h-5 w-5 lg:h-6 lg:w-6 text-primary" />
-                <span className="text-xs lg:text-sm">Guide de démarrage</span>
+                <span className="text-xs lg:text-sm">{t('estDashboard.startGuide')}</span>
               </Button>
               <Button variant="outline" className="h-auto p-3 lg:p-4 rounded-xl flex flex-col items-center gap-2">
                 <Users className="h-5 w-5 lg:h-6 lg:w-6 text-primary" />
-                <span className="text-xs lg:text-sm">Tutoriel vidéo</span>
+                <span className="text-xs lg:text-sm">{t('estDashboard.videoTutorial')}</span>
               </Button>
               <Button variant="outline" className="h-auto p-3 lg:p-4 rounded-xl flex flex-col items-center gap-2">
                 <Download className="h-5 w-5 lg:h-6 lg:w-6 text-primary" />
-                <span className="text-xs lg:text-sm">Ressources</span>
+                <span className="text-xs lg:text-sm">{t('estDashboard.resources')}</span>
               </Button>
             </div>
           </CardContent>
@@ -301,17 +303,17 @@ export function EstablishmentDashboardScreen({ hasData = true, onNavigate }: Est
     <div className="p-4 lg:p-6 space-y-6 lg:space-y-8">
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <h1 className="text-2xl lg:text-3xl font-bold">Dashboard {getDisplayName()}</h1>
-          <p className="text-sm lg:text-base text-muted-foreground">Vue d'ensemble de votre activité et gestion des certificats</p>
+          <h1 className="text-2xl lg:text-3xl font-bold">{t('estDashboard.dashboardTitle', { name: getDisplayName() })}</h1>
+          <p className="text-sm lg:text-base text-muted-foreground">{t('estDashboard.overview')}</p>
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
           <Button variant="outline" className="rounded-xl w-full sm:w-auto">
             <Download className="h-4 w-4 mr-2" />
-            Export
+            {t('estDashboard.export')}
           </Button>
           <Button onClick={() => onNavigate('create-certificate')} className="rounded-xl w-full sm:w-auto">
             <Plus className="h-4 w-4 mr-2" />
-            Nouveau certificat
+            {t('estDashboard.newCertificate')}
           </Button>
         </div>
       </div>
@@ -322,7 +324,7 @@ export function EstablishmentDashboardScreen({ hasData = true, onNavigate }: Est
           <CardContent className="p-4 lg:p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs lg:text-sm text-muted-foreground">Certificats émis ce mois</p>
+                <p className="text-xs lg:text-sm text-muted-foreground">{t('estDashboard.certIssuedThisMonth')}</p>
                 <p className="text-2xl lg:text-3xl font-bold">{stats.certificatesIssued}</p>
                 <div className="flex items-center gap-1 mt-2">
                   <TrendingUp className="h-3 w-3 lg:h-4 lg:w-4 text-green-600" />
@@ -340,7 +342,7 @@ export function EstablishmentDashboardScreen({ hasData = true, onNavigate }: Est
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Total vérifications</p>
+                <p className="text-sm text-muted-foreground">{t('estDashboard.totalVerifications')}</p>
                 <p className="text-3xl font-bold">{stats.totalVerifications}</p>
                 <div className="flex items-center gap-1 mt-2">
                   <TrendingUp className="h-4 w-4 text-green-600" />
@@ -358,7 +360,7 @@ export function EstablishmentDashboardScreen({ hasData = true, onNavigate }: Est
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Étudiants actifs</p>
+                <p className="text-sm text-muted-foreground">{t('estDashboard.activeStudents')}</p>
                 <p className="text-3xl font-bold">{stats.activeStudents}</p>
                 <div className="flex items-center gap-1 mt-2">
                   <TrendingUp className="h-4 w-4 text-green-600" />
@@ -376,14 +378,14 @@ export function EstablishmentDashboardScreen({ hasData = true, onNavigate }: Est
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Demandes en attente</p>
+                <p className="text-sm text-muted-foreground">{t('estDashboard.pendingRequests')}</p>
                 <p className="text-3xl font-bold text-orange-600">{stats.pendingRequests}</p>
                 <Button 
                   variant="link" 
                   className="p-0 h-auto text-sm text-orange-600 mt-2"
                   onClick={() => onNavigate('students')}
                 >
-                  Traiter les demandes →
+                  {t('estDashboard.processRequests')}
                 </Button>
               </div>
               <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
@@ -401,14 +403,14 @@ export function EstablishmentDashboardScreen({ hasData = true, onNavigate }: Est
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2 text-base lg:text-lg">
                 <Clock className="h-4 w-4 lg:h-5 lg:w-5 text-orange-600" />
-                Demandes en attente
+                {t('estDashboard.pendingRequests')}
               </CardTitle>
               <Button variant="ghost" size="sm" onClick={() => onNavigate('students')}>
-                Voir tout
+                {t('common.viewAll')}
               </Button>
             </div>
             <CardDescription className="text-xs lg:text-sm">
-              Étudiants souhaitant se lier à votre établissement
+              {t('estDashboard.studentsWishLink')}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 lg:space-y-4">
@@ -423,7 +425,7 @@ export function EstablishmentDashboardScreen({ hasData = true, onNavigate }: Est
                       <p className="font-medium text-sm lg:text-base truncate">{request.name}</p>
                       <p className="text-xs lg:text-sm text-muted-foreground truncate">{request.email}</p>
                       <p className="text-xs text-muted-foreground">
-                        {new Date(request.date).toLocaleDateString('fr-FR')}
+                        {new Date(request.date).toLocaleDateString(dateLocale)}
                       </p>
                     </div>
                   </div>
@@ -448,7 +450,7 @@ export function EstablishmentDashboardScreen({ hasData = true, onNavigate }: Est
               ))
             ) : (
               <div className="text-center py-6 text-sm text-muted-foreground">
-                Aucune demande en attente
+                {t('estDashboard.noPendingRequests')}
               </div>
             )}
           </CardContent>
@@ -459,10 +461,10 @@ export function EstablishmentDashboardScreen({ hasData = true, onNavigate }: Est
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base lg:text-lg">
               <TrendingUp className="h-4 w-4 lg:h-5 lg:w-5 text-primary" />
-              Activité récente
+              {t('estDashboard.recentActivity')}
             </CardTitle>
             <CardDescription className="text-xs lg:text-sm">
-              Dernières actions effectuées sur la plateforme
+              {t('estDashboard.recentActivityDesc')}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 lg:space-y-4">
@@ -489,7 +491,7 @@ export function EstablishmentDashboardScreen({ hasData = true, onNavigate }: Est
               ))
             ) : (
               <div className="text-center py-6 text-sm text-muted-foreground">
-                Aucune activité récente
+                {t('estDashboard.noRecentActivity')}
               </div>
             )}
           </CardContent>
@@ -501,8 +503,8 @@ export function EstablishmentDashboardScreen({ hasData = true, onNavigate }: Est
         <CardHeader>
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div>
-              <CardTitle className="text-base lg:text-lg">Évolution des vérifications</CardTitle>
-              <CardDescription className="text-xs lg:text-sm">Nombre de vérifications de certificats sur les derniers mois</CardDescription>
+              <CardTitle className="text-base lg:text-lg">{t('estDashboard.verificationsEvolution')}</CardTitle>
+              <CardDescription className="text-xs lg:text-sm">{t('estDashboard.verificationsEvolutionDesc')}</CardDescription>
             </div>
             <div className="flex gap-2">
               {['7d', '30d', '90d'].map((period) => (

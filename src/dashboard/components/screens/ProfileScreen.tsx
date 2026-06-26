@@ -13,6 +13,7 @@ import { useUser } from '../../hooks/useUser';
 import { api } from '../../../services/api';
 import { useAuth } from '../../../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { 
   User, 
   Mail, 
@@ -63,9 +64,12 @@ export function ProfileScreen() {
   const { user: contextUser } = useUser();
   const { logout } = useAuth();
   const navigate = useNavigate();
+  const { t, i18n } = useTranslation();
   
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [stats, setStats] = useState<{ certificates: number; verifications: number; third: number } | null>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -98,7 +102,9 @@ export function ProfileScreen() {
   useEffect(() => {
     loadUserProfile();
     loadSessions();
-  }, []);
+    loadStats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contextUser?.id, contextUser?.role]);
 
   const loadUserProfile = async () => {
     try {
@@ -109,7 +115,7 @@ export function ProfileScreen() {
         setUserProfile(response.data);
       }
     } catch (err) {
-      setError('Erreur lors du chargement du profil');
+      setError(t('profile.messages.loadError'));
       console.error('Erreur chargement profil:', err);
     } finally {
       setLoading(false);
@@ -124,6 +130,38 @@ export function ProfileScreen() {
       }
     } catch (err) {
       console.error('Erreur chargement sessions:', err);
+    }
+  };
+
+  const loadStats = async () => {
+    try {
+      setStatsLoading(true);
+      if (!contextUser?.id) return;
+      const idNum = Number(contextUser.id);
+
+      if (contextUser.role === 'student') {
+        const response = await api.getStudentDashboard(idNum);
+        if (response.success) {
+          setStats({
+            certificates: response.data.stats.totalCertificates ?? 0,
+            verifications: response.data.stats.totalVerifications ?? 0,
+            third: response.data.stats.linkedEstablishments ?? 0,
+          });
+        }
+      } else if (contextUser.role === 'establishment') {
+        const response = await api.getEstablishmentDashboard(idNum);
+        if (response.success) {
+          setStats({
+            certificates: response.data.stats.certificatesIssued ?? 0,
+            verifications: response.data.stats.totalVerifications ?? 0,
+            third: response.data.stats.activeStudents ?? 0,
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Erreur chargement statistiques:', err);
+    } finally {
+      setStatsLoading(false);
     }
   };
 
@@ -155,7 +193,7 @@ export function ProfileScreen() {
       
       const response = await api.updateUserProfile(profileData);
       if (response.success) {
-        setSuccess('Profil modifié avec succès');
+        setSuccess(t('profile.messages.profileUpdated'));
     setIsEditing(false);
         // Recharger le profil pour avoir les données mises à jour
         await loadUserProfile();
@@ -169,12 +207,12 @@ export function ProfileScreen() {
 
   const handleChangePassword = async () => {
     if (passwordData.newPassword !== passwordData.confirmPassword) {
-      setError('Les nouveaux mots de passe ne correspondent pas');
+      setError(t('profile.messages.passwordMismatch'));
       return;
     }
     
     if (passwordData.newPassword.length < 6) {
-      setError('Le nouveau mot de passe doit contenir au moins 6 caractères');
+      setError(t('profile.messages.passwordTooShort'));
       return;
     }
     
@@ -183,7 +221,7 @@ export function ProfileScreen() {
       setError('');
       
       await api.changePassword(passwordData.currentPassword, passwordData.newPassword);
-      setSuccess('Mot de passe modifié avec succès');
+      setSuccess(t('profile.messages.passwordUpdated'));
       setShowPasswordDialog(false);
       setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (err: unknown) {
@@ -196,7 +234,7 @@ export function ProfileScreen() {
   const handleTerminateSession = async (sessionId: string) => {
     try {
       await api.terminateSession(sessionId);
-      setSuccess('Session terminée avec succès');
+      setSuccess(t('profile.messages.sessionTerminated'));
       await loadSessions();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Erreur lors de la suppression de la session');
@@ -205,7 +243,7 @@ export function ProfileScreen() {
 
   const handleDeleteAccount = async () => {
     if (!deletePassword) {
-      setError('Veuillez entrer votre mot de passe pour confirmer la suppression');
+      setError(t('profile.messages.deletePasswordRequired'));
       return;
     }
     
@@ -214,7 +252,7 @@ export function ProfileScreen() {
       setError('');
       
       await api.deleteAccount(deletePassword);
-      setSuccess('Compte supprimé avec succès');
+      setSuccess(t('profile.messages.accountDeleted'));
       
       // Déconnexion et redirection
       setTimeout(() => {
@@ -255,7 +293,8 @@ export function ProfileScreen() {
 
   const getMemberSince = () => {
     if (!userProfile) return '';
-    return new Date(userProfile.dateCreation).toLocaleDateString('fr-FR', { 
+    const locale = i18n.language.startsWith('fr') ? 'fr-FR' : 'en-US';
+    return new Date(userProfile.dateCreation).toLocaleDateString(locale, { 
       year: 'numeric', 
       month: 'long' 
     });
@@ -267,7 +306,7 @@ export function ProfileScreen() {
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-            <p className="text-muted-foreground">Chargement du profil...</p>
+            <p className="text-muted-foreground">{t('profile.loading')}</p>
           </div>
         </div>
       </div>
@@ -279,8 +318,8 @@ export function ProfileScreen() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
         <div>
-          <h1 className="text-3xl font-bold">Mon Profil</h1>
-          <p className="text-muted-foreground">Gérez vos informations personnelles et préférences</p>
+          <h1 className="text-3xl font-bold">{t('profile.title')}</h1>
+          <p className="text-muted-foreground">{t('profile.subtitle')}</p>
         </div>
       </div>
 
@@ -305,9 +344,9 @@ export function ProfileScreen() {
 
       <Tabs defaultValue="profile" className="w-full">
         <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:grid-cols-3">
-          <TabsTrigger value="profile">Profil</TabsTrigger>
-          <TabsTrigger value="privacy">Confidentialité</TabsTrigger>
-          <TabsTrigger value="security">Sécurité</TabsTrigger>
+          <TabsTrigger value="profile">{t('profile.tabs.profile')}</TabsTrigger>
+          <TabsTrigger value="privacy">{t('profile.tabs.privacy')}</TabsTrigger>
+          <TabsTrigger value="security">{t('profile.tabs.security')}</TabsTrigger>
         </TabsList>
 
         {/* Profile Tab */}
@@ -316,8 +355,8 @@ export function ProfileScreen() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle>Informations personnelles</CardTitle>
-                  <CardDescription>Vos informations de base</CardDescription>
+                  <CardTitle>{t('profile.personalInfo')}</CardTitle>
+                  <CardDescription>{t('profile.personalInfoDesc')}</CardDescription>
                 </div>
                 <Button
                   variant={isEditing ? "default" : "outline"}
@@ -325,11 +364,11 @@ export function ProfileScreen() {
                   disabled={saving}
                 >
                   {saving ? (
-                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Enregistrement...</>
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> {t('common.saving')}</>
                   ) : isEditing ? (
-                    <><Save className="mr-2 h-4 w-4" /> Enregistrer</>
+                    <><Save className="mr-2 h-4 w-4" /> {t('common.save')}</>
                   ) : (
-                    <><Edit className="mr-2 h-4 w-4" /> Modifier</>
+                    <><Edit className="mr-2 h-4 w-4" /> {t('common.edit')}</>
                   )}
                 </Button>
               </div>
@@ -355,9 +394,9 @@ export function ProfileScreen() {
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold">{getUserDisplayName()}</h3>
-                  <p className="text-muted-foreground">Membre depuis {getMemberSince()}</p>
+                  <p className="text-muted-foreground">{t('profile.memberSince', { date: getMemberSince() })}</p>
                   <Badge variant="outline" className="mt-2">
-                    {userProfile?.statut === 'ACTIF' ? 'Profil vérifié' : 'En attente'}
+                    {userProfile?.statut === 'ACTIF' ? t('profile.verified') : t('profile.pending')}
                   </Badge>
                 </div>
               </div>
@@ -369,7 +408,7 @@ export function ProfileScreen() {
                 {contextUser?.role === 'student' ? (
                   <>
                 <div className="space-y-2">
-                      <Label htmlFor="prenom">Prénom</Label>
+                      <Label htmlFor="prenom">{t('profile.firstName')}</Label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
@@ -383,7 +422,7 @@ export function ProfileScreen() {
                 </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="nom">Nom</Label>
+                      <Label htmlFor="nom">{t('profile.lastName')}</Label>
                       <div className="relative">
                         <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input
@@ -398,7 +437,7 @@ export function ProfileScreen() {
                   </>
                 ) : (
                   <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="nomEtablissement">Nom de l'établissement</Label>
+                    <Label htmlFor="nomEtablissement">{t('profile.establishmentName')}</Label>
                     <div className="relative">
                       <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input
@@ -413,7 +452,7 @@ export function ProfileScreen() {
                 )}
 
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="email">{t('profile.email')}</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
@@ -434,7 +473,7 @@ export function ProfileScreen() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="phone">Téléphone</Label>
+                  <Label htmlFor="phone">{t('profile.phone')}</Label>
                   <div className="relative">
                     <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
@@ -455,7 +494,7 @@ export function ProfileScreen() {
 
                 {contextUser?.role === 'establishment' && (
                   <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="adresse">Adresse</Label>
+                    <Label htmlFor="adresse">{t('profile.address')}</Label>
                   <div className="relative">
                     <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
@@ -475,22 +514,32 @@ export function ProfileScreen() {
           {/* Statistics */}
           <Card>
             <CardHeader>
-              <CardTitle>Mes statistiques</CardTitle>
-              <CardDescription>Aperçu de votre activité</CardDescription>
+              <CardTitle>{t('profile.stats.title')}</CardTitle>
+              <CardDescription>{t('profile.stats.desc')}</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid gap-4 md:grid-cols-3">
                 <div className="text-center p-4 bg-primary/5 rounded-lg">
-                  <p className="text-2xl font-bold text-primary">12</p>
-                  <p className="text-sm text-muted-foreground">Certificats</p>
+                  <p className="text-2xl font-bold text-primary">
+                    {statsLoading ? '—' : stats?.certificates ?? 0}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {contextUser?.role === 'establishment' ? t('profile.stats.certificatesIssued') : t('profile.stats.certificates')}
+                  </p>
                 </div>
                 <div className="text-center p-4 bg-chart-2/5 rounded-lg">
-                  <p className="text-2xl font-bold text-chart-2">156</p>
-                  <p className="text-sm text-muted-foreground">Vérifications</p>
+                  <p className="text-2xl font-bold text-chart-2">
+                    {statsLoading ? '—' : stats?.verifications ?? 0}
+                  </p>
+                  <p className="text-sm text-muted-foreground">{t('profile.stats.verifications')}</p>
                 </div>
                 <div className="text-center p-4 bg-chart-4/5 rounded-lg">
-                  <p className="text-2xl font-bold text-chart-4">5</p>
-                  <p className="text-sm text-muted-foreground">Établissements</p>
+                  <p className="text-2xl font-bold text-chart-4">
+                    {statsLoading ? '—' : stats?.third ?? 0}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {contextUser?.role === 'establishment' ? t('profile.stats.linkedStudents') : t('profile.stats.establishments')}
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -503,16 +552,16 @@ export function ProfileScreen() {
             <CardHeader>
               <CardTitle className="flex items-center">
                 <Eye className="mr-2 h-5 w-5" />
-                Paramètres de confidentialité
+                {t('profile.privacy.title')}
               </CardTitle>
-              <CardDescription>Contrôlez qui peut voir vos informations</CardDescription>
+              <CardDescription>{t('profile.privacy.desc')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <div className="text-base font-medium">Profil public</div>
+                  <div className="text-base font-medium">{t('profile.privacy.publicProfile')}</div>
                   <div className="text-sm text-muted-foreground">
-                    Permettre aux autres de voir votre profil
+                    {t('profile.privacy.publicProfileDesc')}
                   </div>
                 </div>
                 <Switch
@@ -523,9 +572,9 @@ export function ProfileScreen() {
               <Separator />
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <div className="text-base font-medium">Certificats visibles</div>
+                  <div className="text-base font-medium">{t('profile.privacy.showCertificates')}</div>
                   <div className="text-sm text-muted-foreground">
-                    Afficher vos certificats sur votre profil public
+                    {t('profile.privacy.showCertificatesDesc')}
                   </div>
                 </div>
                 <Switch
@@ -536,9 +585,9 @@ export function ProfileScreen() {
               <Separator />
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <div className="text-base font-medium">Statistiques partagées</div>
+                  <div className="text-base font-medium">{t('profile.privacy.shareStats')}</div>
                   <div className="text-sm text-muted-foreground">
-                    Partager vos statistiques d'activité
+                    {t('profile.privacy.shareStatsDesc')}
                   </div>
                 </div>
                 <Switch
@@ -553,16 +602,16 @@ export function ProfileScreen() {
             <CardHeader>
               <CardTitle className="flex items-center">
                 <Bell className="mr-2 h-5 w-5" />
-                Notifications
+                {t('profile.notifications.title')}
               </CardTitle>
-              <CardDescription>Choisissez les notifications que vous souhaitez recevoir</CardDescription>
+              <CardDescription>{t('profile.notifications.desc')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <div className="text-base font-medium">Nouveaux certificats</div>
+                  <div className="text-base font-medium">{t('profile.notifications.newCertificates')}</div>
                   <div className="text-sm text-muted-foreground">
-                    Quand un nouveau certificat est disponible
+                    {t('profile.notifications.newCertificatesDesc')}
                   </div>
                 </div>
                 <Switch
@@ -573,9 +622,9 @@ export function ProfileScreen() {
               <Separator />
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <div className="text-base font-medium">Vérifications</div>
+                  <div className="text-base font-medium">{t('profile.notifications.verifications')}</div>
                   <div className="text-sm text-muted-foreground">
-                    Quand quelqu'un vérifie vos certificats
+                    {t('profile.notifications.verificationsDesc')}
                   </div>
                 </div>
                 <Switch
@@ -586,9 +635,9 @@ export function ProfileScreen() {
               <Separator />
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <div className="text-base font-medium">Alertes sécurité</div>
+                  <div className="text-base font-medium">{t('profile.notifications.security')}</div>
                   <div className="text-sm text-muted-foreground">
-                    Activités suspectes sur votre compte
+                    {t('profile.notifications.securityDesc')}
                   </div>
                 </div>
                 <Switch
@@ -599,9 +648,9 @@ export function ProfileScreen() {
               <Separator />
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <div className="text-base font-medium">Marketing</div>
+                  <div className="text-base font-medium">{t('profile.notifications.marketing')}</div>
                   <div className="text-sm text-muted-foreground">
-                    Nouvelles fonctionnalités et conseils
+                    {t('profile.notifications.marketingDesc')}
                   </div>
                 </div>
                 <Switch
@@ -619,33 +668,33 @@ export function ProfileScreen() {
             <CardHeader>
               <CardTitle className="flex items-center">
                 <Shield className="mr-2 h-5 w-5" />
-                Sécurité du compte
+                {t('profile.security.title')}
               </CardTitle>
-              <CardDescription>Protégez votre compte avec des mesures de sécurité avancées</CardDescription>
+              <CardDescription>{t('profile.security.desc')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <div className="text-base font-medium">Mot de passe</div>
+                  <div className="text-base font-medium">{t('profile.security.password')}</div>
                   <div className="text-sm text-muted-foreground">
-                    Dernière modification il y a 2 mois
+                    {t('profile.security.passwordChangedAgo')}
                   </div>
                 </div>
                 <Button variant="outline" onClick={() => setShowPasswordDialog(true)}>
                   <Lock className="mr-2 h-4 w-4" />
-                  Changer
+                  {t('common.change')}
                 </Button>
               </div>
               <Separator />
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <div className="text-base font-medium">Authentification à deux facteurs</div>
+                  <div className="text-base font-medium">{t('profile.security.twoFactor')}</div>
                   <div className="text-sm text-muted-foreground">
-                    Sécurisez votre compte avec 2FA
+                    {t('profile.security.twoFactorDesc')}
                   </div>
                 </div>
                 <Button variant="outline">
-                  Configurer
+                  {t('common.configure')}
                 </Button>
               </div>
             </CardContent>
@@ -653,13 +702,13 @@ export function ProfileScreen() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Sessions actives</CardTitle>
-              <CardDescription>Gérez les appareils connectés à votre compte</CardDescription>
+              <CardTitle>{t('profile.security.sessions')}</CardTitle>
+              <CardDescription>{t('profile.security.sessionsDesc')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {sessions.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  Aucune session active trouvée
+                  {t('profile.security.noSessions')}
                 </div>
               ) : (
                 sessions.map((session) => (
@@ -680,7 +729,7 @@ export function ProfileScreen() {
                   </div>
                   <div className="flex items-center space-x-2">
                     {session.current && (
-                      <Badge variant="default" className="text-xs">Actuelle</Badge>
+                      <Badge variant="default" className="text-xs">{t('profile.security.current')}</Badge>
                     )}
                     {!session.current && (
                       <Button
@@ -700,19 +749,19 @@ export function ProfileScreen() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-destructive">Zone de danger</CardTitle>
-              <CardDescription>Actions irréversibles sur votre compte</CardDescription>
+              <CardTitle className="text-destructive">{t('profile.security.dangerZone')}</CardTitle>
+              <CardDescription>{t('profile.security.dangerZoneDesc')}</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between p-4 border border-destructive/20 rounded-lg bg-destructive/5">
                 <div>
-                  <p className="font-medium">Supprimer le compte</p>
+                  <p className="font-medium">{t('profile.security.deleteAccount')}</p>
                   <p className="text-sm text-muted-foreground">
-                    Supprime définitivement votre compte et toutes vos données
+                    {t('profile.security.deleteAccountDesc')}
                   </p>
                 </div>
                 <Button variant="destructive" size="sm" onClick={() => setShowDeleteDialog(true)}>
-                  Supprimer
+                  {t('common.delete')}
                 </Button>
               </div>
             </CardContent>
@@ -724,43 +773,43 @@ export function ProfileScreen() {
       <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Changer le mot de passe</DialogTitle>
+            <DialogTitle>{t('profile.passwordDialog.title')}</DialogTitle>
             <DialogDescription>
-              Entrez votre mot de passe actuel et le nouveau mot de passe
+              {t('profile.passwordDialog.desc')}
             </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="currentPassword">Mot de passe actuel</Label>
+              <Label htmlFor="currentPassword">{t('profile.passwordDialog.current')}</Label>
               <Input
                 id="currentPassword"
                 type="password"
                 value={passwordData.currentPassword}
                 onChange={(e) => setPasswordData({...passwordData, currentPassword: e.target.value})}
-                placeholder="Votre mot de passe actuel"
+                placeholder={t('profile.passwordDialog.currentPlaceholder')}
               />
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="newPassword">Nouveau mot de passe</Label>
+              <Label htmlFor="newPassword">{t('profile.passwordDialog.new')}</Label>
               <Input
                 id="newPassword"
                 type="password"
                 value={passwordData.newPassword}
                 onChange={(e) => setPasswordData({...passwordData, newPassword: e.target.value})}
-                placeholder="Nouveau mot de passe"
+                placeholder={t('profile.passwordDialog.newPlaceholder')}
               />
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirmer le nouveau mot de passe</Label>
+              <Label htmlFor="confirmPassword">{t('profile.passwordDialog.confirm')}</Label>
               <Input
                 id="confirmPassword"
                 type="password"
                 value={passwordData.confirmPassword}
                 onChange={(e) => setPasswordData({...passwordData, confirmPassword: e.target.value})}
-                placeholder="Confirmer le nouveau mot de passe"
+                placeholder={t('profile.passwordDialog.confirmPlaceholder')}
               />
             </div>
           </div>
@@ -774,7 +823,7 @@ export function ProfileScreen() {
                 setError('');
               }}
             >
-              Annuler
+              {t('common.cancel')}
             </Button>
             <Button
               onClick={handleChangePassword}
@@ -784,12 +833,12 @@ export function ProfileScreen() {
               {saving ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Modification...
+                  {t('profile.passwordDialog.submitting')}
                 </>
               ) : (
                 <>
                   <Lock className="h-4 w-4" />
-                  Changer le mot de passe
+                  {t('profile.passwordDialog.submit')}
                 </>
               )}
             </Button>
@@ -803,34 +852,34 @@ export function ProfileScreen() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-destructive">
               <AlertTriangle className="h-5 w-5" />
-              Supprimer le compte
+              {t('profile.deleteDialog.title')}
             </DialogTitle>
             <DialogDescription>
-              Cette action est irréversible. Toutes vos données seront définitivement supprimées.
+              {t('profile.deleteDialog.desc')}
             </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4">
             <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
               <p className="text-sm text-destructive font-medium">
-                ⚠️ Attention : Cette action supprimera définitivement :
+                {t('profile.deleteDialog.warning')}
               </p>
               <ul className="text-sm text-destructive mt-2 ml-4 list-disc">
-                <li>Votre profil et toutes vos informations personnelles</li>
-                <li>Tous vos certificats et liaisons</li>
-                <li>Toutes vos sessions actives</li>
-                <li>Toutes les données associées à votre compte</li>
+                <li>{t('profile.deleteDialog.item1')}</li>
+                <li>{t('profile.deleteDialog.item2')}</li>
+                <li>{t('profile.deleteDialog.item3')}</li>
+                <li>{t('profile.deleteDialog.item4')}</li>
               </ul>
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="deletePassword">Confirmer avec votre mot de passe</Label>
+              <Label htmlFor="deletePassword">{t('profile.deleteDialog.confirmLabel')}</Label>
               <Input
                 id="deletePassword"
                 type="password"
                 value={deletePassword}
                 onChange={(e) => setDeletePassword(e.target.value)}
-                placeholder="Votre mot de passe pour confirmer"
+                placeholder={t('profile.deleteDialog.confirmPlaceholder')}
               />
             </div>
           </div>
@@ -844,7 +893,7 @@ export function ProfileScreen() {
                 setError('');
               }}
             >
-              Annuler
+              {t('common.cancel')}
             </Button>
             <Button
               variant="destructive"
@@ -855,12 +904,12 @@ export function ProfileScreen() {
               {saving ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Suppression...
+                  {t('profile.deleteDialog.submitting')}
                 </>
               ) : (
                 <>
                   <Trash2 className="h-4 w-4" />
-                  Supprimer définitivement
+                  {t('profile.deleteDialog.submit')}
                 </>
               )}
             </Button>

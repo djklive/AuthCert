@@ -33,6 +33,7 @@ import {
 } from 'recharts';
 import { api } from '../../../services/api';
 import { useUser } from '../../hooks/useUser';
+import { useTranslation } from 'react-i18next';
 
 interface EstablishmentStatsScreenProps {
   onNavigate: (screen: string) => void;
@@ -66,6 +67,7 @@ export function EstablishmentStatsScreen({ onNavigate }: EstablishmentStatsScree
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const { user } = useUser();
+  const { t } = useTranslation();
 
   const loadStats = useCallback(async () => {
     try {
@@ -85,12 +87,12 @@ export function EstablishmentStatsScreen({ onNavigate }: EstablishmentStatsScree
         throw new Error(response.message || 'Erreur lors du chargement des statistiques');
       }
     } catch (err) {
-      setError('Erreur lors du chargement des statistiques');
+      setError(t('estStats.loadError'));
       console.error('Erreur chargement stats:', err);
     } finally {
       setLoading(false);
     }
-  }, [user?.id, selectedPeriod]);
+  }, [user?.id, selectedPeriod, t]);
 
   useEffect(() => {
     if (user?.id) {
@@ -103,15 +105,15 @@ export function EstablishmentStatsScreen({ onNavigate }: EstablishmentStatsScree
     if (!statsData) return;
     
     const csvData = [
-      ['Métrique', 'Valeur'],
-      ['Total Certificats', statsData.totalCertificates],
-      ['Total Étudiants', statsData.totalStudents],
-      ['Total Vérifications', statsData.totalVerifications],
+      [t('estStats.csvMetric'), t('estStats.csvValue')],
+      [t('estStats.csvTotalCerts'), statsData.totalCertificates],
+      [t('estStats.csvTotalStudents'), statsData.totalStudents],
+      [t('estStats.csvTotalVerifications'), statsData.totalVerifications],
       ['', ''],
-      ['Certificats par Statut', ''],
+      [t('estStats.csvCertsByStatus'), ''],
       ...Object.entries(statsData.certificatesByStatus).map(([status, count]) => [status, count]),
       ['', ''],
-      ['Certificats par Formation', ''],
+      [t('estStats.csvCertsByFormation'), ''],
       ...statsData.certificatesByFormation.map(({ formationName, count }) => [formationName, count])
     ];
 
@@ -120,7 +122,7 @@ export function EstablishmentStatsScreen({ onNavigate }: EstablishmentStatsScree
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `statistiques-etablissement-${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `${t('estStats.csvFilename')}-${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
   };
@@ -131,7 +133,7 @@ export function EstablishmentStatsScreen({ onNavigate }: EstablishmentStatsScree
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
-            <p className="text-muted-foreground">Chargement des statistiques...</p>
+            <p className="text-muted-foreground">{t('estStats.loading')}</p>
           </div>
         </div>
       </div>
@@ -146,7 +148,7 @@ export function EstablishmentStatsScreen({ onNavigate }: EstablishmentStatsScree
             <p className="text-destructive mb-4">{error}</p>
             <Button onClick={loadStats} variant="outline">
               <RefreshCw className="h-4 w-4 mr-2" />
-              Réessayer
+              {t('estStats.retry')}
             </Button>
           </CardContent>
         </Card>
@@ -159,7 +161,7 @@ export function EstablishmentStatsScreen({ onNavigate }: EstablishmentStatsScree
       <div className="p-6">
         <Card>
           <CardContent className="p-6 text-center">
-            <p className="text-muted-foreground">Aucune donnée disponible</p>
+            <p className="text-muted-foreground">{t('estStats.noData')}</p>
           </CardContent>
         </Card>
       </div>
@@ -212,19 +214,19 @@ export function EstablishmentStatsScreen({ onNavigate }: EstablishmentStatsScree
   })) || [];
 
   const periods = [
-    { value: '7d', label: '7 derniers jours' },
-    { value: '30d', label: '30 derniers jours' },
-    { value: '90d', label: '3 derniers mois' },
-    { value: '1y', label: 'Dernière année' }
+    { value: '7d', label: t('estStats.period7d') },
+    { value: '30d', label: t('estStats.period30d') },
+    { value: '90d', label: t('estStats.period90d') },
+    { value: '1y', label: t('estStats.period1y') }
   ];
 
   return (
     <div className="p-6 space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Statistiques & Rapports</h1>
+          <h1 className="text-3xl font-bold">{t('estStats.title')}</h1>
           <p className="text-muted-foreground">
-            Analysez les performances de vos certificats et l'engagement de vos étudiants
+            {t('estStats.subtitle')}
           </p>
         </div>
         <div className="flex gap-3">
@@ -242,7 +244,7 @@ export function EstablishmentStatsScreen({ onNavigate }: EstablishmentStatsScree
           </Select>
           <Button className="rounded-xl" onClick={handleExportStats}>
             <Download className="h-4 w-4 mr-2" />
-            Exporter le rapport PDF
+            {t('estStats.exportPdf')}
           </Button>
         </div>
       </div>
@@ -253,11 +255,11 @@ export function EstablishmentStatsScreen({ onNavigate }: EstablishmentStatsScree
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Certificats émis</p>
+                <p className="text-sm text-muted-foreground">{t('estStats.certificatesIssued')}</p>
                 <p className="text-3xl font-bold">{stats.totalCertificates}</p>
                 <div className="flex items-center gap-1 mt-2">
                   <TrendingUp className="h-4 w-4 text-green-600" />
-                  <span className="text-sm text-green-600">+18% ce mois</span>
+                  <span className="text-sm text-green-600">{t('estStats.thisMonth', { value: '+18%' })}</span>
                 </div>
               </div>
               <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
@@ -271,11 +273,11 @@ export function EstablishmentStatsScreen({ onNavigate }: EstablishmentStatsScree
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Vérifications totales</p>
+                <p className="text-sm text-muted-foreground">{t('estStats.verificationsTotal')}</p>
                 <p className="text-3xl font-bold">{stats.totalVerifications}</p>
                 <div className="flex items-center gap-1 mt-2">
                   <TrendingUp className="h-4 w-4 text-green-600" />
-                  <span className="text-sm text-green-600">+12% ce mois</span>
+                  <span className="text-sm text-green-600">{t('estStats.thisMonth', { value: '+12%' })}</span>
                 </div>
               </div>
               <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
@@ -289,11 +291,11 @@ export function EstablishmentStatsScreen({ onNavigate }: EstablishmentStatsScree
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Taux de vérification</p>
+                <p className="text-sm text-muted-foreground">{t('estStats.verificationRate')}</p>
                 <p className="text-3xl font-bold">{stats.verificationRate}%</p>
                 <div className="flex items-center gap-1 mt-2">
                   <TrendingUp className="h-4 w-4 text-green-600" />
-                  <span className="text-sm text-green-600">+3.2% ce mois</span>
+                  <span className="text-sm text-green-600">{t('estStats.thisMonth', { value: '+3.2%' })}</span>
                 </div>
               </div>
               <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
@@ -307,11 +309,11 @@ export function EstablishmentStatsScreen({ onNavigate }: EstablishmentStatsScree
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Temps moyen de vérif.</p>
+                <p className="text-sm text-muted-foreground">{t('estStats.avgVerifyTime')}</p>
                 <p className="text-3xl font-bold">{stats.avgVerificationTime}s</p>
                 <div className="flex items-center gap-1 mt-2">
                   <Zap className="h-4 w-4 text-yellow-600" />
-                  <span className="text-sm text-yellow-600">Très rapide</span>
+                  <span className="text-sm text-yellow-600">{t('estStats.veryFast')}</span>
                 </div>
               </div>
               <div className="w-12 h-12 bg-yellow-100 rounded-xl flex items-center justify-center">
@@ -328,17 +330,17 @@ export function EstablishmentStatsScreen({ onNavigate }: EstablishmentStatsScree
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Évolution des métriques</CardTitle>
-                <CardDescription>Suivi des performances sur les derniers mois</CardDescription>
+                <CardTitle>{t('estStats.metricsEvolution')}</CardTitle>
+                <CardDescription>{t('estStats.metricsEvolutionDesc')}</CardDescription>
               </div>
               <Select value={selectedMetric} onValueChange={setSelectedMetric}>
                 <SelectTrigger className="w-40 rounded-lg">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="verifications">Vérifications</SelectItem>
-                  <SelectItem value="certificates">Certificats</SelectItem>
-                  <SelectItem value="students">Étudiants</SelectItem>
+                  <SelectItem value="verifications">{t('estStats.verifications')}</SelectItem>
+                  <SelectItem value="certificates">{t('estStats.certificates')}</SelectItem>
+                  <SelectItem value="students">{t('estStats.students')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -377,9 +379,9 @@ export function EstablishmentStatsScreen({ onNavigate }: EstablishmentStatsScree
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Globe className="h-5 w-5" />
-              Répartition géographique
+              {t('estStats.geoTitle')}
             </CardTitle>
-            <CardDescription>Origine des vérifications de certificats</CardDescription>
+            <CardDescription>{t('estStats.geoDesc')}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex items-center justify-center h-[200px] mb-4">
@@ -420,10 +422,10 @@ export function EstablishmentStatsScreen({ onNavigate }: EstablishmentStatsScree
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Trophy className="h-5 w-5 text-yellow-600" />
-            Top 5 des certificats les plus vérifiés
+            {t('estStats.top5Title')}
           </CardTitle>
           <CardDescription>
-            Classement de vos certificats par nombre de vérifications
+            {t('estStats.top5Desc')}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -442,7 +444,7 @@ export function EstablishmentStatsScreen({ onNavigate }: EstablishmentStatsScree
                   <div>
                     <h3 className="font-medium">{certificate.name}</h3>
                     <p className="text-sm text-muted-foreground">
-                      {certificate.verifications} vérifications
+                      {t('estStats.verificationsCount', { count: certificate.verifications })}
                     </p>
                   </div>
                 </div>
@@ -466,9 +468,9 @@ export function EstablishmentStatsScreen({ onNavigate }: EstablishmentStatsScree
       {/* Monthly Revenue Chart */}
       <Card className="rounded-2xl">
         <CardHeader>
-          <CardTitle>Évolution mensuelle</CardTitle>
+          <CardTitle>{t('estStats.monthlyEvolution')}</CardTitle>
           <CardDescription>
-            Évolution du nombre de vérifications par mois
+            {t('estStats.monthlyEvolutionDesc')}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -500,9 +502,9 @@ export function EstablishmentStatsScreen({ onNavigate }: EstablishmentStatsScree
       {/* Quick Actions */}
       <Card className="rounded-2xl">
         <CardHeader>
-          <CardTitle>Actions rapides</CardTitle>
+          <CardTitle>{t('estStats.quickActions')}</CardTitle>
           <CardDescription>
-            Explorez vos données plus en détail
+            {t('estStats.quickActionsDesc')}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -513,7 +515,7 @@ export function EstablishmentStatsScreen({ onNavigate }: EstablishmentStatsScree
               onClick={() => onNavigate('certificates')}
             >
               <Award className="h-6 w-6 text-primary" />
-              <span>Voir tous les certificats</span>
+              <span>{t('estStats.viewAllCertificates')}</span>
             </Button>
             <Button 
               variant="outline" 
@@ -521,14 +523,14 @@ export function EstablishmentStatsScreen({ onNavigate }: EstablishmentStatsScree
               onClick={() => onNavigate('students')}
             >
               <Users className="h-6 w-6 text-primary" />
-              <span>Gérer les étudiants</span>
+              <span>{t('estStats.manageStudents')}</span>
             </Button>
             <Button 
               variant="outline" 
               className="h-auto p-4 rounded-xl flex flex-col items-center gap-2"
             >
               <Calendar className="h-6 w-6 text-primary" />
-              <span>Planifier un rapport</span>
+              <span>{t('estStats.scheduleReport')}</span>
             </Button>
           </div>
         </CardContent>

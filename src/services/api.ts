@@ -1,6 +1,6 @@
-const API_BASE_URL = import.meta.env.BACKEND_URL || 'https://authcert-production.up.railway.app/api';
+// const API_BASE_URL = import.meta.env.BACKEND_URL || 'https://authcert-production.up.railway.app/api';
 //const API_BASE_URL = 'https://authcert-production.up.railway.app/api';
-//const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = 'http://localhost:5000/api';
 export const API_BASE = API_BASE_URL;
 
 export interface Document {
@@ -97,6 +97,37 @@ export interface DemandeCertificat {
     nomEtablissement: string;
   };
   documents: DocumentDemandeCertificat[];
+}
+
+// Interfaces IA
+export interface ProfileAnalysis {
+  resumeProfil: string;
+  posteCible: string;
+  domaines: string[];
+  certificationsRecommandees: string[];
+  nombreCertificats: number;
+}
+
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface DiplomaExtraction {
+  extracted: {
+    nomComplet: string | null;
+    titre: string | null;
+    mention: string | null;
+    dateObtention: string | null;
+    etablissement: string | null;
+    texteBrut: string | null;
+  };
+  match: {
+    scoreNom: number;
+    scoreFormation: number;
+    ok: boolean;
+    details: Record<string, unknown>;
+  };
 }
 
 function authHeaders(): Record<string, string> {
@@ -242,6 +273,65 @@ function authHeaders(): Record<string, string> {
       } as HeadersInit,
     });
     if (!res.ok) throw new Error('Erreur re-publication certificat');
+    return res.json();
+  },
+
+  // ======== Assistant IA (apprenant) ========
+
+  // Analyse du portefeuille de certificats de l'apprenant connecté
+  async analyzeProfile(): Promise<{ success: boolean; data: ProfileAnalysis }> {
+    const res = await fetch(`${API_BASE_URL}/ai/profile-analysis`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(),
+      } as HeadersInit,
+      body: JSON.stringify({})
+    });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.message || "Erreur lors de l'analyse du profil");
+    }
+    return res.json();
+  },
+
+  // Discuter avec l'assistant IA
+  async chatWithAssistant(messages: ChatMessage[]): Promise<{ success: boolean; data: { reply: string } }> {
+    const res = await fetch(`${API_BASE_URL}/ai/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(),
+      } as HeadersInit,
+      body: JSON.stringify({ messages })
+    });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.message || "Erreur lors de la discussion avec l'assistant");
+    }
+    return res.json();
+  },
+
+  // Numériser un diplôme (OCR) et vérifier la correspondance étudiant/formation
+  async extractDiploma(
+    file: File,
+    apprenantId: number,
+    formationId?: string
+  ): Promise<{ success: boolean; data: DiplomaExtraction }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('apprenantId', apprenantId.toString());
+    if (formationId) formData.append('formationId', formationId);
+
+    const res = await fetch(`${API_BASE_URL}/ai/ocr/diploma`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: formData
+    });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.message || 'Erreur lors de la numérisation du diplôme');
+    }
     return res.json();
   },
 

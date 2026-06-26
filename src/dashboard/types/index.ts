@@ -13,7 +13,8 @@ export type Screen =
   | 'subscription'
   | 'requests' 
   | 'profile' 
-  | 'notifications';
+  | 'notifications'
+  | 'assistant';
 
 // Type pour la navigation qui accepte soit Screen soit string
 export type NavigateFunction = (screen: Screen | string) => void;

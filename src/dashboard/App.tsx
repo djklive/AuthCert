@@ -62,7 +62,7 @@ export default function App({ onLogout }: AppProps) {
     // Vérifier si c'est un Screen valide
     const validScreens: Screen[] = [
       'login', 'onboarding', 'dashboard', 'certificates', 'create-certificate', 'formations',
-      'establishments', 'students', 'stats', 'subscription', 'requests', 'profile', 'notifications'
+      'establishments', 'students', 'stats', 'subscription', 'requests', 'profile', 'notifications', 'assistant'
     ];
     
     if (typeof screen === 'string' && validScreens.includes(screen as Screen)) {

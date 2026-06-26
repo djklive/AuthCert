@@ -32,6 +32,7 @@ app.use(require('./routes/liaisons.routes'));
 app.use(require('./routes/demandes.routes'));
 app.use(require('./routes/uploads.routes'));
 app.use(require('./routes/subscriptions.routes'));
+app.use(require('./routes/ai.routes'));
 
 // Initialiser Supabase Storage au démarrage
 async function initializeSupabase() {

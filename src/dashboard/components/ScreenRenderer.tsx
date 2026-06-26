@@ -14,6 +14,7 @@ import { RequestsScreen } from './screens/RequestsScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
 import { NotificationsScreen } from './screens/NotificationsScreen';
 import { FormationsScreen } from './screens/FormationsScreen';
+import { AssistantScreen } from './screens/AssistantScreen';
 
 interface ScreenRendererProps {
   currentScreen: Screen;
@@ -140,6 +141,13 @@ export function ScreenRenderer({
         return (
           <NotificationsScreen 
             
+          />
+        );
+
+      case 'assistant':
+        return (
+          <AssistantScreen 
+            onNavigate={onNavigate}
           />
         );
 

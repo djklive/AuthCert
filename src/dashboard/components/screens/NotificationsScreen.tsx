@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
@@ -45,6 +46,7 @@ interface NotificationDisplay extends NotificationData {
 }*/
 
 export function NotificationsScreen() {
+  const { t } = useTranslation();
   const [notifications, setNotifications] = useState<NotificationDisplay[]>([]);
   const [activeTab, setActiveTab] = useState('all');
   const [loading, setLoading] = useState(true);
@@ -77,16 +79,16 @@ export function NotificationsScreen() {
     const date = new Date(dateString);
     const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
     
-    if (seconds < 60) return `Il y a ${seconds}s`;
+    if (seconds < 60) return t('notifications.agoSeconds', { count: seconds });
     const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `Il y a ${minutes}min`;
+    if (minutes < 60) return t('notifications.agoMinutes', { count: minutes });
     const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `Il y a ${hours}h`;
+    if (hours < 24) return t('notifications.agoHours', { count: hours });
     const days = Math.floor(hours / 24);
-    if (days < 30) return `Il y a ${days}j`;
+    if (days < 30) return t('notifications.agoDays', { count: days });
     const months = Math.floor(days / 30);
-    if (months < 12) return `Il y a ${months} mois`;
-    return `Il y a ${Math.floor(months / 12)} an${Math.floor(months / 12) > 1 ? 's' : ''}`;
+    if (months < 12) return t('notifications.agoMonths', { count: months });
+    return t('notifications.agoYears', { count: Math.floor(months / 12) });
   };
 
   // Charger les notifications
@@ -113,12 +115,12 @@ export function NotificationsScreen() {
         throw new Error(response.message || 'Erreur lors du chargement des notifications');
       }
     } catch (err) {
-      setError('Erreur lors du chargement des notifications');
+      setError(t('notifications.loadError'));
       console.error('Erreur chargement notifications:', err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     loadNotifications();
@@ -185,24 +187,24 @@ export function NotificationsScreen() {
   };
 
   const getTypeLabel = (type: string) => {
-    const labelMap: Record<string, string> = {
-      'NOUVEAU_CERTIFICAT': 'Certificat',
-      'VERIFICATION_CERTIFICAT': 'Vérification',
-      'DEMANDE_LIAISON_APPRENANT': 'Demande liaison',
-      'DEMANDE_LIAISON_APPROUVEE': 'Liaison approuvée',
-      'DEMANDE_LIAISON_REJETEE': 'Liaison rejetée',
-      'DEMANDE_CERTIFICAT_NOUVELLE': 'Demande certificat',
-      'DEMANDE_CERTIFICAT_APPROUVEE': 'Certificat approuvé',
-      'DEMANDE_CERTIFICAT_REJETEE': 'Certificat rejeté',
-      'CERTIFICAT_REVOQUE': 'Révocation',
-      'NOUVELLE_SESSION': 'Nouvelle session',
-      'SECURITE_ALERTE': 'Sécurité',
-      'SYSTEME_MISE_A_JOUR': 'Système',
-      'ABONNEMENT_EXPIRE': 'Abonnement',
-      'ABONNEMENT_RENOUVELE': 'Abonnement'
+    const keyMap: Record<string, string> = {
+      'NOUVEAU_CERTIFICAT': 'notifications.typeCertificat',
+      'VERIFICATION_CERTIFICAT': 'notifications.typeVerification',
+      'DEMANDE_LIAISON_APPRENANT': 'notifications.typeLinkRequest',
+      'DEMANDE_LIAISON_APPROUVEE': 'notifications.typeLinkApproved',
+      'DEMANDE_LIAISON_REJETEE': 'notifications.typeLinkRejected',
+      'DEMANDE_CERTIFICAT_NOUVELLE': 'notifications.typeCertRequest',
+      'DEMANDE_CERTIFICAT_APPROUVEE': 'notifications.typeCertApproved',
+      'DEMANDE_CERTIFICAT_REJETEE': 'notifications.typeCertRejected',
+      'CERTIFICAT_REVOQUE': 'notifications.typeRevocation',
+      'NOUVELLE_SESSION': 'notifications.typeNewSession',
+      'SECURITE_ALERTE': 'notifications.typeSecurity',
+      'SYSTEME_MISE_A_JOUR': 'notifications.typeSystem',
+      'ABONNEMENT_EXPIRE': 'notifications.typeSubscription',
+      'ABONNEMENT_RENOUVELE': 'notifications.typeSubscription'
     };
     
-    return labelMap[type] || 'Notification';
+    return t(keyMap[type] || 'notifications.typeDefault');
   };
 
   if (loading) {
@@ -211,7 +213,7 @@ export function NotificationsScreen() {
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
-            <p className="text-muted-foreground">Chargement des notifications...</p>
+            <p className="text-muted-foreground">{t('notifications.loading')}</p>
           </div>
         </div>
       </div>
@@ -223,18 +225,18 @@ export function NotificationsScreen() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
         <div>
-          <h1 className="text-3xl font-bold">Notifications</h1>
+          <h1 className="text-3xl font-bold">{t('notifications.title')}</h1>
           <p className="text-muted-foreground">
-            Restez informé de l'activité de votre compte
+            {t('notifications.subtitle')}
           </p>
         </div>
         <div className="flex items-center space-x-3">
           <Button variant="outline" onClick={loadNotifications}>
             <RefreshCw className="mr-2 h-4 w-4" />
-            Actualiser
+            {t('notifications.refresh')}
           </Button>
           <Button variant="outline" onClick={markAllAsRead} disabled={unreadCount === 0}>
-            Tout marquer comme lu
+            {t('notifications.markAllRead')}
           </Button>
         </div>
       </div>
@@ -259,7 +261,7 @@ export function NotificationsScreen() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{notifications.length}</p>
-                <p className="text-sm text-muted-foreground">Total</p>
+                <p className="text-sm text-muted-foreground">{t('notifications.statTotal')}</p>
               </div>
             </div>
           </CardContent>
@@ -272,7 +274,7 @@ export function NotificationsScreen() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{unreadCount}</p>
-                <p className="text-sm text-muted-foreground">Non lues</p>
+                <p className="text-sm text-muted-foreground">{t('notifications.statUnread')}</p>
               </div>
             </div>
           </CardContent>
@@ -285,7 +287,7 @@ export function NotificationsScreen() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{importantCount}</p>
-                <p className="text-sm text-muted-foreground">Importantes</p>
+                <p className="text-sm text-muted-foreground">{t('notifications.statImportant')}</p>
               </div>
             </div>
           </CardContent>
@@ -295,20 +297,20 @@ export function NotificationsScreen() {
       {/* Notifications */}
       <Card>
         <CardHeader>
-          <CardTitle>Centre de notifications</CardTitle>
-          <CardDescription>Gérez toutes vos notifications</CardDescription>
+          <CardTitle>{t('notifications.center')}</CardTitle>
+          <CardDescription>{t('notifications.centerDesc')}</CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="all">
-                Toutes ({notifications.length})
+                {t('notifications.tabAll', { count: notifications.length })}
               </TabsTrigger>
               <TabsTrigger value="unread">
-                Non lues ({unreadCount})
+                {t('notifications.tabUnread', { count: unreadCount })}
               </TabsTrigger>
               <TabsTrigger value="important">
-                Importantes ({notifications.filter(n => n.important).length})
+                {t('notifications.tabImportant', { count: notifications.filter(n => n.important).length })}
               </TabsTrigger>
             </TabsList>
 
@@ -316,11 +318,11 @@ export function NotificationsScreen() {
               {filteredNotifications.length === 0 ? (
                 <div className="text-center py-12">
                   <Bell className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">Aucune notification</h3>
+                  <h3 className="text-lg font-semibold mb-2">{t('notifications.none')}</h3>
                   <p className="text-muted-foreground">
                     {activeTab === 'unread' 
-                      ? 'Toutes vos notifications sont lues !' 
-                      : 'Vous n\'avez pas de notifications pour le moment.'
+                      ? t('notifications.allRead')
+                      : t('notifications.noneYet')
                     }
                   </p>
                 </div>
@@ -349,7 +351,7 @@ export function NotificationsScreen() {
                               </h4>
                               {notification.important && (
                                 <Badge variant="destructive" className="text-xs">
-                                  Important
+                                  {t('notifications.important')}
                                 </Badge>
                               )}
                               <Badge variant="outline" className="text-xs">
@@ -380,7 +382,7 @@ export function NotificationsScreen() {
                                 e.stopPropagation();
                                 markAsRead(notification.id);
                               }}
-                              title="Marquer comme lu"
+                              title={t('notifications.markRead')}
                             >
                               <CheckCircle className="h-4 w-4" />
                             </Button>
@@ -392,7 +394,7 @@ export function NotificationsScreen() {
                                 e.stopPropagation();
                                 markAsUnread(notification.id);
                               }}
-                              title="Marquer comme non lu"
+                              title={t('notifications.markUnread')}
                             >
                               <Mail className="h-4 w-4" />
                             </Button>
@@ -404,7 +406,7 @@ export function NotificationsScreen() {
                               e.stopPropagation();
                               deleteNotification(notification.id);
                             }}
-                            title="Supprimer"
+                            title={t('notifications.delete')}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
